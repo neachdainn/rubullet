@@ -8,5 +8,8 @@ edition = "2018"
 
 [dependencies]
 
+[build-dependencies]
+cmake = "0.1.42"
+
 [dev-dependencies]
 easy-error = "0.3.1"
