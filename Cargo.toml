@@ -1,0 +1,12 @@
+[package]
+name = "rubullet"
+version = "0.1.0"
+authors = ["Nathan Kent <nkent2@cs.rochester.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[dev-dependencies]
+easy-error = "0.3.1"
