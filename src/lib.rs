@@ -18,4 +18,4 @@ mod error;
 mod mode;
 mod ffi;
 
-pub use crate::{client::PhysicsClient, error::Error, mode::Mode};
+pub use crate::{client::{BodyId, PhysicsClient, UrdfOptions}, error::Error, mode::Mode};

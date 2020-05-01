@@ -35,8 +35,57 @@ extern "C"
 
 	pub fn b3GetStatusType(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
 
+	pub fn b3GetStatusActualState(statusHandle: b3SharedMemoryStatusHandle,
+											bodyUniqueId: *mut c_int,
+											numDegreeOfFreedomQ: *mut c_int,
+											numDegreeOfFreedomU: *mut c_int,
+											rootLocalInertialFrame: *const *mut f64,
+											actualStateQ: *const *mut f64,
+											actualStateQdot: *const *mut f64,
+											jointReactionForces: *const *mut f64) -> c_int;
+
+	pub fn b3GetStatusBodyIndex(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
 	pub fn b3InitSyncBodyInfoCommand(physClient: b3PhysicsClientHandle) -> b3SharedMemoryCommandHandle;
 	pub fn b3InitSyncUserDataCommand(physClient: b3PhysicsClientHandle) -> b3SharedMemoryCommandHandle;
+
+	pub fn b3InitPhysicsParamCommand(physClient: b3PhysicsClientHandle) -> b3SharedMemoryCommandHandle;
+	pub fn b3PhysicsParamSetGravity(commandHandle: b3SharedMemoryCommandHandle, gravx: f64, gravy: f64, gravz: f64) -> c_int;
+
+	pub fn b3InitStepSimulationCommand(physClient: b3PhysicsClientHandle) -> b3SharedMemoryCommandHandle;
+
+	pub fn b3SetAdditionalSearchPath(physClient: b3PhysicsClientHandle, path: *const c_char) -> b3SharedMemoryCommandHandle;
+
+	pub fn b3LoadUrdfCommandInit(physClient: b3PhysicsClientHandle, urdfFileName: *const c_char) -> b3SharedMemoryCommandHandle;
+	pub fn b3LoadUrdfCommandSetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int) -> c_int;
+	pub fn b3LoadUrdfCommandSetStartPosition(commandHandle: b3SharedMemoryCommandHandle, startPosX: f64, startPosY: f64, startPosZ: f64) -> c_int;
+	pub fn b3LoadUrdfCommandSetStartOrientation(commandHandle: b3SharedMemoryCommandHandle, startOrnX: f64, startOrnY: f64, startOrnZ: f64, startOrnW: f64) -> c_int;
+	pub fn b3LoadUrdfCommandSetUseFixedBase(commandHandle: b3SharedMemoryCommandHandle, useFixedBase: c_int) -> c_int;
+	pub fn b3LoadUrdfCommandSetGlobalScaling(commandHandle: b3SharedMemoryCommandHandle, globalScaling: f64) -> c_int;
+
+	pub fn b3RequestActualStateCommandInit(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> b3SharedMemoryCommandHandle;
+}
+
+#[repr(C)]
+pub enum eURDF_Flags
+{
+	URDF_USE_INERTIA_FROM_FILE = 2,
+	URDF_USE_SELF_COLLISION = 8,
+	URDF_USE_SELF_COLLISION_EXCLUDE_PARENT = 16,
+	URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS = 32,
+	URDF_RESERVED = 64,
+	URDF_USE_IMPLICIT_CYLINDER = 128,
+	URDF_GLOBAL_VELOCITIES_MB = 256,
+	MJCF_COLORS_FROM_FILE = 512,
+	URDF_ENABLE_CACHED_GRAPHICS_SHAPES = 1024,
+	URDF_ENABLE_SLEEPING = 2048,
+	URDF_INITIALIZE_SAT_FEATURES = 4096,
+	URDF_USE_SELF_COLLISION_INCLUDE_PARENT = 8192,
+	URDF_PARSE_SENSORS = 16384,
+	URDF_USE_MATERIAL_COLORS_FROM_MTL = 32768,
+	URDF_USE_MATERIAL_TRANSPARANCY_FROM_MTL = 65536,
+	URDF_MAINTAIN_LINK_ORDER = 131072,
+	URDF_ENABLE_WAKEUP = 262144,
 }
 
 #[repr(C)]
