@@ -1,6 +1,12 @@
 //! A Rust interface for Bullet physics inspired by PyBullet.
 #![allow(dead_code)]
 
+pub use crate::{
+    client::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions},
+    error::Error,
+    mode::Mode,
+};
+
 /// A utility for creating C-string literals.
 /*
 macro_rules! cstr
@@ -12,13 +18,7 @@ macro_rules! cstr
     }
 }
 */
-mod client;
-mod error;
+pub mod client;
+pub mod error;
 mod ffi;
-mod mode;
-
-pub use crate::{
-    client::{BodyId, PhysicsClient, UrdfOptions},
-    error::Error,
-    mode::Mode,
-};
+pub mod mode;

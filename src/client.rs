@@ -2,15 +2,20 @@
 //!
 //! This is largely modeled after the PyBullet API but utilizes Rust's more expressive type system
 //! where available.
+use std::convert::TryFrom;
 use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
-
 // I currently do not know the best way to represent the file operations for Windows. PyBullet uses
 // raw C-strings but that doesn't seem appropriate here. I don't really have a Windows machine, so
 // until then...
 use std::os::unix::ffi::OsStrExt;
 
-use crate::{ffi, Error, Mode};
 use nalgebra::{Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
+
+use crate::ffi::b3JointInfo;
+use crate::{ffi, Error, Mode};
+
+use self::gui_marker::GuiMarker;
+use std::time::Duration;
 
 /// The "handle" to the physics client.
 ///
@@ -55,8 +60,7 @@ impl PhysicsClient {
         };
 
         // Make sure the returned pointer is valid.
-        let handle =
-            Handle::new(raw_handle).ok_or_else(|| Error::new("Bullet returned a null handle"))?;
+        let handle = Handle::new(raw_handle).ok_or(Error::new("Bullet returned a null handle"))?;
 
         // At this point, we need to disconnect the physics client at any error. So we create the
         // Rust struct and allow the `Drop` implementation to take care of that.
@@ -93,7 +97,25 @@ impl PhysicsClient {
         // The client is up and running
         Ok(client)
     }
-
+    pub fn set_time_step(&mut self, time_step: &Duration) {
+        unsafe {
+            let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
+            let _ret = ffi::b3PhysicsParamSetTimeStep(command, time_step.as_secs_f64());
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+    }
+    pub fn set_real_time_simulation(&mut self, enable_real_time_simulation: bool) {
+        unsafe {
+            let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
+            let _ret = ffi::b3PhysicsParamSetRealTimeSimulation(
+                command,
+                enable_real_time_simulation as i32,
+            );
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+    }
     /// Sets an additional search path for loading assests.
     pub fn set_additional_search_path<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if !self.can_submit_command() {
@@ -164,7 +186,9 @@ impl PhysicsClient {
         if options.maintain_link_order {
             flags |= ffi::eURDF_Flags::URDF_MAINTAIN_LINK_ORDER as c_int;
         }
-
+        if options.enable_cached_graphics_shapes {
+            flags |= ffi::eURDF_Flags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES as c_int;
+        }
         unsafe {
             // As always, PyBullet does not document and does not check return codes.
             let command = ffi::b3LoadUrdfCommandInit(self.handle.as_ptr(), file.as_ptr());
@@ -218,7 +242,6 @@ impl PhysicsClient {
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
             let status_type = ffi::b3GetStatusType(status_handle);
-
             if status_type
                 != ffi::EnumSharedMemoryServerStatus::CMD_STEP_FORWARD_SIMULATION_COMPLETED as i32
             {
@@ -285,6 +308,336 @@ impl PhysicsClient {
     fn can_submit_command(&mut self) -> bool {
         unsafe { ffi::b3CanSubmitCommand(self.handle.as_ptr()) != 0 }
     }
+
+    pub fn change_dynamics_linear_damping(&mut self, body: BodyId, linear_damping: f64) {
+        unsafe {
+            let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
+            if linear_damping >= 0. {
+                ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
+            }
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+    }
+
+    pub fn change_dynamics_angular_damping(&mut self, body: BodyId, angular_damping: f64) {
+        unsafe {
+            let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
+            if angular_damping >= 0. {
+                ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
+            }
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+    }
+
+    pub fn get_num_joints(&mut self, body: BodyId) -> i32 {
+        unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) }
+    }
+    pub fn get_joint_info(&mut self, body: BodyId, joint_index: i32) -> b3JointInfo {
+        unsafe {
+            let mut joint_info = b3JointInfo {
+                m_link_name: [2; 1024],
+                m_joint_name: [2; 1024],
+                m_joint_type: 0,
+                m_q_index: 0,
+                m_u_index: 0,
+                m_joint_index: 0,
+                m_flags: 0,
+                m_joint_damping: 0.0,
+                m_joint_friction: 0.0,
+                m_joint_upper_limit: 0.0,
+                m_joint_lower_limit: 0.0,
+                m_joint_max_force: 0.0,
+                m_joint_max_velocity: 0.0,
+                m_parent_frame: [0.; 7],
+                m_child_frame: [0.; 7],
+                m_joint_axis: [0.; 3],
+                m_parent_index: 0,
+                m_q_size: 0,
+                m_u_size: 0,
+            };
+            // let mut joint_info: b3JointInfo = b3JointInfo::default();
+            ffi::b3GetJointInfo(self.handle.as_ptr(), body.0, joint_index, &mut joint_info);
+            joint_info
+        }
+    }
+    pub fn reset_joint_state(
+        &mut self,
+        body: BodyId,
+        joint_index: i32,
+        value: Option<f64>,
+    ) -> Result<(), Error> {
+        unsafe {
+            let num_joints = ffi::b3GetNumJoints(self.handle.as_ptr(), body.0);
+            if joint_index > num_joints {
+                return Err(Error::new("Joint index out-of-range."));
+            }
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+
+            ffi::b3CreatePoseCommandSetJointPosition(
+                self.handle.as_ptr(),
+                command_handle,
+                joint_index,
+                value.unwrap_or(0.),
+            );
+            ffi::b3CreatePoseCommandSetJointVelocity(
+                self.handle.as_ptr(),
+                command_handle,
+                joint_index,
+                0.,
+            );
+            let handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            Ok(())
+        }
+    }
+    pub fn calculate_inverse_kinematics(
+        &mut self,
+        body: BodyId,
+        end_effector_link_index: i32,
+        target_pos_obj: &[f64; 3],
+        target_orn_obj: &[f64; 4],
+        lower_limits: &Vec<f64>,
+        upper_limits: &Vec<f64>,
+        joint_ranges: &Vec<f64>,
+        rest_poses: &Vec<f64>,
+    ) -> Result<Vec<f64>, Error> {
+        let solver = 0;
+        let max_num_iterations = 5;
+        let residual_threshold = -1.;
+
+        let has_orn = true; // TODO make orientation optional
+
+        let pos = target_pos_obj;
+        let ori = target_orn_obj;
+        let sz_lower_limits = lower_limits.len();
+        let sz_upper_limits = upper_limits.len();
+        let sz_joint_ranges = joint_ranges.len();
+        let sz_rest_poses = rest_poses.len();
+        let sz_joint_damping = 0;
+        let sz_current_positions = 0;
+        let num_joints = self.get_num_joints(body);
+        let dof_count = unsafe { ffi::b3ComputeDofCount(self.handle.as_ptr(), body.0) } as usize;
+
+        let mut has_null_space = false;
+        let mut has_joint_damping = false;
+        let mut has_current_positions = false;
+
+        let current_positions: Option<Vec<f64>> = None;
+        let joint_damping: Option<Vec<f64>> = None;
+
+        if dof_count != 0
+            && (sz_lower_limits == dof_count)
+            && (sz_upper_limits == dof_count)
+            && (sz_joint_ranges == dof_count)
+            && (sz_rest_poses == dof_count)
+        {
+            // let sz_in_bytes = std::mem::size_of::<f64>() * dof_count;
+            has_null_space = true;
+        }
+        if sz_current_positions > 0 {
+            if sz_current_positions != dof_count {
+                return Err(Error::new(
+                    "number of current_positions is not equal to the number of DoF's",
+                ));
+            } else {
+                has_current_positions = true;
+            }
+        }
+        if sz_joint_damping > 0 {
+            if sz_current_positions < dof_count {
+                return Err(Error::new("calculateInverseKinematics: the size of input joint damping values should be equal to the number of degrees of freedom, not using joint damping."));
+            } else {
+                has_joint_damping = true;
+            }
+        }
+        let mut num_pos = 0;
+        unsafe {
+            let command =
+                ffi::b3CalculateInverseKinematicsCommandInit(self.handle.as_ptr(), body.0);
+            ffi::b3CalculateInverseKinematicsSelectSolver(command, solver);
+            if has_current_positions {
+                ffi::b3CalculateInverseKinematicsSetCurrentPositions(
+                    command,
+                    dof_count as i32,
+                    current_positions.unwrap().as_ptr(),
+                )
+            }
+            if max_num_iterations > 0 {
+                ffi::b3CalculateInverseKinematicsSetMaxNumIterations(command, max_num_iterations);
+            }
+            if residual_threshold >= 0. {
+                ffi::b3CalculateInverseKinematicsSetResidualThreshold(command, residual_threshold);
+            }
+            if has_null_space {
+                if has_orn {
+                    ffi::b3CalculateInverseKinematicsPosOrnWithNullSpaceVel(
+                        command,
+                        dof_count as i32,
+                        end_effector_link_index,
+                        pos.as_ptr(),
+                        ori.as_ptr(),
+                        lower_limits.as_ptr(),
+                        upper_limits.as_ptr(),
+                        joint_ranges.as_ptr(),
+                        rest_poses.as_ptr(),
+                    );
+                } else {
+                    ffi::b3CalculateInverseKinematicsPosWithNullSpaceVel(
+                        command,
+                        dof_count as i32,
+                        end_effector_link_index,
+                        pos.as_ptr(),
+                        lower_limits.as_ptr(),
+                        upper_limits.as_ptr(),
+                        joint_ranges.as_ptr(),
+                        rest_poses.as_ptr(),
+                    );
+                }
+            } else {
+                if has_orn {
+                    ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
+                        command,
+                        end_effector_link_index,
+                        pos.as_ptr(),
+                        ori.as_ptr(),
+                    );
+                } else {
+                    ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
+                        command,
+                        end_effector_link_index,
+                        pos.as_ptr(),
+                    );
+                }
+            }
+            if has_joint_damping {
+                ffi::b3CalculateInverseKinematicsSetJointDamping(
+                    command,
+                    dof_count as i32,
+                    joint_damping.unwrap().as_ptr(),
+                )
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let mut result_body_index: c_int = 0;
+            let mut result = ffi::b3GetStatusInverseKinematicsJointPositions(
+                status_handle,
+                &mut result_body_index,
+                &mut num_pos,
+                &mut 0.,
+            );
+            if result != 0 && num_pos != 0 {
+                let mut ik_output_joint_pos = vec![0.; num_pos as usize];
+                result = ffi::b3GetStatusInverseKinematicsJointPositions(
+                    status_handle,
+                    &mut result_body_index,
+                    &mut num_pos,
+                    ik_output_joint_pos.as_mut_ptr(),
+                );
+                return Ok(ik_output_joint_pos);
+            }
+        }
+        // let command =
+        Err(Error::new("Error in calculateInverseKinematics"))
+    }
+
+    /// sets joint motor commands. This function differs a bit from the corresponding pybullet function.
+    /// Instead of providing optional arguments that depend on the Control Mode. The necessary Parameters
+    /// are directly encoded in the ControlMode Enum
+    /// # Example
+    /// ```rust
+    /// use rubullet::{ControlMode, PhysicsClient, Mode};
+    /// let mut client = PhysicsClient::connect(Mode::Direct)?;
+    /// client.set_additional_search_path("bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    /// let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
+    /// let joint_index = 1;
+    /// client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);
+    /// client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
+    /// ```
+    pub fn set_joint_motor_control_2(
+        &mut self,
+        body: BodyId,
+        joint_index: i32,
+        control_mode: ControlMode,
+        maximum_force: Option<f64>,
+    ) {
+        let force = maximum_force.unwrap_or(100000.);
+        let kp = 0.1;
+        let kd = 1.0;
+        let target_velocity = 0.;
+        unsafe {
+            let command_handle = ffi::b3JointControlCommandInit2(
+                self.handle.as_ptr(),
+                body.0,
+                control_mode.get_int(),
+            );
+            let info = self.get_joint_info(body, joint_index);
+
+            match control_mode {
+                ControlMode::Position(target_position) => {
+                    ffi::b3JointControlSetDesiredPosition(
+                        command_handle,
+                        info.m_q_index,
+                        target_position,
+                    );
+
+                    ffi::b3JointControlSetKp(command_handle, info.m_u_index, kp);
+                    ffi::b3JointControlSetDesiredVelocity(
+                        command_handle,
+                        info.m_u_index,
+                        target_velocity,
+                    );
+
+                    ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
+                    ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
+                }
+                ControlMode::PD {
+                    target_position: pos,
+                    target_velocity: vel,
+                    position_gain: pg,
+                    velocity_gain: vg,
+                    maximum_velocity: max_vel,
+                } => {
+                    if max_vel.is_some() {
+                        ffi::b3JointControlSetMaximumVelocity(
+                            command_handle,
+                            info.m_u_index,
+                            max_vel.unwrap(),
+                        );
+                    }
+                    ffi::b3JointControlSetDesiredPosition(command_handle, info.m_q_index, pos);
+
+                    ffi::b3JointControlSetKp(command_handle, info.m_u_index, pg);
+                    ffi::b3JointControlSetDesiredVelocity(command_handle, info.m_u_index, vel);
+
+                    ffi::b3JointControlSetKd(command_handle, info.m_u_index, vg);
+                    ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
+                }
+                ControlMode::Velocity(vel) => {
+                    ffi::b3JointControlSetDesiredVelocity(command_handle, info.m_u_index, vel);
+                    ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
+                    ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
+                }
+                ControlMode::Torque(f) => {
+                    ffi::b3JointControlSetDesiredForceTorque(command_handle, info.m_u_index, f);
+                }
+            }
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+    }
+
+    // pub fn configure_debug_visualizer(&mut self,flag:DebugVisualizerFlag, enable:bool,light_position:Option<[f64;3]>, shadow_map_resolution:Option<i32>, shadow_map_world_size:Option<i32>) {
+    pub fn configure_debug_visualizer(&mut self, flag: DebugVisualizerFlag, enable: bool) {
+        unsafe {
+            let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle.as_ptr());
+            ffi::b3ConfigureOpenGLVisualizerSetVisualizationFlags(
+                command_handle,
+                flag as i32,
+                enable as i32,
+            );
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+    }
 }
 
 impl Drop for PhysicsClient {
@@ -322,6 +675,9 @@ pub struct UrdfOptions {
     /// Try to maintain the link order from the URDF file.
     pub maintain_link_order: bool,
 
+    /// Caches as reuses graphics shapes. This will decrease loading times for similar objects
+    pub enable_cached_graphics_shapes: bool,
+
     /// Applies a scale factor to the model.
     pub global_scaling: f64,
 
@@ -340,8 +696,81 @@ impl Default for UrdfOptions {
             enable_sleeping: false,
             maintain_link_order: false,
             global_scaling: -1.0,
-
+            enable_cached_graphics_shapes: false,
             _unused: (),
+        }
+    }
+}
+
+pub enum ControlMode {
+    Position(f64),
+    Velocity(f64),
+    Torque(f64),
+    PD {
+        target_position: f64,
+        target_velocity: f64,
+        position_gain: f64,
+        velocity_gain: f64,
+        maximum_velocity: Option<f64>,
+    },
+}
+
+impl ControlMode {
+    fn get_int(&self) -> i32 {
+        match self {
+            ControlMode::Position(_) => 2,
+            ControlMode::Velocity(_) => 0,
+            ControlMode::Torque(_) => 1,
+            ControlMode::PD { .. } => 3,
+        }
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub enum DebugVisualizerFlag {
+    COV_ENABLE_GUI = 1,
+    COV_ENABLE_SHADOWS,
+    COV_ENABLE_WIREFRAME,
+    COV_ENABLE_VR_TELEPORTING,
+    COV_ENABLE_VR_PICKING,
+    COV_ENABLE_VR_RENDER_CONTROLLERS,
+    COV_ENABLE_RENDERING,
+    COV_ENABLE_SYNC_RENDERING_INTERNAL,
+    COV_ENABLE_KEYBOARD_SHORTCUTS,
+    COV_ENABLE_MOUSE_PICKING,
+    COV_ENABLE_Y_AXIS_UP,
+    COV_ENABLE_TINY_RENDERER,
+    COV_ENABLE_RGB_BUFFER_PREVIEW,
+    COV_ENABLE_DEPTH_BUFFER_PREVIEW,
+    COV_ENABLE_SEGMENTATION_MARK_PREVIEW,
+    COV_ENABLE_PLANAR_REFLECTION,
+    COV_ENABLE_SINGLE_STEP_RENDERING,
+}
+
+pub struct JointMotorControlOptions {
+    pub body_unique_id: BodyId,
+    pub joint_index: i32,
+    pub control_mode: ControlMode,
+    pub target_position: Option<f64>,
+    pub target_velocity: Option<f64>,
+    pub force: Option<f64>,
+    pub position_gain: Option<f64>,
+    pub velocity_gain: Option<f64>,
+    pub max_velocity: Option<f64>,
+}
+
+impl JointMotorControlOptions {
+    fn new(body_unique_id: BodyId, joint_index: i32, control_mode: ControlMode) -> Self {
+        JointMotorControlOptions {
+            body_unique_id,
+            joint_index,
+            control_mode,
+            target_position: None,
+            target_velocity: None,
+            force: None,
+            position_gain: None,
+            velocity_gain: None,
+            max_velocity: None,
         }
     }
 }
@@ -383,4 +812,37 @@ mod gui_marker {
         }
     }
 }
-use self::gui_marker::GuiMarker;
+
+#[derive(Debug, PartialEq)]
+pub enum JointType {
+    Revolute = 0,
+    Prismatic = 1,
+    Spherical = 2,
+    Planar = 3,
+    Fixed = 4,
+    Point2Point = 5,
+    Gear = 6,
+}
+
+impl TryFrom<i32> for JointType {
+    type Error = Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(JointType::Revolute),
+            1 => Ok(JointType::Prismatic),
+            2 => Ok(JointType::Spherical),
+            3 => Ok(JointType::Planar),
+            4 => Ok(JointType::Fixed),
+            5 => Ok(JointType::Point2Point),
+            6 => Ok(JointType::Gear),
+            _ => Err(Error::new("could not convert into a valid joint type")),
+        }
+    }
+}
+
+impl b3JointInfo {
+    pub fn get_joint_type(&self) -> JointType {
+        JointType::try_from(self.m_joint_type).unwrap()
+    }
+}

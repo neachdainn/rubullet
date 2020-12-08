@@ -32,6 +32,14 @@ extern "C" {
     ) -> b3PhysicsClientHandle;
     pub fn b3DisconnectSharedMemory(physClient: b3PhysicsClientHandle);
 
+    pub fn b3InitConfigureOpenGLVisualizer(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3ConfigureOpenGLVisualizerSetVisualizationFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        flag: c_int,
+        enabled: c_int,
+    );
     pub fn b3CanSubmitCommand(physClient: b3PhysicsClientHandle) -> c_int;
     pub fn b3SubmitClientCommandAndWaitStatus(
         physClient: b3PhysicsClientHandle,
@@ -69,7 +77,14 @@ extern "C" {
         gravy: f64,
         gravz: f64,
     ) -> c_int;
-
+    pub fn b3PhysicsParamSetTimeStep(
+        commandHandle: b3SharedMemoryCommandHandle,
+        time_step: f64,
+    ) -> c_int;
+    pub fn b3PhysicsParamSetRealTimeSimulation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        enableRealTimeSimulation: c_int,
+    ) -> c_int;
     pub fn b3InitStepSimulationCommand(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
@@ -113,6 +128,160 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
     ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitChangeDynamicsInfo(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3ChangeDynamicsInfoSetLinearDamping(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linear_damping: f64,
+    ) -> c_int;
+    pub fn b3ChangeDynamicsInfoSetAngularDamping(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linear_damping: f64,
+    ) -> c_int;
+
+    pub fn b3GetNumJoints(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
+    pub fn b3GetJointInfo(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        jointIndex: c_int,
+        jointInfo: *mut b3JointInfo,
+    );
+    pub fn b3CreatePoseCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3CreatePoseCommandSetJointPosition(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointIndex: c_int,
+        jointPosition: f64,
+    ) -> c_int;
+    pub fn b3CreatePoseCommandSetJointVelocity(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointIndex: c_int,
+        jointVelocity: f64,
+    ) -> c_int;
+    pub fn b3ComputeDofCount(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
+
+    pub fn b3CalculateInverseKinematicsCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3CalculateInverseKinematicsAddTargetPurePosition(
+        commandHandle: b3SharedMemoryCommandHandle,
+        endEffectorLinkIndex: c_int,
+        targetPosition: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsAddTargetsPurePosition(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numEndEffectorLinkIndices: c_int,
+        endEffectorIndices: *const c_int,
+        targetPositions: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        endEffectorLinkIndex: c_int,
+        targetPosition: *const f64,
+        targetOrientation: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsPosWithNullSpaceVel(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numDof: c_int,
+        endEffectorLinkIndex: c_int,
+        targetPosition: *const f64,
+        lowerLimit: *const f64,
+        upperLimit: *const f64,
+        jointRange: *const f64,
+        restPose: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsPosOrnWithNullSpaceVel(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numDof: c_int,
+        endEffectorLinkIndex: c_int,
+        targetPosition: *const f64,
+        targetOrientation: *const f64,
+        lowerLimit: *const f64,
+        upperLimit: *const f64,
+        jointRange: *const f64,
+        restPose: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsSetJointDamping(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numDof: c_int,
+        jointDampingCoeff: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsSelectSolver(
+        commandHandle: b3SharedMemoryCommandHandle,
+        solver: c_int,
+    );
+    pub fn b3GetStatusInverseKinematicsJointPositions(
+        commandHandle: b3SharedMemoryStatusHandle,
+        bodyUniqueId: *mut c_int,
+        dofCount: *mut c_int,
+        jointPositions: *mut f64,
+    ) -> c_int;
+
+    pub fn b3CalculateInverseKinematicsSetCurrentPositions(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numDof: c_int,
+        currentJointPositions: *const f64,
+    );
+    pub fn b3CalculateInverseKinematicsSetMaxNumIterations(
+        commandHandle: b3SharedMemoryCommandHandle,
+        maxNumIterations: c_int,
+    );
+    pub fn b3CalculateInverseKinematicsSetResidualThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        residualThreshold: f64,
+    );
+
+    pub fn b3JointControlCommandInit2(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        controlMode: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3JointControlSetDesiredPosition(
+        commandHandle: b3SharedMemoryCommandHandle,
+        qIndex: c_int,
+        value: f64,
+    ) -> c_int;
+    pub fn b3JointControlSetKp(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        value: f64,
+    ) -> c_int;
+    pub fn b3JointControlSetKd(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        value: f64,
+    ) -> c_int;
+    pub fn b3JointControlSetMaximumVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        maximumVelocity: f64,
+    ) -> c_int;
+
+    pub fn b3JointControlSetDesiredVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        value: f64,
+    ) -> c_int;
+    pub fn b3JointControlSetMaximumForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        value: f64,
+    ) -> c_int;
+    pub fn b3JointControlSetDesiredForceTorque(
+        commandHandle: b3SharedMemoryCommandHandle,
+        dofIndex: c_int,
+        value: f64,
+    ) -> c_int;
 }
 
 #[repr(C)]
@@ -254,4 +423,28 @@ pub enum EnumSharedMemoryServerStatus {
     CMD_REQUEST_MESH_DATA_FAILED,
 
     CMD_MAX_SERVER_COMMANDS,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct b3JointInfo {
+    pub m_link_name: [c_char; 1024],
+    pub m_joint_name: [c_char; 1024],
+    pub m_joint_type: i32,
+    pub m_q_index: i32,
+    pub m_u_index: i32,
+    pub m_joint_index: i32,
+    pub m_flags: i32,
+    pub m_joint_damping: f64,
+    pub m_joint_friction: f64,
+    pub m_joint_upper_limit: f64,
+    pub m_joint_lower_limit: f64,
+    pub m_joint_max_force: f64,
+    pub m_joint_max_velocity: f64,
+    pub m_parent_frame: [f64; 7],
+    pub m_child_frame: [f64; 7],
+    pub m_joint_axis: [f64; 3],
+    pub m_parent_index: i32,
+    pub m_q_size: i32,
+    pub m_u_size: i32,
 }
