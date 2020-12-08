@@ -1,6 +1,6 @@
 //! An introduction to the usage of RuBullet.
 use std::f64::consts::PI;
-use std::{thread, time::Duration};
+use std::{time::Duration};
 
 use easy_error::Terminator;
 use nalgebra::{Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3};
@@ -23,7 +23,6 @@ fn main() -> Result<(), Terminator> {
         physics_client.step_simulation()?;
         std::thread::sleep(time_step);
     }
-    Ok(())
 }
 
 pub struct PandaSim {
@@ -129,7 +128,7 @@ impl PandaSim {
                 index += 1;
             }
         }
-        let mut t = Duration::new(0, 0);
+        let t = Duration::new(0, 0);
         Ok(PandaSim {
             offset,
             id: panda_id,
