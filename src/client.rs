@@ -55,7 +55,8 @@ impl PhysicsClient {
         };
 
         // Make sure the returned pointer is valid.
-        let handle = Handle::new(raw_handle).ok_or(Error::new("Bullet returned a null handle"))?;
+        let handle =
+            Handle::new(raw_handle).ok_or_else(|| Error::new("Bullet returned a null handle"))?;
 
         // At this point, we need to disconnect the physics client at any error. So we create the
         // Rust struct and allow the `Drop` implementation to take care of that.
@@ -186,7 +187,7 @@ impl PhysicsClient {
                 let _ret = ffi::b3LoadUrdfCommandSetUseFixedBase(command, 1);
             }
 
-            if options.global_scaling != 1.0 && options.global_scaling > 0.0 {
+            if options.global_scaling > 0.0 {
                 let _ret =
                     ffi::b3LoadUrdfCommandSetGlobalScaling(command, options.global_scaling as f64);
             }
@@ -338,7 +339,7 @@ impl Default for UrdfOptions {
             use_self_collision: false,
             enable_sleeping: false,
             maintain_link_order: false,
-            global_scaling: 1.0,
+            global_scaling: -1.0,
 
             _unused: (),
         }
