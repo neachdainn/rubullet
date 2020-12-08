@@ -154,10 +154,10 @@ impl PandaSim {
                 PandaSim::PANDA_END_EFFECTOR_INDEX,
                 &pos,
                 &orn,
-                &PandaSim::LL.to_vec(),
-                &PandaSim::UL.to_vec(),
-                &PandaSim::JR.to_vec(),
-                &PandaSim::INITIAL_JOINT_POSITIONS.to_vec(),
+                &PandaSim::LL,
+                &PandaSim::UL,
+                &PandaSim::JR,
+                &PandaSim::INITIAL_JOINT_POSITIONS,
             )
             .unwrap();
         for i in 0..PandaSim::PANDA_NUM_DOFS {

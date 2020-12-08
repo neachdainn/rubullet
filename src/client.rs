@@ -60,7 +60,8 @@ impl PhysicsClient {
         };
 
         // Make sure the returned pointer is valid.
-        let handle = Handle::new(raw_handle).ok_or(Error::new("Bullet returned a null handle"))?;
+        let handle =
+            Handle::new(raw_handle).ok_or_else(|| Error::new("Bullet returned a null handle"))?;
 
         // At this point, we need to disconnect the physics client at any error. So we create the
         // Rust struct and allow the `Drop` implementation to take care of that.
@@ -385,21 +386,23 @@ impl PhysicsClient {
                 joint_index,
                 0.,
             );
-            let handle =
+            let _handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             Ok(())
         }
     }
+    // TODO make some of the parameters optional
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_inverse_kinematics(
         &mut self,
         body: BodyId,
         end_effector_link_index: i32,
         target_pos_obj: &[f64; 3],
         target_orn_obj: &[f64; 4],
-        lower_limits: &Vec<f64>,
-        upper_limits: &Vec<f64>,
-        joint_ranges: &Vec<f64>,
-        rest_poses: &Vec<f64>,
+        lower_limits: &[f64],
+        upper_limits: &[f64],
+        joint_ranges: &[f64],
+        rest_poses: &[f64],
     ) -> Result<Vec<f64>, Error> {
         let solver = 0;
         let max_num_iterations = 5;
@@ -415,7 +418,6 @@ impl PhysicsClient {
         let sz_rest_poses = rest_poses.len();
         let sz_joint_damping = 0;
         let sz_current_positions = 0;
-        let num_joints = self.get_num_joints(body);
         let dof_count = unsafe { ffi::b3ComputeDofCount(self.handle.as_ptr(), body.0) } as usize;
 
         let mut has_null_space = false;
@@ -493,22 +495,21 @@ impl PhysicsClient {
                         rest_poses.as_ptr(),
                     );
                 }
+            } else if has_orn {
+                ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
+                    command,
+                    end_effector_link_index,
+                    pos.as_ptr(),
+                    ori.as_ptr(),
+                );
             } else {
-                if has_orn {
-                    ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
-                        command,
-                        end_effector_link_index,
-                        pos.as_ptr(),
-                        ori.as_ptr(),
-                    );
-                } else {
-                    ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
-                        command,
-                        end_effector_link_index,
-                        pos.as_ptr(),
-                    );
-                }
+                ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
+                    command,
+                    end_effector_link_index,
+                    pos.as_ptr(),
+                );
             }
+
             if has_joint_damping {
                 ffi::b3CalculateInverseKinematicsSetJointDamping(
                     command,
@@ -519,7 +520,7 @@ impl PhysicsClient {
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
             let mut result_body_index: c_int = 0;
-            let mut result = ffi::b3GetStatusInverseKinematicsJointPositions(
+            let result = ffi::b3GetStatusInverseKinematicsJointPositions(
                 status_handle,
                 &mut result_body_index,
                 &mut num_pos,
@@ -527,7 +528,7 @@ impl PhysicsClient {
             );
             if result != 0 && num_pos != 0 {
                 let mut ik_output_joint_pos = vec![0.; num_pos as usize];
-                result = ffi::b3GetStatusInverseKinematicsJointPositions(
+                ffi::b3GetStatusInverseKinematicsJointPositions(
                     status_handle,
                     &mut result_body_index,
                     &mut num_pos,
@@ -597,11 +598,11 @@ impl PhysicsClient {
                     velocity_gain: vg,
                     maximum_velocity: max_vel,
                 } => {
-                    if max_vel.is_some() {
+                    if let Some(max_vel) = max_vel {
                         ffi::b3JointControlSetMaximumVelocity(
                             command_handle,
                             info.m_u_index,
-                            max_vel.unwrap(),
+                            max_vel,
                         );
                     }
                     ffi::b3JointControlSetDesiredPosition(command_handle, info.m_q_index, pos);
