@@ -7,11 +7,10 @@
 
 /// Ways to connect to physics servers.
 #[non_exhaustive]
-pub enum Mode
-{
-	/// Starts a physics server within the process and connects without a transport layer.
-	Direct,
+pub enum Mode {
+    /// Starts a physics server within the process and connects without a transport layer.
+    Direct,
 
-	/// Creates a physics server with a graphical frontend and communicates with it.
-	Gui,
+    /// Creates a physics server with a graphical frontend and communicates with it.
+    Gui,
 }

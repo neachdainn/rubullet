@@ -9,41 +9,37 @@
 use std::{borrow::Cow, error, fmt};
 
 #[derive(Debug, Clone)]
-pub struct Error
-{
-	ctx: Cow<'static, str>,
+pub struct Error {
+    ctx: Cow<'static, str>,
 }
 
-impl Error
-{
-	/// Creates a new error from the provided static string.
-	///
-	/// This is not implemented as `From<_>` in order to keep the functionality from being exposed
-	/// to users of the crate.
-	pub(crate) fn new(ctx: &'static str) -> Error
-	{
-		Error { ctx: Cow::Borrowed(ctx) }
-	}
+impl Error {
+    /// Creates a new error from the provided static string.
+    ///
+    /// This is not implemented as `From<_>` in order to keep the functionality from being exposed
+    /// to users of the crate.
+    pub(crate) fn new(ctx: &'static str) -> Error {
+        Error {
+            ctx: Cow::Borrowed(ctx),
+        }
+    }
 
-	/// Creates a new error from the provided `String`.
-	pub(crate) fn with(ctx: String) -> Error
-	{
-		Error { ctx: Cow::Owned(ctx) }
-	}
+    /// Creates a new error from the provided `String`.
+    pub(crate) fn with(ctx: String) -> Error {
+        Error {
+            ctx: Cow::Owned(ctx),
+        }
+    }
 }
 
-impl fmt::Display for Error
-{
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result
-	{
-		write!(f, "{}", self.ctx)
-	}
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.ctx)
+    }
 }
 
-impl error::Error for Error
-{
-	fn description(&self) -> &str
-	{
-		&self.ctx
-	}
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        &self.ctx
+    }
 }

@@ -5,17 +5,20 @@
 /*
 macro_rules! cstr
 {
-	($lit:expr) => {
-		concat!($lit, "\0") as *const str
-			as *const [::std::os::raw::c_char]
-			as *const ::std::os::raw::c_char
-	}
+    ($lit:expr) => {
+        concat!($lit, "\0") as *const str
+            as *const [::std::os::raw::c_char]
+            as *const ::std::os::raw::c_char
+    }
 }
 */
-
 mod client;
 mod error;
-mod mode;
 mod ffi;
+mod mode;
 
-pub use crate::{client::{BodyId, PhysicsClient, UrdfOptions}, error::Error, mode::Mode};
+pub use crate::{
+    client::{BodyId, PhysicsClient, UrdfOptions},
+    error::Error,
+    mode::Mode,
+};
