@@ -166,7 +166,42 @@ extern "C" {
         jointIndex: c_int,
         jointVelocity: f64,
     ) -> c_int;
+
+    pub fn b3GetJointState(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        jointIndex: c_int,
+        state: *mut b3JointSensorState,
+    ) -> c_int;
+    pub fn b3GetJointStateMultiDof(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        jointIndex: c_int,
+        state: *mut b3JointSensorState2,
+    ) -> c_int;
+
     pub fn b3ComputeDofCount(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
+
+    pub fn b3CalculateInverseDynamicsCommandInit2(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        jointPositionsQ: *const f64,
+        dofCountQ: c_int,
+        jointVelocitiesQdot: *const f64,
+        jointAccelerations: *const f64,
+        dofCountQdot: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CalculateInverseDynamicsSetFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        flags: c_int,
+    );
+    pub fn b3GetStatusInverseDynamicsJointForces(
+        statusHandle: b3SharedMemoryStatusHandle,
+        bodyUniqueId: *mut c_int,
+        dofCount: *mut c_int,
+        jointForces: *mut f64,
+    ) -> c_int;
 
     pub fn b3CalculateInverseKinematicsCommandInit(
         physClient: b3PhysicsClientHandle,
@@ -447,4 +482,24 @@ pub struct b3JointInfo {
     pub m_parent_index: i32,
     pub m_q_size: i32,
     pub m_u_size: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct b3JointSensorState {
+    pub m_joint_position: f64,
+    pub m_joint_velocity: f64,
+    pub m_joint_force_torque: [f64; 6],
+    pub m_joint_motor_torque: f64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct b3JointSensorState2 {
+    pub m_joint_position: [f64; 4],
+    pub m_joint_velocity: [f64; 3],
+    pub m_joint_reaction_force_torque: [f64; 6],
+    pub m_joint_motor_torque_multi_dof: [f64; 3],
+    pub m_q_dof_size: c_int,
+    pub m_u_dof_size: c_int,
 }

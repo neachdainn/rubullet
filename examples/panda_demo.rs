@@ -1,6 +1,5 @@
-//! An introduction to the usage of RuBullet.
 use std::f64::consts::PI;
-use std::{time::Duration};
+use std::time::Duration;
 
 use easy_error::Terminator;
 use nalgebra::{Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3};
@@ -160,19 +159,14 @@ impl PandaSim {
             )
             .unwrap();
         for i in 0..PandaSim::PANDA_NUM_DOFS {
-            client.set_joint_motor_control_2(
-                self.id,
-                i as i32,
-                ControlMode::Position(joint_poses[i]),
-                Some(240. * 5.),
-            );
-            client.set_joint_motor_control_2(
-                self.id,
-                i as i32,
-                ControlMode::Position(joint_poses[i]),
-                Some(240. * 5.),
-            );
-            // physics_client.set_joint_motor_control_2(panda_id, i as i32, ControlMode::Torque(100.), None);
+            // client.set_joint_motor_control_2(
+            //     self.id,
+            //     i as i32,
+            //     ControlMode::Position(joint_poses[i]),
+            //     Some(240. * 5.),
+            // );
         }
+        println!("{:?}", client.get_joint_state(self.id, 4));
+        client.set_joint_motor_control_2(self.id, 4 as i32, ControlMode::Torque(100.), None);
     }
 }

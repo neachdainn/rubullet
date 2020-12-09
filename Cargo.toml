@@ -18,6 +18,10 @@ path = "examples/panda_demo.rs"
 name = "hello_rubullet"
 path = "examples/hello_rubullet.rs"
 
+[[example]]
+name = "inverse_dynamics"
+path = "examples/inverse_dynamics.rs"
+
 [dependencies]
 nalgebra = "0.21.0"
 

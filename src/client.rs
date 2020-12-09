@@ -11,10 +11,13 @@ use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::b3JointInfo;
+use crate::ffi::{b3JointInfo, b3JointSensorState};
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
+use crate::ffi::EnumSharedMemoryServerStatus::{
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
+};
 use std::time::Duration;
 
 /// The "handle" to the physics client.
@@ -391,6 +394,79 @@ impl PhysicsClient {
             Ok(())
         }
     }
+    pub fn get_joint_state(
+        &mut self,
+        body: BodyId,
+        joint_index: i32,
+    ) -> Result<b3JointSensorState, Error> {
+        unsafe {
+            if body.0 < 0 {
+                return Err(Error::new("getJointState failed; invalid BodyId"));
+            }
+            if joint_index < 0 {
+                return Err(Error::new("getJointState failed; invalid joint_index"));
+            }
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("getJointState failed."));
+            }
+            let mut sensor_state = b3JointSensorState::default();
+            if 0 != ffi::b3GetJointState(
+                self.handle.as_ptr(),
+                status_handle,
+                joint_index,
+                &mut sensor_state,
+            ) {
+                return Ok(sensor_state);
+            }
+        }
+        Err(Error::new("getJointState failed (2)."))
+    }
+    pub fn get_joint_states(
+        &mut self,
+        body: BodyId,
+        joint_indices: &[i32],
+    ) -> Result<Vec<b3JointSensorState>, Error> {
+        unsafe {
+            if body.0 < 0 {
+                return Err(Error::new("getJointState failed; invalid BodyId"));
+            }
+            let num_joints = self.get_num_joints(body);
+            if joint_indices.is_empty() {
+                return Err(Error::new("expected a sequence of joint indices"));
+            }
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("getJointState failed."));
+            }
+            let mut result_list_joint_states =
+                Vec::<b3JointSensorState>::with_capacity(num_joints as usize);
+            for &joint_index in joint_indices.iter() {
+                if joint_index < 0 || joint_index >= num_joints {
+                    return Err(Error::new("getJointStates failed; invalid joint_index"));
+                }
+                let mut sensor_state = b3JointSensorState::default();
+                if 0 != ffi::b3GetJointState(
+                    self.handle.as_ptr(),
+                    status_handle,
+                    joint_index,
+                    &mut sensor_state,
+                ) {
+                    result_list_joint_states.push(sensor_state);
+                } else {
+                    return Err(Error::new("getJointState failed (2)."));
+                }
+            }
+            Ok(result_list_joint_states)
+        }
+    }
+
     // TODO make some of the parameters optional
     #[allow(clippy::too_many_arguments)]
     pub fn calculate_inverse_kinematics(
@@ -541,6 +617,59 @@ impl PhysicsClient {
         Err(Error::new("Error in calculateInverseKinematics"))
     }
 
+    pub fn calculate_inverse_dynamics(
+        &mut self,
+        body_id: BodyId,
+        object_positions: &[f64],
+        object_velocities: &[f64],
+        object_accelerations: &[f64],
+    ) -> Result<Vec<f64>, Error> {
+        let flags = 0; // TODO find out what those flags are and let the user set them
+        if object_velocities.len() != object_accelerations.len() {
+            return Err(Error::new(
+                "number of object velocities should be equal to the number of object accelerations",
+            ));
+        }
+        unsafe {
+            let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
+                self.handle.as_ptr(),
+                body_id.0,
+                object_positions.as_ptr(),
+                object_positions.len() as i32,
+                object_velocities.as_ptr(),
+                object_accelerations.as_ptr(),
+                object_velocities.len() as i32,
+            );
+            ffi::b3CalculateInverseDynamicsSetFlags(command_handle, flags);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED as i32 {
+                let mut body_unique_id = 0;
+                let mut dof_count = 0;
+                ffi::b3GetStatusInverseDynamicsJointForces(
+                    status_handle,
+                    &mut body_unique_id,
+                    &mut dof_count,
+                    &mut 0.,
+                );
+                if dof_count != 0 {
+                    let mut joint_forces_output = vec![0.; dof_count as usize];
+                    ffi::b3GetStatusInverseDynamicsJointForces(
+                        status_handle,
+                        &mut 0,
+                        &mut 0,
+                        joint_forces_output.as_mut_ptr(),
+                    );
+                    return Ok(joint_forces_output);
+                }
+            }
+        }
+        Err(Error::new(
+            "Error in calculateInverseDynamics, please check arguments.",
+        ))
+    }
+
     /// sets joint motor commands. This function differs a bit from the corresponding pybullet function.
     /// Instead of providing optional arguments that depend on the Control Mode. The necessary Parameters
     /// are directly encoded in the ControlMode Enum
@@ -625,6 +754,156 @@ impl PhysicsClient {
             let _status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
+    }
+
+    pub fn set_joint_motor_control_array(
+        &mut self,
+        body: BodyId,
+        joint_indices: &[i32],
+        control_mode: ControlModeArray,
+        maximum_force: Option<Vec<f64>>,
+    ) -> Result<(), Error> {
+        let forces = maximum_force.unwrap_or_else(|| vec![100000.; joint_indices.len()]);
+        if forces.len() != joint_indices.len() {
+            return Err(Error::new(
+                "number of maximum forces should match the number of joint indices",
+            ));
+        }
+        let kp = 0.1;
+        let kd = 1.0;
+        let target_velocities = vec![0.; joint_indices.len()];
+        let num_joints = self.get_num_joints(body);
+        unsafe {
+            let command_handle = ffi::b3JointControlCommandInit2(
+                self.handle.as_ptr(),
+                body.0,
+                control_mode.get_int(),
+            );
+
+            for &joint_index in joint_indices.iter() {
+                if joint_index < 0 || joint_index >= num_joints {
+                    return Err(Error::new("Joint index out-of-range."));
+                }
+            }
+            match control_mode {
+                ControlModeArray::Positions(target_positions) => {
+                    if target_positions.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of target positions should match the number of joint indices",
+                        ));
+                    }
+                    for i in 0..target_positions.len() {
+                        let info = self.get_joint_info(body, joint_indices[i]);
+                        ffi::b3JointControlSetDesiredPosition(
+                            command_handle,
+                            info.m_q_index,
+                            target_positions[i],
+                        );
+                        ffi::b3JointControlSetKp(command_handle, info.m_u_index, kp);
+                        ffi::b3JointControlSetDesiredVelocity(
+                            command_handle,
+                            info.m_u_index,
+                            target_velocities[i],
+                        );
+
+                        ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
+                        ffi::b3JointControlSetMaximumForce(
+                            command_handle,
+                            info.m_u_index,
+                            forces[i],
+                        );
+                    }
+                }
+                ControlModeArray::PD {
+                    target_positions: pos,
+                    target_velocities: vel,
+                    position_gains: pg,
+                    velocity_gains: vg,
+                } => {
+                    if pos.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of target positions should match the number of joint indices",
+                        ));
+                    }
+                    if vel.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of target velocities should match the number of joint indices",
+                        ));
+                    }
+                    if pg.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of position gains should match the number of joint indices",
+                        ));
+                    }
+                    if vg.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of velocity gains should match the number of joint indices",
+                        ));
+                    }
+                    for i in 0..pos.len() {
+                        let info = self.get_joint_info(body, joint_indices[i]);
+                        ffi::b3JointControlSetDesiredPosition(
+                            command_handle,
+                            info.m_q_index,
+                            pos[i],
+                        );
+
+                        ffi::b3JointControlSetKp(command_handle, info.m_u_index, pg[i]);
+                        ffi::b3JointControlSetDesiredVelocity(
+                            command_handle,
+                            info.m_u_index,
+                            vel[i],
+                        );
+
+                        ffi::b3JointControlSetKd(command_handle, info.m_u_index, vg[i]);
+                        ffi::b3JointControlSetMaximumForce(
+                            command_handle,
+                            info.m_u_index,
+                            forces[i],
+                        );
+                    }
+                }
+                ControlModeArray::Velocities(vel) => {
+                    if vel.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of target velocities should match the number of joint indices",
+                        ));
+                    }
+                    for i in 0..vel.len() {
+                        let info = self.get_joint_info(body, joint_indices[i]);
+                        ffi::b3JointControlSetDesiredVelocity(
+                            command_handle,
+                            info.m_u_index,
+                            vel[i],
+                        );
+                        ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
+                        ffi::b3JointControlSetMaximumForce(
+                            command_handle,
+                            info.m_u_index,
+                            forces[i],
+                        );
+                    }
+                }
+                ControlModeArray::Torques(f) => {
+                    if f.len() != joint_indices.len() {
+                        return Err(Error::new(
+                            "number of target torques should match the number of joint indices",
+                        ));
+                    }
+                    for i in 0..f.len() {
+                        let info = self.get_joint_info(body, joint_indices[i]);
+                        ffi::b3JointControlSetDesiredForceTorque(
+                            command_handle,
+                            info.m_u_index,
+                            f[i],
+                        );
+                    }
+                }
+            }
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+        Ok(())
     }
 
     // pub fn configure_debug_visualizer(&mut self,flag:DebugVisualizerFlag, enable:bool,light_position:Option<[f64;3]>, shadow_map_resolution:Option<i32>, shadow_map_world_size:Option<i32>) {
@@ -723,6 +1002,29 @@ impl ControlMode {
             ControlMode::Velocity(_) => 0,
             ControlMode::Torque(_) => 1,
             ControlMode::PD { .. } => 3,
+        }
+    }
+}
+
+pub enum ControlModeArray<'a> {
+    Positions(&'a [f64]),
+    Velocities(&'a [f64]),
+    Torques(&'a [f64]),
+    PD {
+        target_positions: &'a [f64],
+        target_velocities: &'a [f64],
+        position_gains: &'a [f64],
+        velocity_gains: &'a [f64],
+    },
+}
+
+impl ControlModeArray<'_> {
+    fn get_int(&self) -> i32 {
+        match self {
+            ControlModeArray::Positions(_) => 2,
+            ControlModeArray::Velocities(_) => 0,
+            ControlModeArray::Torques(_) => 1,
+            ControlModeArray::PD { .. } => 3,
         }
     }
 }
