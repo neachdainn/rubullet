@@ -11,7 +11,7 @@ use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::{b3JointInfo, b3JointSensorState};
+use crate::ffi::{b3JointInfo, b3JointSensorState, b3LinkState};
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
@@ -305,6 +305,92 @@ impl PhysicsClient {
                 tra,
                 UnitQuaternion::from_quaternion(rot),
             ))
+        }
+    }
+
+    pub fn get_link_state(
+        &mut self,
+        body: BodyId,
+        link_index: i32,
+        compute_link_velocity: bool,
+        compute_forward_kinematics: bool,
+    ) -> Result<b3LinkState, Error> {
+        unsafe {
+            if body.0 < 0 {
+                return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
+            }
+            if link_index < 0 {
+                return Err(Error::new("getLinkState failed; invalid linkIndex"));
+            }
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            if compute_link_velocity {
+                ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
+            }
+            if compute_forward_kinematics {
+                ffi::b3RequestActualStateCommandComputeForwardKinematics(cmd_handle, 1);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("getLinkState failed."));
+            }
+            let mut link_state = b3LinkState::default();
+            if ffi::b3GetLinkState(
+                self.handle.as_ptr(),
+                status_handle,
+                link_index,
+                &mut link_state,
+            ) != 0
+            {
+                return Ok(link_state);
+            }
+        }
+        Err(Error::new("getLinkState failed."))
+    }
+    pub fn get_link_states(
+        &mut self,
+        body: BodyId,
+        link_indices: &[i32],
+        compute_link_velocity: bool,
+        compute_forward_kinematics: bool,
+    ) -> Result<Vec<b3LinkState>, Error> {
+        unsafe {
+            if body.0 < 0 {
+                return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
+            }
+            if link_indices.iter().any(|&x| x < 0) {
+                return Err(Error::new("getLinkState failed; invalid linkIndex"));
+            }
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            if compute_link_velocity {
+                ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
+            }
+            if compute_forward_kinematics {
+                ffi::b3RequestActualStateCommandComputeForwardKinematics(cmd_handle, 1);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("getLinkState failed."));
+            }
+            let mut link_states = Vec::<b3LinkState>::with_capacity(link_indices.len());
+            for &link_index in link_indices.iter() {
+                let mut link_state = b3LinkState::default();
+                if ffi::b3GetLinkState(
+                    self.handle.as_ptr(),
+                    status_handle,
+                    link_index,
+                    &mut link_state,
+                ) != 0
+                {
+                    link_states.push(link_state);
+                } else {
+                    return Err(Error::new("getLinkStates failed."));
+                }
+            }
+            Ok(link_states)
         }
     }
 

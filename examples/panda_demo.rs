@@ -159,14 +159,12 @@ impl PandaSim {
             )
             .unwrap();
         for i in 0..PandaSim::PANDA_NUM_DOFS {
-            // client.set_joint_motor_control_2(
-            //     self.id,
-            //     i as i32,
-            //     ControlMode::Position(joint_poses[i]),
-            //     Some(240. * 5.),
-            // );
+            client.set_joint_motor_control_2(
+                self.id,
+                i as i32,
+                ControlMode::Position(joint_poses[i]),
+                Some(240. * 5.),
+            );
         }
-        println!("{:?}", client.get_joint_state(self.id, 4));
-        client.set_joint_motor_control_2(self.id, 4 as i32, ControlMode::Torque(100.), None);
     }
 }

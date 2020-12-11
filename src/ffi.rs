@@ -128,7 +128,32 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
     ) -> b3SharedMemoryCommandHandle;
-
+    pub fn b3RequestActualStateCommandComputeLinkVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        computeLinkVelocity: c_int,
+    ) -> c_int;
+    pub fn b3RequestActualStateCommandComputeForwardKinematics(
+        commandHandle: b3SharedMemoryCommandHandle,
+        computeForwardKinematics: c_int,
+    ) -> c_int;
+    pub fn b3GetJointState(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        jointIndex: c_int,
+        state: *mut b3JointSensorState,
+    ) -> c_int;
+    pub fn b3GetJointStateMultiDof(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        jointIndex: c_int,
+        state: *mut b3JointSensorState2,
+    ) -> c_int;
+    pub fn b3GetLinkState(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        linkIndex: c_int,
+        state: *mut b3LinkState,
+    ) -> c_int;
     pub fn b3InitChangeDynamicsInfo(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
@@ -165,19 +190,6 @@ extern "C" {
         commandHandle: b3SharedMemoryCommandHandle,
         jointIndex: c_int,
         jointVelocity: f64,
-    ) -> c_int;
-
-    pub fn b3GetJointState(
-        physClient: b3PhysicsClientHandle,
-        statusHandle: b3SharedMemoryStatusHandle,
-        jointIndex: c_int,
-        state: *mut b3JointSensorState,
-    ) -> c_int;
-    pub fn b3GetJointStateMultiDof(
-        physClient: b3PhysicsClientHandle,
-        statusHandle: b3SharedMemoryStatusHandle,
-        jointIndex: c_int,
-        state: *mut b3JointSensorState2,
     ) -> c_int;
 
     pub fn b3ComputeDofCount(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
@@ -502,4 +514,22 @@ pub struct b3JointSensorState2 {
     pub m_joint_motor_torque_multi_dof: [f64; 3],
     pub m_q_dof_size: c_int,
     pub m_u_dof_size: c_int,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct b3LinkState {
+    pub m_world_position: [f64; 3],
+    pub m_world_orientation: [f64; 4],
+    pub m_local_inertial_position: [f64; 3],
+    pub m_local_inertial_orientation: [f64; 4],
+    pub m_world_linkFrame_position: [f64; 3],
+    pub m_world_linkFrame_orientation: [f64; 4],
+    ///only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
+    pub m_world_linear_velocity: [f64; 3],
+    ///only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
+    pub m_world_angular_velocity: [f64; 3],
+
+    pub m_world_aabb_min: [f64; 3],
+    pub m_world_aabb_max: [f64; 3],
 }
