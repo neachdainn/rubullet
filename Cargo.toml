@@ -21,9 +21,12 @@ path = "examples/hello_rubullet.rs"
 [[example]]
 name = "inverse_dynamics"
 path = "examples/inverse_dynamics.rs"
+[profile.dev]
+opt-level = 3
 
 [dependencies]
-nalgebra = "0.21.0"
+nalgebra = "0.23"
+image = "0.23.12"
 
 [build-dependencies]
 cmake = "0.1.42"

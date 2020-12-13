@@ -329,6 +329,60 @@ extern "C" {
         dofIndex: c_int,
         value: f64,
     ) -> c_int;
+    pub fn b3InitRequestCameraImage(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3RequestCameraImageSetPixelResolution(
+        commandHandle: b3SharedMemoryCommandHandle,
+        width: c_int,
+        height: c_int,
+    );
+    pub fn b3RequestCameraImageSetCameraMatrices(
+        commandHandle: b3SharedMemoryCommandHandle,
+        viewMatrix: *const f32,
+        projectionMatrix: *const f32,
+    );
+
+    pub fn b3GetCameraImageData(physClient: b3PhysicsClientHandle, imageData: *mut b3CameraImageData);
+
+    pub fn b3ComputeViewMatrixFromPositions(
+        cameraPosition: *const f32,
+        cameraTargetPosition: *const f32,
+        cameraUp: *const f32,
+        viewMatrix: *mut f32,
+    );
+    pub fn b3ComputeViewMatrixFromYawPitchRoll(
+        cameraTargetPosition: *const f32,
+        distance: f32,
+        yaw: f32,
+        pitch: f32,
+        roll: f32,
+        upAxis: c_int,
+        viewMatrix: *mut f32,
+    );
+    pub fn b3ComputePositionFromViewMatrix(
+        viewMatrix: *const f32,
+        cameraPosition: *mut f32,
+        cameraTargetPosition: *mut f32,
+        cameraUp: *mut f32,
+    );
+
+    pub fn b3ComputeProjectionMatrix(
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        nearVal: f32,
+        farVal: f32,
+        projectionMatrix: *mut f32,
+    );
+    pub fn b3ComputeProjectionMatrixFOV(
+        fov: f32,
+        aspect: f32,
+        nearVal: f32,
+        farVal: f32,
+        projectionMatrix: *mut f32,
+    );
 }
 
 #[repr(C)]
@@ -532,4 +586,26 @@ pub struct b3LinkState {
 
     pub m_world_aabb_min: [f64; 3],
     pub m_world_aabb_max: [f64; 3],
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct b3CameraImageData {
+    pub m_pixel_width: c_int,
+    pub m_pixel_height: c_int,
+    pub m_rgb_color_data: *mut [u8],
+    pub m_depth_values: *mut [f32],
+    pub m_segmentation_mask_values: *mut [c_int],
+}
+
+impl Default for b3CameraImageData {
+    fn default() -> Self {
+        b3CameraImageData {
+            m_pixel_width: 0,
+            m_pixel_height: 0,
+            m_rgb_color_data: &mut [0 as u8],
+            m_depth_values: &mut [0. as f32],
+            m_segmentation_mask_values: &mut [0],
+        }
+    }
 }

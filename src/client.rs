@@ -11,14 +11,13 @@ use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::{b3JointInfo, b3JointSensorState, b3LinkState};
+use crate::ffi::{b3JointInfo, b3JointSensorState, b3LinkState, b3CameraImageData};
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{
-    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
-};
+use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED};
 use std::time::Duration;
+use image::{RgbaImage, Rgba, ImageBuffer};
 
 /// The "handle" to the physics client.
 ///
@@ -694,7 +693,7 @@ impl PhysicsClient {
                     status_handle,
                     &mut result_body_index,
                     &mut num_pos,
-                    ik_output_joint_pos.as_mut_ptr(),
+                    ik_output_joint_pos.as_mut_slice().as_mut_ptr(),
                 );
                 return Ok(ik_output_joint_pos);
             }
@@ -992,6 +991,55 @@ impl PhysicsClient {
         Ok(())
     }
 
+    pub fn compute_view_matrix(camera_eye_position: &[f32; 3], camera_target_position: &[f32; 3], camera_up_vector: &[f32; 3]) -> [f32; 16] {
+        let mut view_matrix = [0. as f32; 16];
+        unsafe {
+            ffi::b3ComputeViewMatrixFromPositions(camera_eye_position.as_ptr(), camera_target_position.as_ptr(), camera_up_vector.as_ptr(), view_matrix.as_mut_ptr());
+            view_matrix
+        }
+    }
+    pub fn compute_view_matrix_from_yaw_pitch_roll(camera_target_position: &[f32; 3], distance: f32, yaw: f32, pitch: f32, roll: f32, up_axis_index: i32) -> [f32; 16] {
+        let mut view_matrix = [0. as f32; 16];
+        unsafe {
+            ffi::b3ComputeViewMatrixFromYawPitchRoll(camera_target_position.as_ptr(), distance, yaw, pitch, roll, up_axis_index, view_matrix.as_mut_ptr());
+            view_matrix
+        }
+    }
+
+    pub fn compute_projection_matrix(left: f32, right: f32, bottom: f32, top: f32, near_val: f32, far_val: f32) -> [f32; 16] {
+        let mut projection_matrix = [0. as f32; 16];
+        unsafe {
+            ffi::b3ComputeProjectionMatrix(left, right, bottom, top, near_val, far_val, projection_matrix.as_mut_ptr());
+            projection_matrix
+        }
+    }
+    pub fn compute_projection_matrix_fov(fov: f32, aspect: f32, near_val: f32, far_val: f32) -> [f32; 16] {
+        let mut projection_matrix = [0. as f32; 16];
+        unsafe {
+            ffi::b3ComputeProjectionMatrixFOV(fov, aspect, near_val, far_val, projection_matrix.as_mut_ptr());
+            projection_matrix
+        }
+    }
+    pub fn get_camera_image(&mut self, width: i32, height: i32, view_matrix: &[f32; 16], projection_matrix: &[f32; 16]) -> Result<RgbaImage, Error> {
+        unsafe {
+            let command = ffi::b3InitRequestCameraImage(self.handle.as_ptr());
+            ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
+            ffi::b3RequestCameraImageSetCameraMatrices(command, view_matrix.as_ptr(), projection_matrix.as_ptr());
+            if self.can_submit_command() {
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+                let status_type = ffi::b3GetStatusType(status_handle);
+                if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
+                    let mut image_data = b3CameraImageData::default();
+                    ffi::b3GetCameraImageData(self.handle.as_ptr(), &mut image_data);
+                    let mut a: &mut [u8];
+                    a = std::mem::transmute(image_data.m_rgb_color_data);
+                    let mut img: RgbaImage = ImageBuffer::from_vec(width as u32, height as u32, a[0..(width * height * 4) as usize].into()).unwrap();
+                    return Ok(img);
+                }
+            }
+            return Err(Error::new("getCameraImage failed"));
+        }
+    }
     // pub fn configure_debug_visualizer(&mut self,flag:DebugVisualizerFlag, enable:bool,light_position:Option<[f64;3]>, shadow_map_resolution:Option<i32>, shadow_map_world_size:Option<i32>) {
     pub fn configure_debug_visualizer(&mut self, flag: DebugVisualizerFlag, enable: bool) {
         unsafe {
