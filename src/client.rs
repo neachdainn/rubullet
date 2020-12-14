@@ -744,7 +744,7 @@ impl PhysicsClient {
                         status_handle,
                         &mut 0,
                         &mut 0,
-                        joint_forces_output.as_mut_ptr(),
+                        joint_forces_output.as_mut_slice().as_mut_ptr(),
                     );
                     return Ok(joint_forces_output);
                 }
