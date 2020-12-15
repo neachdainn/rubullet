@@ -9,15 +9,18 @@ use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 // until then...
 use std::os::unix::ffi::OsStrExt;
 
-use nalgebra::{Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::{b3JointInfo, b3JointSensorState, b3LinkState, b3CameraImageData};
+use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState};
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED};
+use crate::ffi::EnumSharedMemoryServerStatus::{
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
+    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED,
+};
+use image::{ImageBuffer, Rgba, RgbaImage};
 use std::time::Duration;
-use image::{RgbaImage, Rgba, ImageBuffer};
 
 /// The "handle" to the physics client.
 ///
@@ -755,6 +758,110 @@ impl PhysicsClient {
         ))
     }
 
+    pub fn calculate_jacobian(
+        &mut self,
+        body_id: BodyId,
+        link_index: i32,
+        local_position: &[f64; 3],
+        object_positions: &[f64],
+        object_velocities: &[f64],
+        object_accelerations: &[f64],
+    ) -> Result<Jacobian, Error> {
+        if object_positions.len() != object_velocities.len() {
+            return Err(Error::new(
+                "object_velocities  has not the same size as object_positions",
+            ));
+        }
+        if object_positions.len() != object_accelerations.len() {
+            return Err(Error::new(
+                "object_accelerations  has not the same size as object_positions",
+            ));
+        }
+        let num_joints = self.get_num_joints(body_id);
+        let mut dof_count_org = 0;
+        for j in 0..num_joints {
+            let joint_info = self.get_joint_info(body_id, j);
+            match joint_info.get_joint_type() {
+                JointType::Revolute | JointType::Prismatic => {
+                    dof_count_org += 1;
+                }
+                JointType::Spherical => {
+                    return Err(Error::new(
+                        "Spherical joints are not supported in the rubullet binding",
+                    ))
+                }
+                JointType::Planar => {
+                    return Err(Error::new(
+                        "Planar joints are not supported in the rubullet binding",
+                    ))
+                }
+                _ => {}
+            }
+        }
+        if dof_count_org != 0 && dof_count_org == object_positions.len() {
+            // let mut local_point = vec![0.;3];
+            // let mut joint_positions = vec![0.;dof_count_org];
+            // let mut joint_velocities = vec![0.;dof_count_org];
+            // let mut joint_accelerations = vec![0.;dof_count_org];
+            let mut local_point = local_position;
+            let mut joint_positions = object_positions;
+            let mut joint_velocities = object_velocities;
+            let mut joint_accelerations = object_accelerations;
+            // let mut linear_jacobian : &mut [f64];
+            // let mut angular_jacobian : &mut [f64];
+            let mut linear_jacobian: Vec<f64> = Vec::new();
+            let mut angular_jacobian: Vec<f64> = Vec::new();
+            unsafe {
+                let command_handle = ffi::b3CalculateJacobianCommandInit(
+                    self.handle.as_ptr(),
+                    body_id.0,
+                    link_index,
+                    local_point.as_ptr(),
+                    joint_positions.as_ptr(),
+                    joint_velocities.as_ptr(),
+                    joint_accelerations.as_ptr(),
+                );
+                let status_handle =
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                let status_type = ffi::b3GetStatusType(status_handle);
+                if status_type == CMD_CALCULATED_JACOBIAN_COMPLETED as i32 {
+                    let mut dof_count = 0;
+                    ffi::b3GetStatusJacobian(
+                        status_handle,
+                        &mut dof_count,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                    );
+                    if dof_count != 0 {
+                        linear_jacobian = vec![0.; 3 * dof_count as usize];
+                        angular_jacobian = vec![0.; 3 * dof_count as usize];
+                        ffi::b3GetStatusJacobian(
+                            status_handle,
+                            &mut dof_count,
+                            linear_jacobian.as_mut_slice().as_mut_ptr(),
+                            angular_jacobian.as_mut_slice().as_mut_ptr(),
+                        );
+                        let linear_jacobian_mat = DMatrix::from_row_slice(
+                            3,
+                            dof_count as usize,
+                            linear_jacobian.as_mut_slice(),
+                        );
+                        let angular_jacobian_mat = DMatrix::from_row_slice(
+                            3,
+                            dof_count as usize,
+                            angular_jacobian.as_mut_slice(),
+                        );
+                        return Ok(Jacobian {
+                            linear_jacobian: linear_jacobian_mat,
+                            angular_jacobian: angular_jacobian_mat,
+                        });
+                    }
+                }
+            }
+        }
+        Err(Error::new("Error in calculateJacobian"))
+    }
+
     /// sets joint motor commands. This function differs a bit from the corresponding pybullet function.
     /// Instead of providing optional arguments that depend on the Control Mode. The necessary Parameters
     /// are directly encoded in the ControlMode Enum
@@ -779,6 +886,7 @@ impl PhysicsClient {
         let kp = 0.1;
         let kd = 1.0;
         let target_velocity = 0.;
+        let max_vel: Option<f64> = None;
         unsafe {
             let command_handle = ffi::b3JointControlCommandInit2(
                 self.handle.as_ptr(),
@@ -808,10 +916,17 @@ impl PhysicsClient {
                 ControlMode::PD {
                     target_position: pos,
                     target_velocity: vel,
-                    position_gain: pg,
-                    velocity_gain: vg,
+                    position_gain: kp,
+                    velocity_gain: kd,
                     maximum_velocity: max_vel,
-                } => {
+                } | ControlMode::PositionWithPD {
+                    target_position: pos,
+                    target_velocity: vel,
+                    position_gain: kp,
+                    velocity_gain: kd,
+                    maximum_velocity: max_vel
+                }
+                => {
                     if let Some(max_vel) = max_vel {
                         ffi::b3JointControlSetMaximumVelocity(
                             command_handle,
@@ -821,10 +936,10 @@ impl PhysicsClient {
                     }
                     ffi::b3JointControlSetDesiredPosition(command_handle, info.m_q_index, pos);
 
-                    ffi::b3JointControlSetKp(command_handle, info.m_u_index, pg);
+                    ffi::b3JointControlSetKp(command_handle, info.m_u_index, kp);
                     ffi::b3JointControlSetDesiredVelocity(command_handle, info.m_u_index, vel);
 
-                    ffi::b3JointControlSetKd(command_handle, info.m_u_index, vg);
+                    ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                     ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
                 }
                 ControlMode::Velocity(vel) => {
@@ -900,6 +1015,11 @@ impl PhysicsClient {
                     }
                 }
                 ControlModeArray::PD {
+                    target_positions: pos,
+                    target_velocities: vel,
+                    position_gains: pg,
+                    velocity_gains: vg,
+                } | ControlModeArray::PositionsWithPD {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,
@@ -991,49 +1111,115 @@ impl PhysicsClient {
         Ok(())
     }
 
-    pub fn compute_view_matrix(camera_eye_position: &[f32; 3], camera_target_position: &[f32; 3], camera_up_vector: &[f32; 3]) -> [f32; 16] {
+    pub fn compute_view_matrix(
+        camera_eye_position: &[f32; 3],
+        camera_target_position: &[f32; 3],
+        camera_up_vector: &[f32; 3],
+    ) -> [f32; 16] {
         let mut view_matrix = [0. as f32; 16];
         unsafe {
-            ffi::b3ComputeViewMatrixFromPositions(camera_eye_position.as_ptr(), camera_target_position.as_ptr(), camera_up_vector.as_ptr(), view_matrix.as_mut_ptr());
+            ffi::b3ComputeViewMatrixFromPositions(
+                camera_eye_position.as_ptr(),
+                camera_target_position.as_ptr(),
+                camera_up_vector.as_ptr(),
+                view_matrix.as_mut_ptr(),
+            );
             view_matrix
         }
     }
-    pub fn compute_view_matrix_from_yaw_pitch_roll(camera_target_position: &[f32; 3], distance: f32, yaw: f32, pitch: f32, roll: f32, up_axis_index: i32) -> [f32; 16] {
+    pub fn compute_view_matrix_from_yaw_pitch_roll(
+        camera_target_position: &[f32; 3],
+        distance: f32,
+        yaw: f32,
+        pitch: f32,
+        roll: f32,
+        up_axis_index: i32,
+    ) -> [f32; 16] {
         let mut view_matrix = [0. as f32; 16];
         unsafe {
-            ffi::b3ComputeViewMatrixFromYawPitchRoll(camera_target_position.as_ptr(), distance, yaw, pitch, roll, up_axis_index, view_matrix.as_mut_ptr());
+            ffi::b3ComputeViewMatrixFromYawPitchRoll(
+                camera_target_position.as_ptr(),
+                distance,
+                yaw,
+                pitch,
+                roll,
+                up_axis_index,
+                view_matrix.as_mut_ptr(),
+            );
             view_matrix
         }
     }
 
-    pub fn compute_projection_matrix(left: f32, right: f32, bottom: f32, top: f32, near_val: f32, far_val: f32) -> [f32; 16] {
+    pub fn compute_projection_matrix(
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near_val: f32,
+        far_val: f32,
+    ) -> [f32; 16] {
         let mut projection_matrix = [0. as f32; 16];
         unsafe {
-            ffi::b3ComputeProjectionMatrix(left, right, bottom, top, near_val, far_val, projection_matrix.as_mut_ptr());
+            ffi::b3ComputeProjectionMatrix(
+                left,
+                right,
+                bottom,
+                top,
+                near_val,
+                far_val,
+                projection_matrix.as_mut_ptr(),
+            );
             projection_matrix
         }
     }
-    pub fn compute_projection_matrix_fov(fov: f32, aspect: f32, near_val: f32, far_val: f32) -> [f32; 16] {
+    pub fn compute_projection_matrix_fov(
+        fov: f32,
+        aspect: f32,
+        near_val: f32,
+        far_val: f32,
+    ) -> [f32; 16] {
         let mut projection_matrix = [0. as f32; 16];
         unsafe {
-            ffi::b3ComputeProjectionMatrixFOV(fov, aspect, near_val, far_val, projection_matrix.as_mut_ptr());
+            ffi::b3ComputeProjectionMatrixFOV(
+                fov,
+                aspect,
+                near_val,
+                far_val,
+                projection_matrix.as_mut_ptr(),
+            );
             projection_matrix
         }
     }
-    pub fn get_camera_image(&mut self, width: i32, height: i32, view_matrix: &[f32; 16], projection_matrix: &[f32; 16]) -> Result<RgbaImage, Error> {
+    pub fn get_camera_image(
+        &mut self,
+        width: i32,
+        height: i32,
+        view_matrix: &[f32; 16],
+        projection_matrix: &[f32; 16],
+    ) -> Result<RgbaImage, Error> {
         unsafe {
             let command = ffi::b3InitRequestCameraImage(self.handle.as_ptr());
             ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
-            ffi::b3RequestCameraImageSetCameraMatrices(command, view_matrix.as_ptr(), projection_matrix.as_ptr());
+            ffi::b3RequestCameraImageSetCameraMatrices(
+                command,
+                view_matrix.as_ptr(),
+                projection_matrix.as_ptr(),
+            );
             if self.can_submit_command() {
-                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+                let status_handle =
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
                     ffi::b3GetCameraImageData(self.handle.as_ptr(), &mut image_data);
                     let mut a: &mut [u8];
                     a = std::mem::transmute(image_data.m_rgb_color_data);
-                    let mut img: RgbaImage = ImageBuffer::from_vec(width as u32, height as u32, a[0..(width * height * 4) as usize].into()).unwrap();
+                    let mut img: RgbaImage = ImageBuffer::from_vec(
+                        width as u32,
+                        height as u32,
+                        a[0..(width * height * 4) as usize].into(),
+                    )
+                        .unwrap();
                     return Ok(img);
                 }
             }
@@ -1118,6 +1304,13 @@ impl Default for UrdfOptions {
 
 pub enum ControlMode {
     Position(f64),
+    PositionWithPD {
+        target_position: f64,
+        target_velocity: f64,
+        position_gain: f64,
+        velocity_gain: f64,
+        maximum_velocity: Option<f64>,
+    },
     Velocity(f64),
     Torque(f64),
     PD {
@@ -1136,12 +1329,19 @@ impl ControlMode {
             ControlMode::Velocity(_) => 0,
             ControlMode::Torque(_) => 1,
             ControlMode::PD { .. } => 3,
+            ControlMode::PositionWithPD { .. } => 2,
         }
     }
 }
 
 pub enum ControlModeArray<'a> {
     Positions(&'a [f64]),
+    PositionsWithPD {
+        target_positions: &'a [f64],
+        target_velocities: &'a [f64],
+        position_gains: &'a [f64],
+        velocity_gains: &'a [f64],
+    },
     Velocities(&'a [f64]),
     Torques(&'a [f64]),
     PD {
@@ -1159,6 +1359,7 @@ impl ControlModeArray<'_> {
             ControlModeArray::Velocities(_) => 0,
             ControlModeArray::Torques(_) => 1,
             ControlModeArray::PD { .. } => 3,
+            ControlModeArray::PositionsWithPD { .. } => 2,
         }
     }
 }
@@ -1282,4 +1483,10 @@ impl b3JointInfo {
     pub fn get_joint_type(&self) -> JointType {
         JointType::try_from(self.m_joint_type).unwrap()
     }
+}
+
+#[derive(Debug)]
+pub struct Jacobian {
+    pub linear_jacobian: DMatrix<f64>,
+    pub angular_jacobian: DMatrix<f64>,
 }

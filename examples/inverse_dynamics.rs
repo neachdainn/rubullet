@@ -36,9 +36,9 @@ fn main() -> Result<(), Terminator> {
     let steps = ((end - start) / delta_t.as_secs_f64()) as usize;
     let mut t = vec![0.; steps];
 
-    let mut q_pos_desired = vec![vec![0.; steps]; steps];
-    let mut q_vel_desired = vec![vec![0.; steps]; steps];
-    let mut q_acc_desired = vec![vec![0.; steps]; steps];
+    let mut q_pos_desired = vec![vec![0.; steps]; 2];
+    let mut q_vel_desired = vec![vec![0.; steps]; 2];
+    let mut q_acc_desired = vec![vec![0.; steps]; 2];
 
     for s in 0..steps {
         t[s] = start + s as f64 * delta_t.as_secs_f64();
@@ -51,9 +51,9 @@ fn main() -> Result<(), Terminator> {
         q_acc_desired[0][s] = -2. * PI * f64::sin(2. * PI * t[s]);
         q_acc_desired[1][s] = 2. * PI * f64::cos(2. * PI * t[s]);
     }
-    let mut q_pos = vec![vec![0.; steps]; steps];
-    let mut q_vel = vec![vec![0.; steps]; steps];
-    let mut q_tor = vec![vec![0.; steps]; steps];
+    let mut q_pos = vec![vec![0.; steps]; 2];
+    let mut q_vel = vec![vec![0.; steps]; 2];
+    let mut q_tor = vec![vec![0.; steps]; 2];
 
     for i in 0..t.len() {
         let joint_states = physics_client.get_joint_states(id_robot, &[0, 3])?;

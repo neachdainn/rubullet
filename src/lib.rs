@@ -5,6 +5,7 @@ pub use crate::{
     client::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions},
     error::Error,
     mode::Mode,
+    ffi::{b3JointInfo, b3JointSensorState}
 };
 
 /// A utility for creating C-string literals.

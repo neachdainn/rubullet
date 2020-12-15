@@ -287,6 +287,21 @@ extern "C" {
         residualThreshold: f64,
     );
 
+    pub fn b3CalculateJacobianCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        localPosition: *const f64,
+        jointPositionsQ: *const f64,
+        jointVelocitiesQdot: *const f64,
+        jointAccelerations: *const f64,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3GetStatusJacobian(
+        statusHandle: b3SharedMemoryStatusHandle,
+        dofCount: *mut c_int,
+        linearJacobian: *mut f64,
+        angularJacobian: *mut f64,
+    ) -> c_int;
     pub fn b3JointControlCommandInit2(
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
@@ -551,7 +566,7 @@ pub struct b3JointInfo {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct b3JointSensorState {
     pub m_joint_position: f64,
     pub m_joint_velocity: f64,
@@ -577,8 +592,8 @@ pub struct b3LinkState {
     pub m_world_orientation: [f64; 4],
     pub m_local_inertial_position: [f64; 3],
     pub m_local_inertial_orientation: [f64; 4],
-    pub m_world_linkFrame_position: [f64; 3],
-    pub m_world_linkFrame_orientation: [f64; 4],
+    pub m_world_link_frame_position: [f64; 3],
+    pub m_world_link_frame_orientation: [f64; 4],
     ///only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
     pub m_world_linear_velocity: [f64; 3],
     ///only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
