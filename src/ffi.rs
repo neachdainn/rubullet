@@ -222,10 +222,7 @@ extern "C" {
         dofCountQ: c_int,
     ) -> b3SharedMemoryCommandHandle;
 
-    pub fn b3CalculateMassMatrixSetFlags(
-        commandHandle: b3SharedMemoryCommandHandle,
-        flags: c_int,
-    );
+    pub fn b3CalculateMassMatrixSetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
 
     #[doc = "the mass matrix is stored in column-major layout of size dofCount*dofCount"]
     pub fn b3GetStatusMassMatrix(

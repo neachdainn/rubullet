@@ -128,7 +128,6 @@ fn main() -> Result<(), Terminator> {
     set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints as usize].as_slice());
     p.step_simulation();
 
-
     let (pos, vel, torq) = get_joint_states(&mut p, kuka_id);
     let (mpos, mvel, mtorq) = get_motor_joint_states(&mut p, kuka_id);
     let result = p.get_link_state(kuka_id, kuka_end_effector_index, true, true)?;

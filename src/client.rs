@@ -15,7 +15,11 @@ use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED};
+use crate::ffi::EnumSharedMemoryServerStatus::{
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
+    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
+    CMD_CAMERA_IMAGE_COMPLETED,
+};
 use image::{ImageBuffer, RgbaImage};
 use std::time::Duration;
 
@@ -551,22 +555,46 @@ impl PhysicsClient {
             Ok(result_list_joint_states)
         }
     }
-    pub fn calculate_mass_matrix(&mut self, body: BodyId, object_positions: &[f64]) -> Result<DMatrix<f64>, Error> {
+    pub fn calculate_mass_matrix(
+        &mut self,
+        body: BodyId,
+        object_positions: &[f64],
+    ) -> Result<DMatrix<f64>, Error> {
         if object_positions.len() > 0 {
             let joint_positions = object_positions;
             let flags = 0; // TODO add flags
             unsafe {
-                let command_handle = ffi::b3CalculateMassMatrixCommandInit(self.handle.as_ptr(), body.0, joint_positions.as_ptr(), joint_positions.len() as i32);
+                let command_handle = ffi::b3CalculateMassMatrixCommandInit(
+                    self.handle.as_ptr(),
+                    body.0,
+                    joint_positions.as_ptr(),
+                    joint_positions.len() as i32,
+                );
                 ffi::b3CalculateMassMatrixSetFlags(command_handle, flags);
-                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                let status_handle =
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CALCULATED_MASS_MATRIX_COMPLETED as i32 {
                     let mut dof_count = 0;
-                    ffi::b3GetStatusMassMatrix(self.handle.as_ptr(), status_handle, &mut dof_count, std::ptr::null_mut());
+                    ffi::b3GetStatusMassMatrix(
+                        self.handle.as_ptr(),
+                        status_handle,
+                        &mut dof_count,
+                        std::ptr::null_mut(),
+                    );
                     if dof_count != 0 {
                         let mut mass_vec = vec![0.; (dof_count * dof_count) as usize];
-                        ffi::b3GetStatusMassMatrix(self.handle.as_ptr(), status_handle, &mut dof_count, mass_vec.as_mut_slice().as_mut_ptr());
-                        let mass_mat = DMatrix::<f64>::from_row_slice(dof_count as usize, dof_count as usize, mass_vec.as_slice());
+                        ffi::b3GetStatusMassMatrix(
+                            self.handle.as_ptr(),
+                            status_handle,
+                            &mut dof_count,
+                            mass_vec.as_mut_slice().as_mut_ptr(),
+                        );
+                        let mass_mat = DMatrix::<f64>::from_row_slice(
+                            dof_count as usize,
+                            dof_count as usize,
+                            mass_vec.as_slice(),
+                        );
                         return Ok(mass_mat);
                     }
                 } else {
@@ -932,14 +960,14 @@ impl PhysicsClient {
                     position_gain: kp,
                     velocity_gain: kd,
                     maximum_velocity: max_vel,
-                } | ControlMode::PositionWithPD {
+                }
+                | ControlMode::PositionWithPD {
                     target_position: pos,
                     target_velocity: vel,
                     position_gain: kp,
                     velocity_gain: kd,
-                    maximum_velocity: max_vel
-                }
-                => {
+                    maximum_velocity: max_vel,
+                } => {
                     if let Some(max_vel) = max_vel {
                         ffi::b3JointControlSetMaximumVelocity(
                             command_handle,
@@ -1032,7 +1060,8 @@ impl PhysicsClient {
                     target_velocities: vel,
                     position_gains: pg,
                     velocity_gains: vg,
-                } | ControlModeArray::PositionsWithPD {
+                }
+                | ControlModeArray::PositionsWithPD {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,

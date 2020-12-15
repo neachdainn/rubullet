@@ -1,11 +1,14 @@
-use nalgebra::{DMatrix, Isometry3, Vector3, UnitQuaternion, Quaternion, Rotation3};
-use rubullet::client::ControlModeArray;
-use rubullet::mode::Mode::Direct;
-use rubullet::{b3JointInfo, b3JointSensorState, BodyId, PhysicsClient, UrdfOptions, JointType, ControlMode, DebugVisualizerFlag};
-use std::time::Duration;
-use rubullet::client::ControlModeArray::Torques;
-use std::f64::consts::PI;
 use easy_error::Terminator;
+use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3};
+use rubullet::client::ControlModeArray;
+use rubullet::client::ControlModeArray::Torques;
+use rubullet::mode::Mode::Direct;
+use rubullet::{
+    b3JointInfo, b3JointSensorState, BodyId, ControlMode, DebugVisualizerFlag, JointType,
+    PhysicsClient, UrdfOptions,
+};
+use std::f64::consts::PI;
+use std::time::Duration;
 
 fn slice_compare(a: &[f64], b: &[f64], thresh: f64) {
     assert_eq!(a.len(), b.len());
@@ -275,24 +278,30 @@ pub fn inverse_dynamics_test() {
     ];
     let delta_t = Duration::from_secs_f64(0.1);
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
-    physics_client.set_additional_search_path("bullet3/libbullet3/data").unwrap();
+    physics_client
+        .set_additional_search_path("bullet3/libbullet3/data")
+        .unwrap();
     physics_client.set_time_step(&delta_t);
     let id_revolute_joints = [0, 3];
-    let id_robot = physics_client.load_urdf(
-        "TwoJointRobot_w_fixedJoints.urdf",
-        UrdfOptions {
-            use_fixed_base: true,
-            ..Default::default()
-        },
-    ).unwrap();
+    let id_robot = physics_client
+        .load_urdf(
+            "TwoJointRobot_w_fixedJoints.urdf",
+            UrdfOptions {
+                use_fixed_base: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     physics_client.change_dynamics_angular_damping(id_robot, 0.);
     physics_client.change_dynamics_linear_damping(id_robot, 0.);
-    physics_client.set_joint_motor_control_array(
-        id_robot,
-        &id_revolute_joints,
-        ControlModeArray::Velocities(&[0., 0.]),
-        Some([0., 0.].to_vec()),
-    ).unwrap();
+    physics_client
+        .set_joint_motor_control_array(
+            id_robot,
+            &id_revolute_joints,
+            ControlModeArray::Velocities(&[0., 0.]),
+            Some([0., 0.].to_vec()),
+        )
+        .unwrap();
 
     // Target Positions:
     let start = 0.;
@@ -333,23 +342,20 @@ pub fn inverse_dynamics_test() {
         let obj_vel = [q_vel[0][i], q_vel[1][i]];
         let obj_acc = [q_acc_desired[0][i], q_acc_desired[1][i]];
 
-        let torque =
-            physics_client.calculate_inverse_dynamics(id_robot, &obj_pos, &obj_vel, &obj_acc).unwrap();
+        let torque = physics_client
+            .calculate_inverse_dynamics(id_robot, &obj_pos, &obj_vel, &obj_acc)
+            .unwrap();
 
         q_tor[0][i] = torque[0];
         q_tor[1][i] = torque[1];
 
-        physics_client.set_joint_motor_control_array(
-            id_robot,
-            &id_revolute_joints,
-            Torques(&torque),
-            None,
-        ).unwrap();
+        physics_client
+            .set_joint_motor_control_array(id_robot, &id_revolute_joints, Torques(&torque), None)
+            .unwrap();
         physics_client.step_simulation().unwrap();
     }
     slice_compare(q_tor[0].as_slice(), &target_torque[0], 1e-10);
 }
-
 
 #[test]
 fn test_mass_matrix_and_inverse_kinematics() -> Result<(), Terminator> {
@@ -457,11 +463,104 @@ impl PandaSim {
                 Some(240. * 5.),
             );
         }
-        let target_mass_matrix = [1.2851012047449573, 0.019937918309349063, 1.099094168104455, -0.13992071941819356, -0.04530258995812824, 0.015010766618204326, -0.00419273685297444, -0.004045701114304651, 0.004045701114304651, 0.019937918309349063, 1.4200408634854977, -0.13973846625926817, -0.6766534143669977, -0.011150292631844208, -0.11222097289908575, 7.963273507305265e-05, 0.021288781819096075, -0.021288781819096075, 1.099094168104455, -0.13973846625926817, 1.0599485744387636, -0.01927738076755258, -0.03898176486608705, 0.0367718209930567, -0.0038394168220030464, -0.008321730809750807, 0.008321730809750807, -0.13992071941819356, -0.6766534143669977, -0.01927738076755258, 0.8883254282752625, 0.03919655691643165, 0.13355872722768167, 0.0005209277856703768, -0.04891378328717881, 0.04891378328717881, -0.04530258995812824, -0.011150292631844208, -0.03898176486608705, 0.03919655691643165, 0.028341271915447625, -0.0001434455846943853, 0.0037745850335795, 1.8885374235014403e-05, -1.8885374235014403e-05, 0.015010766618204326, -0.11222097289908575, 0.0367718209930567, 0.13355872722768167, -0.0001434455846943853, 0.047402314149303876, 2.053797643165216e-14, -0.018417574890008004, 0.018417574890008004, -0.00419273685297444, 7.963273507305265e-05, -0.0038394168220030464, 0.0005209277856703768, 0.0037745850335795, 2.053797643165216e-14, 0.004194301009161442, 0.0, 0.0, -0.004045701114304651, 0.021288781819096075, -0.008321730809750807, -0.04891378328717881, 1.8885374235014403e-05, -0.018417574890008004, 0.0, 0.1, 0.0, 0.004045701114304651, -0.021288781819096075, 0.008321730809750807, 0.04891378328717881, -1.8885374235014403e-05, 0.018417574890008004, 0.0, 0.0, 0.1];
-        let target_joint_poses = [1.1029851000632531, 0.43354557662855453, 0.3608104666320187, -2.3105861116521096, -0.2888395010735958, 2.6904095021250938, 2.4711777602235387, 0.02, 0.02];
-        let mass = client.calculate_mass_matrix(self.id, joint_poses.as_slice()).unwrap();
+        let target_mass_matrix = [
+            1.2851012047449573,
+            0.019937918309349063,
+            1.099094168104455,
+            -0.13992071941819356,
+            -0.04530258995812824,
+            0.015010766618204326,
+            -0.00419273685297444,
+            -0.004045701114304651,
+            0.004045701114304651,
+            0.019937918309349063,
+            1.4200408634854977,
+            -0.13973846625926817,
+            -0.6766534143669977,
+            -0.011150292631844208,
+            -0.11222097289908575,
+            7.963273507305265e-05,
+            0.021288781819096075,
+            -0.021288781819096075,
+            1.099094168104455,
+            -0.13973846625926817,
+            1.0599485744387636,
+            -0.01927738076755258,
+            -0.03898176486608705,
+            0.0367718209930567,
+            -0.0038394168220030464,
+            -0.008321730809750807,
+            0.008321730809750807,
+            -0.13992071941819356,
+            -0.6766534143669977,
+            -0.01927738076755258,
+            0.8883254282752625,
+            0.03919655691643165,
+            0.13355872722768167,
+            0.0005209277856703768,
+            -0.04891378328717881,
+            0.04891378328717881,
+            -0.04530258995812824,
+            -0.011150292631844208,
+            -0.03898176486608705,
+            0.03919655691643165,
+            0.028341271915447625,
+            -0.0001434455846943853,
+            0.0037745850335795,
+            1.8885374235014403e-05,
+            -1.8885374235014403e-05,
+            0.015010766618204326,
+            -0.11222097289908575,
+            0.0367718209930567,
+            0.13355872722768167,
+            -0.0001434455846943853,
+            0.047402314149303876,
+            2.053797643165216e-14,
+            -0.018417574890008004,
+            0.018417574890008004,
+            -0.00419273685297444,
+            7.963273507305265e-05,
+            -0.0038394168220030464,
+            0.0005209277856703768,
+            0.0037745850335795,
+            2.053797643165216e-14,
+            0.004194301009161442,
+            0.0,
+            0.0,
+            -0.004045701114304651,
+            0.021288781819096075,
+            -0.008321730809750807,
+            -0.04891378328717881,
+            1.8885374235014403e-05,
+            -0.018417574890008004,
+            0.0,
+            0.1,
+            0.0,
+            0.004045701114304651,
+            -0.021288781819096075,
+            0.008321730809750807,
+            0.04891378328717881,
+            -1.8885374235014403e-05,
+            0.018417574890008004,
+            0.0,
+            0.0,
+            0.1,
+        ];
+        let target_joint_poses = [
+            1.1029851000632531,
+            0.43354557662855453,
+            0.3608104666320187,
+            -2.3105861116521096,
+            -0.2888395010735958,
+            2.6904095021250938,
+            2.4711777602235387,
+            0.02,
+            0.02,
+        ];
+        let mass = client
+            .calculate_mass_matrix(self.id, joint_poses.as_slice())
+            .unwrap();
         slice_compare(mass.as_slice(), &target_mass_matrix, 1e-6);
         slice_compare(joint_poses.as_slice(), &target_joint_poses, 1e-6);
     }
 }
-
