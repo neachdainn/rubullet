@@ -215,6 +215,26 @@ extern "C" {
         jointForces: *mut f64,
     ) -> c_int;
 
+    pub fn b3CalculateMassMatrixCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        jointPositionsQ: *const f64,
+        dofCountQ: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CalculateMassMatrixSetFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        flags: c_int,
+    );
+
+    #[doc = "the mass matrix is stored in column-major layout of size dofCount*dofCount"]
+    pub fn b3GetStatusMassMatrix(
+        physClient: b3PhysicsClientHandle,
+        statusHandle: b3SharedMemoryStatusHandle,
+        dofCount: *mut c_int,
+        massMatrix: *mut f64,
+    ) -> c_int;
+
     pub fn b3CalculateInverseKinematicsCommandInit(
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
@@ -358,7 +378,10 @@ extern "C" {
         projectionMatrix: *const f32,
     );
 
-    pub fn b3GetCameraImageData(physClient: b3PhysicsClientHandle, imageData: *mut b3CameraImageData);
+    pub fn b3GetCameraImageData(
+        physClient: b3PhysicsClientHandle,
+        imageData: *mut b3CameraImageData,
+    );
 
     pub fn b3ComputeViewMatrixFromPositions(
         cameraPosition: *const f32,

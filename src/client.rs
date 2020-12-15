@@ -15,11 +15,8 @@ use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{
-    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
-    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED,
-};
-use image::{ImageBuffer, Rgba, RgbaImage};
+use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED};
+use image::{ImageBuffer, RgbaImage};
 use std::time::Duration;
 
 /// The "handle" to the physics client.
@@ -554,7 +551,31 @@ impl PhysicsClient {
             Ok(result_list_joint_states)
         }
     }
-
+    pub fn calculate_mass_matrix(&mut self, body: BodyId, object_positions: &[f64]) -> Result<DMatrix<f64>, Error> {
+        if object_positions.len() > 0 {
+            let joint_positions = object_positions;
+            let flags = 0; // TODO add flags
+            unsafe {
+                let command_handle = ffi::b3CalculateMassMatrixCommandInit(self.handle.as_ptr(), body.0, joint_positions.as_ptr(), joint_positions.len() as i32);
+                ffi::b3CalculateMassMatrixSetFlags(command_handle, flags);
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                let status_type = ffi::b3GetStatusType(status_handle);
+                if status_type == CMD_CALCULATED_MASS_MATRIX_COMPLETED as i32 {
+                    let mut dof_count = 0;
+                    ffi::b3GetStatusMassMatrix(self.handle.as_ptr(), status_handle, &mut dof_count, std::ptr::null_mut());
+                    if dof_count != 0 {
+                        let mut mass_vec = vec![0.; (dof_count * dof_count) as usize];
+                        ffi::b3GetStatusMassMatrix(self.handle.as_ptr(), status_handle, &mut dof_count, mass_vec.as_mut_slice().as_mut_ptr());
+                        let mass_mat = DMatrix::<f64>::from_row_slice(dof_count as usize, dof_count as usize, mass_vec.as_slice());
+                        return Ok(mass_mat);
+                    }
+                } else {
+                    return Err(Error::new("Internal error in calculateMassMatrix"));
+                }
+            }
+        }
+        Err(Error::new("error in calculate_mass_matrix"))
+    }
     // TODO make some of the parameters optional
     #[allow(clippy::too_many_arguments)]
     pub fn calculate_inverse_kinematics(
@@ -799,18 +820,11 @@ impl PhysicsClient {
             }
         }
         if dof_count_org != 0 && dof_count_org == object_positions.len() {
-            // let mut local_point = vec![0.;3];
-            // let mut joint_positions = vec![0.;dof_count_org];
-            // let mut joint_velocities = vec![0.;dof_count_org];
-            // let mut joint_accelerations = vec![0.;dof_count_org];
             let mut local_point = local_position;
             let mut joint_positions = object_positions;
             let mut joint_velocities = object_velocities;
             let mut joint_accelerations = object_accelerations;
-            // let mut linear_jacobian : &mut [f64];
-            // let mut angular_jacobian : &mut [f64];
-            let mut linear_jacobian: Vec<f64> = Vec::new();
-            let mut angular_jacobian: Vec<f64> = Vec::new();
+
             unsafe {
                 let command_handle = ffi::b3CalculateJacobianCommandInit(
                     self.handle.as_ptr(),
@@ -833,8 +847,8 @@ impl PhysicsClient {
                         std::ptr::null_mut(),
                     );
                     if dof_count != 0 {
-                        linear_jacobian = vec![0.; 3 * dof_count as usize];
-                        angular_jacobian = vec![0.; 3 * dof_count as usize];
+                        let mut linear_jacobian = vec![0.; 3 * dof_count as usize];
+                        let mut angular_jacobian = vec![0.; 3 * dof_count as usize];
                         ffi::b3GetStatusJacobian(
                             status_handle,
                             &mut dof_count,
@@ -886,7 +900,6 @@ impl PhysicsClient {
         let kp = 0.1;
         let kd = 1.0;
         let target_velocity = 0.;
-        let max_vel: Option<f64> = None;
         unsafe {
             let command_handle = ffi::b3JointControlCommandInit2(
                 self.handle.as_ptr(),
