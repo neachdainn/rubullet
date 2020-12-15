@@ -104,6 +104,13 @@ impl PhysicsClient {
         // The client is up and running
         Ok(client)
     }
+    pub fn reset_simulation(&mut self) {
+        unsafe {
+            let command_handle = ffi::b3InitResetSimulationCommand(self.handle.as_ptr());
+            ffi::b3InitResetSimulationSetFlags(command_handle, 0);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+    }
     pub fn set_time_step(&mut self, time_step: &Duration) {
         unsafe {
             let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());

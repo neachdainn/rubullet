@@ -89,6 +89,19 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
 
+    pub fn b3InitResetSimulationCommand(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitResetSimulationCommand2(
+        commandHandle: b3SharedMemoryCommandHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitResetSimulationSetFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        flags: c_int,
+    ) -> c_int;
+
     pub fn b3SetAdditionalSearchPath(
         physClient: b3PhysicsClientHandle,
         path: *const c_char,
