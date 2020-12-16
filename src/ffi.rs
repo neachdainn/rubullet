@@ -1,6 +1,7 @@
 //! Foreign function interface for Bullet C API.
 #![allow(non_camel_case_types, non_snake_case)]
-use std::os::raw::{c_char, c_int};
+
+use std::os::raw::{c_char, c_int, c_uchar};
 
 #[repr(C)]
 pub struct b3PhysicsClientHandle__ {
@@ -431,6 +432,30 @@ extern "C" {
         farVal: f32,
         projectionMatrix: *mut f32,
     );
+
+    pub fn b3InitUserDebugAddParameter(
+        physClient: b3PhysicsClientHandle,
+        // this was once a normal charbut i could only get pointers as u8 instead of i8
+        // so now this parameter is a uchar. seems to work
+        txt: *const c_uchar,
+        rangeMin: f64,
+        rangeMax: f64,
+        startValue: f64,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetDebugItemUniqueId(
+        statusHandle: b3SharedMemoryStatusHandle,
+    ) -> c_int;
+
+    pub fn b3InitUserDebugReadParameter(
+        physClient: b3PhysicsClientHandle,
+        debugItemUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusDebugParameterValue(
+        statusHandle: b3SharedMemoryStatusHandle,
+        paramValue: *mut f64,
+    ) -> c_int;
 }
 
 #[repr(C)]

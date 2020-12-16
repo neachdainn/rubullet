@@ -15,11 +15,7 @@ use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{
-    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
-    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED,
-};
+use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED};
 use image::{ImageBuffer, RgbaImage};
 use std::time::Duration;
 
@@ -1300,6 +1296,47 @@ impl PhysicsClient {
                 enable as i32,
             );
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+    }
+    ///
+    /// Buttons are currently not working
+    /// Examples:
+    /// ```no_run
+    /// use rubullet::PhysicsClient;
+    /// use rubullet::mode::Mode::Gui;
+    /// let mut client = PhysicsClient::connect(Gui)?;
+    /// let slider = client.add_user_debug_parameter("my_slider",0.,1.,0.5)?;
+    /// let button = client.add_user_debug_parameter("my_button",1.,0.,1.)?;
+    /// let value_slider = client.read_user_debug_parameter(slider)?;
+    /// let value_button = client.read_user_debug_parameter(button)?; // value increases by one for every press
+    /// ```
+    // TODO Figure out why button are not working
+    pub fn add_user_debug_parameter<Param: Into<String>>(&mut self, param_name: Param, range_min: f64, range_max: f64, start_value: f64) -> Result<i32, Error> {
+        unsafe {
+            let command_handle = ffi::b3InitUserDebugAddParameter(self.handle.as_ptr(), param_name.into().as_str().as_ptr(), range_min, range_max, start_value);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
+                let debug_item_unique_id = ffi::b3GetDebugItemUniqueId(status_handle);
+                return Ok(debug_item_unique_id);
+            }
+            Err(Error::new("Error in addUserDebugParameter."))
+        }
+    }
+
+    pub fn read_user_debug_parameter(&mut self, item_unique_id: i32) -> Result<f64, Error> {
+        unsafe {
+            let command_handle = ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED as i32 {
+                let mut param_value = 0.;
+                let ok = ffi::b3GetStatusDebugParameterValue(status_handle, &mut param_value);
+                if ok != 0 {
+                    return Ok(param_value);
+                }
+            }
+            Err(Error::new("Failed to read parameter."))
         }
     }
 }
