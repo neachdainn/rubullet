@@ -2,8 +2,9 @@ use std::f64::consts::PI;
 use std::time::Duration;
 
 use easy_error::Terminator;
-use nalgebra::{Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 
+use rubullet::client::{InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder};
 use rubullet::*;
 
 fn main() -> Result<(), Terminator> {
@@ -35,9 +36,16 @@ impl PandaSim {
         [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
     const PANDA_NUM_DOFS: usize = 7;
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
-    const LL: [f64; 7] = [-7.; 7];
-    const UL: [f64; 7] = [7.; 7];
-    const JR: [f64; 7] = [7.; 7];
+    const LL: [f64; 9] = [-7.; 9];
+    const UL: [f64; 9] = [7.; 9];
+    const JR: [f64; 9] = [7.; 9];
+    const NULL_SPACE_PARAMETERS: InverseKinematicsNullSpaceParameters<'static> =
+        InverseKinematicsNullSpaceParameters {
+            lower_limits: &PandaSim::LL,
+            upper_limits: &PandaSim::UL,
+            joint_ranges: &PandaSim::JR,
+            rest_poses: &PandaSim::INITIAL_JOINT_POSITIONS,
+        };
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
         let transform = Isometry3::new(
             Vector3::new(0., 0., -0.6) + offset.clone(),
@@ -137,26 +145,25 @@ impl PandaSim {
     pub fn step(&mut self, client: &mut PhysicsClient) {
         let t = self.t.as_secs_f64();
         self.t += Duration::from_secs_f64(1. / 60.);
-        let pos = [
-            0.2 * f64::sin(1.5 * t),
-            0.044,
-            -0.6 + 0.1 * f64::cos(1.5 * t),
-        ];
 
-        let quat = UnitQuaternion::<f64>::from_euler_angles(PI / 2., 0., 0.);
-        let orn = [quat.i, quat.j, quat.k, quat.w];
-
+        let pose = Isometry3::from_parts(
+            Translation3::new(
+                0.2 * f64::sin(1.5 * t),
+                0.044,
+                -0.6 + 0.1 * f64::cos(1.5 * t),
+            ),
+            UnitQuaternion::<f64>::from_euler_angles(PI / 2., 0., 0.),
+        );
+        let inverse_kinematics_parameters = InverseKinematicsParametersBuilder::new(
+            self.id,
+            PandaSim::PANDA_END_EFFECTOR_INDEX,
+            &pose,
+        )
+            .set_max_num_iterations(5)
+            .use_null_space(PandaSim::NULL_SPACE_PARAMETERS)
+            .build();
         let joint_poses = client
-            .calculate_inverse_kinematics(
-                self.id,
-                PandaSim::PANDA_END_EFFECTOR_INDEX,
-                &pos,
-                &orn,
-                &PandaSim::LL,
-                &PandaSim::UL,
-                &PandaSim::JR,
-                &PandaSim::INITIAL_JOINT_POSITIONS,
-            )
+            .calculate_inverse_kinematics(inverse_kinematics_parameters)
             .unwrap();
         for i in 0..PandaSim::PANDA_NUM_DOFS {
             client.set_joint_motor_control_2(

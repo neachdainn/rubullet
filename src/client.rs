@@ -615,37 +615,47 @@ impl PhysicsClient {
     #[allow(clippy::too_many_arguments)]
     pub fn calculate_inverse_kinematics(
         &mut self,
-        body: BodyId,
-        end_effector_link_index: i32,
-        target_pos_obj: &[f64; 3],
-        target_orn_obj: &[f64; 4],
-        lower_limits: &[f64],
-        upper_limits: &[f64],
-        joint_ranges: &[f64],
-        rest_poses: &[f64],
+        params: InverseKinematicsParameters,
+        // body: BodyId,
+        // end_effector_link_index: i32,
+        // target_pos_obj: &[f64; 3],
+        // target_orn_obj: &[f64; 4],
+        // lower_limits: &[f64],
+        // upper_limits: &[f64],
+        // joint_ranges: &[f64],
+        // rest_poses: &[f64],
     ) -> Result<Vec<f64>, Error> {
-        let solver = 0;
-        let max_num_iterations = 5;
-        let residual_threshold = -1.;
+        let solver = params.solver.into();
+        let max_num_iterations = params.max_num_iterations;
+        let residual_threshold = params.residual_threshold.unwrap_or(-1.);
+        let body = params.body;
+        let end_effector_link_index = params.end_effector_link_index;
 
-        let has_orn = true; // TODO make orientation optional
 
-        let pos = target_pos_obj;
-        let ori = target_orn_obj;
-        let sz_lower_limits = lower_limits.len();
-        let sz_upper_limits = upper_limits.len();
-        let sz_joint_ranges = joint_ranges.len();
-        let sz_rest_poses = rest_poses.len();
-        let sz_joint_damping = 0;
-        let sz_current_positions = 0;
+        let pos = params.target_position;
+        let ori = params.target_orientation;
+        let mut sz_lower_limits = 0;
+        let mut sz_upper_limits = 0;
+        let mut sz_joint_ranges = 0;
+        let mut sz_rest_poses = 0;
+
+        if params.limits.is_some() {
+            let limits = params.limits.as_ref().unwrap();
+            sz_lower_limits = limits.lower_limits.len();
+            sz_upper_limits = limits.upper_limits.len();
+            sz_joint_ranges = limits.joint_ranges.len();
+            sz_rest_poses = limits.rest_poses.len();
+        }
+
         let dof_count = unsafe { ffi::b3ComputeDofCount(self.handle.as_ptr(), body.0) } as usize;
 
         let mut has_null_space = false;
         let mut has_joint_damping = false;
         let mut has_current_positions = false;
 
-        let current_positions: Option<Vec<f64>> = None;
-        let joint_damping: Option<Vec<f64>> = None;
+        let current_positions = params.current_position;
+        let joint_damping = params.joint_damping;
+
 
         if dof_count != 0
             && (sz_lower_limits == dof_count)
@@ -653,11 +663,12 @@ impl PhysicsClient {
             && (sz_joint_ranges == dof_count)
             && (sz_rest_poses == dof_count)
         {
-            // let sz_in_bytes = std::mem::size_of::<f64>() * dof_count;
             has_null_space = true;
+        } else if params.limits.is_some() {
+            eprintln!("Warning! Null space parameter lengths do not match the number DoF and will be ignored!");
         }
-        if sz_current_positions > 0 {
-            if sz_current_positions != dof_count {
+        if current_positions.is_some() {
+            if current_positions.unwrap().len() != dof_count {
                 return Err(Error::new(
                     "number of current_positions is not equal to the number of DoF's",
                 ));
@@ -665,8 +676,8 @@ impl PhysicsClient {
                 has_current_positions = true;
             }
         }
-        if sz_joint_damping > 0 {
-            if sz_current_positions < dof_count {
+        if joint_damping.is_some() {
+            if joint_damping.unwrap().len() < dof_count {
                 return Err(Error::new("calculateInverseKinematics: the size of input joint damping values should be equal to the number of degrees of freedom, not using joint damping."));
             } else {
                 has_joint_damping = true;
@@ -691,13 +702,18 @@ impl PhysicsClient {
                 ffi::b3CalculateInverseKinematicsSetResidualThreshold(command, residual_threshold);
             }
             if has_null_space {
-                if has_orn {
+                let limits = params.limits.unwrap();
+                let lower_limits = limits.lower_limits;
+                let upper_limits = limits.upper_limits;
+                let joint_ranges = limits.joint_ranges;
+                let rest_poses = limits.rest_poses;
+                if ori.is_some() {
                     ffi::b3CalculateInverseKinematicsPosOrnWithNullSpaceVel(
                         command,
                         dof_count as i32,
                         end_effector_link_index,
                         pos.as_ptr(),
-                        ori.as_ptr(),
+                        ori.unwrap().as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
@@ -715,12 +731,12 @@ impl PhysicsClient {
                         rest_poses.as_ptr(),
                     );
                 }
-            } else if has_orn {
+            } else if ori.is_some() {
                 ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
                     command,
                     end_effector_link_index,
                     pos.as_ptr(),
-                    ori.as_ptr(),
+                    ori.unwrap().as_ptr(),
                 );
             } else {
                 ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
@@ -855,10 +871,10 @@ impl PhysicsClient {
             }
         }
         if dof_count_org != 0 && dof_count_org == object_positions.len() {
-            let mut local_point = local_position;
-            let mut joint_positions = object_positions;
-            let mut joint_velocities = object_velocities;
-            let mut joint_accelerations = object_accelerations;
+            let local_point = local_position;
+            let joint_positions = object_positions;
+            let joint_velocities = object_velocities;
+            let joint_accelerations = object_accelerations;
 
             unsafe {
                 let command_handle = ffi::b3CalculateJacobianCommandInit(
@@ -1261,12 +1277,11 @@ impl PhysicsClient {
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
                     ffi::b3GetCameraImageData(self.handle.as_ptr(), &mut image_data);
-                    let mut a: &mut [u8];
-                    a = std::mem::transmute(image_data.m_rgb_color_data);
-                    let mut img: RgbaImage = ImageBuffer::from_vec(
+                    let buffer: &mut [u8] = std::mem::transmute(image_data.m_rgb_color_data);
+                    let img: RgbaImage = ImageBuffer::from_vec(
                         width as u32,
                         height as u32,
-                        a[0..(width * height * 4) as usize].into(),
+                        buffer[0..(width * height * 4) as usize].into(),
                     )
                         .unwrap();
                     return Ok(img);
@@ -1531,6 +1546,102 @@ impl TryFrom<i32> for JointType {
 impl b3JointInfo {
     pub fn get_joint_type(&self) -> JointType {
         JointType::try_from(self.m_joint_type).unwrap()
+    }
+}
+
+pub struct InverseKinematicsNullSpaceParameters<'a> {
+    pub lower_limits: &'a [f64],
+    pub upper_limits: &'a [f64],
+    pub joint_ranges: &'a [f64],
+    pub rest_poses: &'a [f64],
+}
+
+pub struct InverseKinematicsParameters<'a> {
+    pub body: BodyId,
+    pub end_effector_link_index: i32,
+    pub target_position: [f64; 3],
+    pub target_orientation: Option<[f64; 4]>,
+    pub limits: Option<InverseKinematicsNullSpaceParameters<'a>>,
+    pub joint_damping: Option<&'a [f64]>,
+    pub solver: IKSolver,
+    pub current_position: Option<&'a [f64]>,
+    pub max_num_iterations: i32,
+    pub residual_threshold: Option<f64>,
+}
+
+pub enum IKSolver {
+    DLS = 0,
+    SDLS = 1,
+}
+
+impl From<IKSolver> for i32 {
+    fn from(solver: IKSolver) -> Self {
+        solver as i32
+    }
+}
+
+impl<'a> Default for InverseKinematicsParameters<'a> {
+    fn default() -> Self {
+        InverseKinematicsParameters {
+            body: BodyId(0),
+            end_effector_link_index: 0,
+            target_position: [0., 0., 0.],
+            target_orientation: None,
+            limits: None,
+            joint_damping: None,
+            solver: IKSolver::DLS,
+            current_position: None,
+            max_num_iterations: 20,
+            residual_threshold: None,
+        }
+    }
+}
+
+
+pub struct InverseKinematicsParametersBuilder<'a> {
+    params: InverseKinematicsParameters<'a>,
+
+}
+
+impl<'a> InverseKinematicsParametersBuilder<'a> {
+    pub fn new<Index>(body: BodyId, end_effector_link_index: Index, target_pose: &'a Isometry3<f64>) -> Self where
+        Index: Into<i32> {
+        let target_position: [f64; 3] = target_pose.translation.vector.into();
+        let quat = &target_pose.rotation.coords;
+        let target_orientation = [quat.x, quat.y, quat.z, quat.w];
+        let mut params = InverseKinematicsParameters { body, end_effector_link_index: end_effector_link_index.into(), target_position, target_orientation: Some(target_orientation), ..Default::default() };
+        InverseKinematicsParametersBuilder { params }
+    }
+    pub fn ignore_orientation(mut self) -> Self {
+        self.params.target_orientation = None;
+        self
+    }
+    pub fn use_null_space(mut self, limits: InverseKinematicsNullSpaceParameters<'a>) -> Self {
+        self.params.limits = Some(limits);
+        self
+    }
+    pub fn set_joint_damping(mut self, joint_damping: &'a [f64]) -> Self {
+        self.params.joint_damping = Some(joint_damping);
+        self
+    }
+    pub fn set_ik_solver(mut self, solver: IKSolver) -> Self {
+        self.params.solver = solver;
+        self
+    }
+    pub fn set_current_position(mut self, current_position: &'a [f64]) -> Self {
+        self.params.current_position = Some(current_position);
+        self
+    }
+    pub fn set_max_num_iterations(mut self, iterations: u32) -> Self {
+        self.params.max_num_iterations = iterations as i32;
+        self
+    }
+    pub fn set_residual_threshold(mut self, residual_threshold: f64) -> Self {
+        self.params.residual_threshold = Some(residual_threshold);
+        self
+    }
+    pub fn build(self) -> InverseKinematicsParameters<'a> {
+        self.params
     }
 }
 

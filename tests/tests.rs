@@ -1,6 +1,6 @@
 use easy_error::Terminator;
-use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3};
-use rubullet::client::ControlModeArray;
+use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3, Translation3};
+use rubullet::client::{ControlModeArray, InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder};
 use rubullet::client::ControlModeArray::Torques;
 use rubullet::mode::Mode::Direct;
 use rubullet::{
@@ -13,6 +13,7 @@ use std::time::Duration;
 fn slice_compare(a: &[f64], b: &[f64], thresh: f64) {
     assert_eq!(a.len(), b.len());
     for i in 0..a.len() {
+        println!("{} {}", a[i], b[i]);
         float_compare(a[i], b[i], thresh);
     }
 }
@@ -93,7 +94,7 @@ pub fn get_motor_joint_states(
     let joint_states = joint_states
         .iter()
         .zip(joint_infos.iter())
-        .filter(|(j, i)| i.m_q_index > -1)
+        .filter(|(_j, i)| i.m_q_index > -1)
         .map(|(j, i)| *j)
         .collect::<Vec<b3JointSensorState>>();
     let pos = joint_states
@@ -385,17 +386,7 @@ impl PandaSim {
         [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
     const PANDA_NUM_DOFS: usize = 7;
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
-    const LL: [f64; 7] = [-7.; 7];
-    const UL: [f64; 7] = [7.; 7];
-    const JR: [f64; 7] = [7.; 7];
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
-        let transform = Isometry3::new(
-            Vector3::new(0., 0., -0.6) + offset.clone(),
-            Rotation3::from(UnitQuaternion::from_quaternion(Quaternion::new(
-                0.5, -0.5, -0.5, -0.5,
-            )))
-                .scaled_axis(),
-        );
         let cube_start_position = Isometry3::new(
             Vector3::new(0., 0., 0.),
             UnitQuaternion::from_euler_angles(-PI / 2., 0., 0.).scaled_axis(),
@@ -434,27 +425,26 @@ impl PandaSim {
     pub fn step(&mut self, client: &mut PhysicsClient) {
         let t = self.t.as_secs_f64();
         self.t += Duration::from_secs_f64(1. / 60.);
-        let pos = [
-            0.2 * f64::sin(1.5 * t),
-            0.044,
-            -0.6 + 0.1 * f64::cos(1.5 * t),
-        ];
 
-        let quat = UnitQuaternion::<f64>::from_euler_angles(PI / 2., 0., 0.);
-        let orn = [quat.i, quat.j, quat.k, quat.w];
-
+        let pose = Isometry3::from_parts(
+            Translation3::new(
+                0.2 * f64::sin(1.5 * t),
+                0.044,
+                -0.6 + 0.1 * f64::cos(1.5 * t),
+            ),
+            UnitQuaternion::<f64>::from_euler_angles(PI / 2., 0., 0.),
+        );
+        let inverse_kinematics_parameters = InverseKinematicsParametersBuilder::new(
+            self.id,
+            PandaSim::PANDA_END_EFFECTOR_INDEX,
+            &pose,
+        )
+            .set_max_num_iterations(5)
+            .build();
         let joint_poses = client
-            .calculate_inverse_kinematics(
-                self.id,
-                PandaSim::PANDA_END_EFFECTOR_INDEX,
-                &pos,
-                &orn,
-                &PandaSim::LL,
-                &PandaSim::UL,
-                &PandaSim::JR,
-                &PandaSim::INITIAL_JOINT_POSITIONS,
-            )
+            .calculate_inverse_kinematics(inverse_kinematics_parameters)
             .unwrap();
+
         for i in 0..PandaSim::PANDA_NUM_DOFS {
             client.set_joint_motor_control_2(
                 self.id,
@@ -560,7 +550,7 @@ impl PandaSim {
         let mass = client
             .calculate_mass_matrix(self.id, joint_poses.as_slice())
             .unwrap();
-        slice_compare(mass.as_slice(), &target_mass_matrix, 1e-6);
         slice_compare(joint_poses.as_slice(), &target_joint_poses, 1e-6);
+        slice_compare(mass.as_slice(), &target_mass_matrix, 1e-6);
     }
 }
