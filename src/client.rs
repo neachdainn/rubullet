@@ -618,14 +618,6 @@ impl PhysicsClient {
     pub fn calculate_inverse_kinematics(
         &mut self,
         params: InverseKinematicsParameters,
-        // body: BodyId,
-        // end_effector_link_index: i32,
-        // target_pos_obj: &[f64; 3],
-        // target_orn_obj: &[f64; 4],
-        // lower_limits: &[f64],
-        // upper_limits: &[f64],
-        // joint_ranges: &[f64],
-        // rest_poses: &[f64],
     ) -> Result<Vec<f64>, Error> {
         let solver = params.solver.into();
         let max_num_iterations = params.max_num_iterations;
@@ -773,7 +765,6 @@ impl PhysicsClient {
                 return Ok(ik_output_joint_pos);
             }
         }
-        // let command =
         Err(Error::new("Error in calculateInverseKinematics"))
     }
 
@@ -1315,9 +1306,9 @@ impl PhysicsClient {
     /// let value_button = client.read_user_debug_parameter(button)?; // value increases by one for every press
     /// ```
     // TODO Figure out why button are not working
-    pub fn add_user_debug_parameter<Param: Into<String>>(
+    pub fn add_user_debug_parameter<Text: Into<String>>(
         &mut self,
-        param_name: Param,
+        param_name: Text,
         range_min: f64,
         range_max: f64,
         start_value: f64,
@@ -1358,6 +1349,66 @@ impl PhysicsClient {
             Err(Error::new("Failed to read parameter."))
         }
     }
+    pub fn add_user_debug_text<
+        'a,
+        Text: Into<String>,
+        Options: Into<Option<AddDebugTextOptions<'a>>>,
+    >(
+        &mut self,
+        text: Text,
+        text_position: &[f64],
+        options: Options,
+    ) -> Result<BodyId, Error> {
+        unsafe {
+            let options = options.into().unwrap_or(AddDebugTextOptions::default());
+            let command_handle = ffi::b3InitUserDebugDrawAddText3D(
+                self.handle.as_ptr(),
+                text.into().as_str().as_ptr(),
+                text_position.as_ptr(),
+                options.text_color_rgb.as_ptr(),
+                options.text_size,
+                options.life_time,
+            );
+            if let Some(parent_object) = options.parent_object_id {
+                ffi::b3UserDebugItemSetParentObject(
+                    command_handle,
+                    parent_object.0,
+                    options.parent_link_index.unwrap_or(-1),
+                );
+            }
+            if let Some(text_orientation) = options.text_orientation {
+                ffi::b3UserDebugTextSetOrientation(command_handle, text_orientation.as_ptr());
+            }
+            if let Some(replacement_id) = options.replace_item_id {
+                ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement_id.0);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
+                let debug_item_id = BodyId(ffi::b3GetDebugItemUniqueId(status_handle));
+                return Ok(debug_item_id);
+            }
+        }
+        Err(Error::new("Error in add_user_debug_text"))
+    }
+    pub fn remove_user_debug_item(&mut self, id: BodyId) {
+        unsafe {
+            let command_handle = ffi::b3InitUserDebugDrawRemove(self.handle.as_ptr(), id.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    pub fn remove_all_user_debug_items(&mut self) {
+        unsafe {
+            let command_handle = ffi::b3InitUserDebugDrawRemoveAll(self.handle.as_ptr());
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+
     pub fn apply_external_force(
         &mut self,
         body: BodyId,
@@ -1761,6 +1812,30 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     }
     pub fn build(self) -> InverseKinematicsParameters<'a> {
         self.params
+    }
+}
+
+pub struct AddDebugTextOptions<'a> {
+    pub text_color_rgb: &'a [f64],
+    pub text_size: f64,
+    pub life_time: f64,
+    pub text_orientation: Option<&'a [f64]>,
+    pub parent_object_id: Option<BodyId>,
+    pub parent_link_index: Option<i32>,
+    pub replace_item_id: Option<BodyId>,
+}
+
+impl<'a> Default for AddDebugTextOptions<'a> {
+    fn default() -> Self {
+        AddDebugTextOptions {
+            text_color_rgb: &[1.; 3],
+            text_size: 1.,
+            life_time: 0.,
+            text_orientation: None,
+            parent_object_id: None,
+            parent_link_index: None,
+            replace_item_id: None,
+        }
     }
 }
 

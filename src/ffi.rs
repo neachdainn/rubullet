@@ -435,7 +435,7 @@ extern "C" {
 
     pub fn b3InitUserDebugAddParameter(
         physClient: b3PhysicsClientHandle,
-        // this was once a normal charbut i could only get pointers as u8 instead of i8
+        // this was once a normal char but i could only get pointers as u8 instead of i8
         // so now this parameter is a uchar. seems to work
         txt: *const c_uchar,
         rangeMin: f64,
@@ -454,7 +454,51 @@ extern "C" {
         statusHandle: b3SharedMemoryStatusHandle,
         paramValue: *mut f64,
     ) -> c_int;
+    #[doc = " Add/remove user-specific debug lines and debug text messages"]
+    pub fn b3InitUserDebugDrawAddLine3D(
+        physClient: b3PhysicsClientHandle,
+        fromXYZ: *const f64,
+        toXYZ: *const f64,
+        colorRGB: *const f64,
+        lineWidth: f64,
+        lifeTime: f64,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3InitUserDebugDrawAddText3D(
+        physClient: b3PhysicsClientHandle,
+        // this was once a normal char but i could only get pointers as u8 instead of i8
+        // so now this parameter is a uchar. seems to work
+        txt: *const c_uchar,
+        positionXYZ: *const f64,
+        colorRGB: *const f64,
+        textSize: f64,
+        lifeTime: f64,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3UserDebugTextSetOptionFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        optionFlags: c_int,
+    );
+    pub fn b3UserDebugTextSetOrientation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        orientation: *const f64,
+    );
+    pub fn b3UserDebugItemSetReplaceItemUniqueId(
+        commandHandle: b3SharedMemoryCommandHandle,
+        replaceItem: c_int,
+    );
 
+    pub fn b3UserDebugItemSetParentObject(
+        commandHandle: b3SharedMemoryCommandHandle,
+        objectUniqueId: c_int,
+        linkIndex: c_int,
+    );
+    pub fn b3InitUserDebugDrawRemove(
+        physClient: b3PhysicsClientHandle,
+        debugItemUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitUserDebugDrawRemoveAll(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
     #[doc = " Apply external force at the body (or link) center of mass, in world space/Cartesian coordinates."]
     pub fn b3ApplyExternalForceCommandInit(
         physClient: b3PhysicsClientHandle,

@@ -81,6 +81,7 @@ fn main() -> Result<(), Terminator> {
             None,
         )?;
         physics_client.step_simulation()?;
+        std::thread::sleep(delta_t);
     }
 
     Ok(())
