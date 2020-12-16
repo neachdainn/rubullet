@@ -443,9 +443,7 @@ extern "C" {
         startValue: f64,
     ) -> b3SharedMemoryCommandHandle;
 
-    pub fn b3GetDebugItemUniqueId(
-        statusHandle: b3SharedMemoryStatusHandle,
-    ) -> c_int;
+    pub fn b3GetDebugItemUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
 
     pub fn b3InitUserDebugReadParameter(
         physClient: b3PhysicsClientHandle,
@@ -456,6 +454,27 @@ extern "C" {
         statusHandle: b3SharedMemoryStatusHandle,
         paramValue: *mut f64,
     ) -> c_int;
+
+    #[doc = " Apply external force at the body (or link) center of mass, in world space/Cartesian coordinates."]
+    pub fn b3ApplyExternalForceCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3ApplyExternalForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkId: c_int,
+        force: *const f64,
+        position: *const f64,
+        flag: c_int,
+    );
+    pub fn b3ApplyExternalTorque(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkId: c_int,
+        torque: *const f64,
+        flag: c_int,
+    );
 }
 
 #[repr(C)]

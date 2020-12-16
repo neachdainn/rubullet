@@ -15,7 +15,12 @@ use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED};
+use crate::ffi::EnumSharedMemoryServerStatus::{
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
+    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
+    CMD_CAMERA_IMAGE_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
+};
 use image::{ImageBuffer, RgbaImage};
 use std::time::Duration;
 
@@ -104,7 +109,8 @@ impl PhysicsClient {
         unsafe {
             let command_handle = ffi::b3InitResetSimulationCommand(self.handle.as_ptr());
             ffi::b3InitResetSimulationSetFlags(command_handle, 0);
-            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
     pub fn set_time_step(&mut self, time_step: &Duration) {
@@ -627,7 +633,6 @@ impl PhysicsClient {
         let body = params.body;
         let end_effector_link_index = params.end_effector_link_index;
 
-
         let pos = params.target_position;
         let ori = params.target_orientation;
         let mut sz_lower_limits = 0;
@@ -651,7 +656,6 @@ impl PhysicsClient {
 
         let current_positions = params.current_position;
         let joint_damping = params.joint_damping;
-
 
         if dof_count != 0
             && (sz_lower_limits == dof_count)
@@ -1311,10 +1315,23 @@ impl PhysicsClient {
     /// let value_button = client.read_user_debug_parameter(button)?; // value increases by one for every press
     /// ```
     // TODO Figure out why button are not working
-    pub fn add_user_debug_parameter<Param: Into<String>>(&mut self, param_name: Param, range_min: f64, range_max: f64, start_value: f64) -> Result<i32, Error> {
+    pub fn add_user_debug_parameter<Param: Into<String>>(
+        &mut self,
+        param_name: Param,
+        range_min: f64,
+        range_max: f64,
+        start_value: f64,
+    ) -> Result<i32, Error> {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugAddParameter(self.handle.as_ptr(), param_name.into().as_str().as_ptr(), range_min, range_max, start_value);
-            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let command_handle = ffi::b3InitUserDebugAddParameter(
+                self.handle.as_ptr(),
+                param_name.into().as_str().as_ptr(),
+                range_min,
+                range_max,
+                start_value,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item_unique_id = ffi::b3GetDebugItemUniqueId(status_handle);
@@ -1326,8 +1343,10 @@ impl PhysicsClient {
 
     pub fn read_user_debug_parameter(&mut self, item_unique_id: i32) -> Result<f64, Error> {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id);
-            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let command_handle =
+                ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED as i32 {
                 let mut param_value = 0.;
@@ -1338,6 +1357,59 @@ impl PhysicsClient {
             }
             Err(Error::new("Failed to read parameter."))
         }
+    }
+    pub fn apply_external_force(
+        &mut self,
+        body: BodyId,
+        link_index: i32,
+        force_object: &[f64],
+        position_object: &[f64],
+        flags: ExternalForceFrame,
+    ) -> Result<(), Error> {
+        if force_object.len() != 3 {
+            return Err(Error::new("force object has wrong length"));
+        }
+        if position_object.len() != 3 {
+            return Err(Error::new("position object has wrong length"));
+        }
+        unsafe {
+            let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
+            ffi::b3ApplyExternalForce(
+                command,
+                body.0,
+                link_index,
+                force_object.as_ptr(),
+                position_object.as_ptr(),
+                flags as i32,
+            );
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+        Ok(())
+    }
+    pub fn apply_external_torque(
+        &mut self,
+        body: BodyId,
+        link_index: i32,
+        torque_object: &[f64],
+        flags: ExternalForceFrame,
+    ) -> Result<(), Error> {
+        if torque_object.len() != 3 {
+            return Err(Error::new("torque object has wrong length"));
+        }
+        unsafe {
+            let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
+            ffi::b3ApplyExternalTorque(
+                command,
+                body.0,
+                link_index,
+                torque_object.as_ptr(),
+                flags as i32,
+            );
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+        }
+        Ok(())
     }
 }
 
@@ -1634,19 +1706,29 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
     }
 }
 
-
 pub struct InverseKinematicsParametersBuilder<'a> {
     params: InverseKinematicsParameters<'a>,
-
 }
 
 impl<'a> InverseKinematicsParametersBuilder<'a> {
-    pub fn new<Index>(body: BodyId, end_effector_link_index: Index, target_pose: &'a Isometry3<f64>) -> Self where
-        Index: Into<i32> {
+    pub fn new<Index>(
+        body: BodyId,
+        end_effector_link_index: Index,
+        target_pose: &'a Isometry3<f64>,
+    ) -> Self
+        where
+            Index: Into<i32>,
+    {
         let target_position: [f64; 3] = target_pose.translation.vector.into();
         let quat = &target_pose.rotation.coords;
         let target_orientation = [quat.x, quat.y, quat.z, quat.w];
-        let mut params = InverseKinematicsParameters { body, end_effector_link_index: end_effector_link_index.into(), target_position, target_orientation: Some(target_orientation), ..Default::default() };
+        let mut params = InverseKinematicsParameters {
+            body,
+            end_effector_link_index: end_effector_link_index.into(),
+            target_position,
+            target_orientation: Some(target_orientation),
+            ..Default::default()
+        };
         InverseKinematicsParametersBuilder { params }
     }
     pub fn ignore_orientation(mut self) -> Self {
@@ -1686,4 +1768,9 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
 pub struct Jacobian {
     pub linear_jacobian: DMatrix<f64>,
     pub angular_jacobian: DMatrix<f64>,
+}
+
+pub enum ExternalForceFrame {
+    LinkFrame = 1,
+    WorldFrame = 2,
 }
