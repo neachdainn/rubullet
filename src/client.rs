@@ -1312,7 +1312,7 @@ impl PhysicsClient {
         range_min: f64,
         range_max: f64,
         start_value: f64,
-    ) -> Result<i32, Error> {
+    ) -> Result<BodyId, Error> {
         unsafe {
             let command_handle = ffi::b3InitUserDebugAddParameter(
                 self.handle.as_ptr(),
@@ -1326,16 +1326,16 @@ impl PhysicsClient {
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item_unique_id = ffi::b3GetDebugItemUniqueId(status_handle);
-                return Ok(debug_item_unique_id);
+                return Ok(BodyId(debug_item_unique_id));
             }
             Err(Error::new("Error in addUserDebugParameter."))
         }
     }
 
-    pub fn read_user_debug_parameter(&mut self, item_unique_id: i32) -> Result<f64, Error> {
+    pub fn read_user_debug_parameter(&mut self, item_unique_id: BodyId) -> Result<f64, Error> {
         unsafe {
             let command_handle =
-                ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id);
+                ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id.0);
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
