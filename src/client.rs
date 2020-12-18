@@ -13,7 +13,7 @@ use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vec
 
 use crate::ffi::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEvent, b3KeyboardEventsData,
-    b3LinkState,
+    b3LinkState, b3MouseEventsData,
 };
 use crate::{ffi, Error, Mode};
 
@@ -1472,6 +1472,38 @@ impl PhysicsClient {
             events
         }
     }
+    pub fn get_mouse_events(&mut self) -> Vec<MouseEvent> {
+        unsafe {
+            let mut mouse_events = b3MouseEventsData::default();
+            let command_handle = ffi::b3RequestMouseEventsCommandInit(self.handle.as_ptr());
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            ffi::b3GetMouseEventsData(self.handle.as_ptr(), &mut mouse_events);
+            let mut events =
+                Vec::<MouseEvent>::with_capacity(mouse_events.m_numMouseEvents as usize);
+            let data = unsafe {
+                std::slice::from_raw_parts_mut(
+                    mouse_events.m_mouseEvents,
+                    mouse_events.m_numMouseEvents as usize,
+                )
+            };
+            for &event in data.iter() {
+                if event.m_eventType == 1 {
+                    events.push(MouseEvent::Move {
+                        mouse_pos_x: event.m_mousePosX,
+                        mouse_pos_y: event.m_mousePosY,
+                    });
+                } else if event.m_eventType == 2 {
+                    events.push(MouseEvent::Button {
+                        mouse_pos_x: event.m_mousePosX,
+                        mouse_pos_y: event.m_mousePosY,
+                        button_index: event.m_buttonIndex,
+                        button_state_flag: event.m_buttonState,
+                    });
+                }
+            }
+            events
+        }
+    }
 
     pub fn apply_external_force(
         &mut self,
@@ -1944,7 +1976,7 @@ pub struct KeyboardEvent {
 }
 
 impl KeyboardEvent {
-    pub fn is_triggered(&self) -> bool {
+    pub fn was_triggered(&self) -> bool {
         self.key_state & 2 == 2
     }
     pub fn is_down(&self) -> bool {
@@ -1952,5 +1984,31 @@ impl KeyboardEvent {
     }
     pub fn is_released(&self) -> bool {
         self.key_state & 4 == 4
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum MouseEvent {
+    Move {
+        mouse_pos_x: f32,
+        mouse_pos_y: f32,
+    },
+    Button {
+        mouse_pos_x: f32,
+        mouse_pos_y: f32,
+        button_index: i32,
+        button_state_flag: i32,
+    },
+}
+
+impl MouseEvent {
+    pub fn was_triggered(flag: i32) -> bool {
+        flag & 2 == 2
+    }
+    pub fn is_down(flag: i32) -> bool {
+        flag & 1 == 1
+    }
+    pub fn is_released(flag: i32) -> bool {
+        flag & 4 == 4
     }
 }

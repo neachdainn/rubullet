@@ -529,14 +529,14 @@ extern "C" {
         keyboardEventsData: *mut b3KeyboardEventsData,
     );
 
-    // pub fn b3RequestMouseEventsCommandInit(
-    //     physClient: b3PhysicsClientHandle,
-    // ) -> b3SharedMemoryCommandHandle;
-    //
-    // pub fn b3GetMouseEventsData(
-    //     physClient: b3PhysicsClientHandle,
-    //     mouseEventsData: *mut b3MouseEventsData,
-    // );
+    pub fn b3RequestMouseEventsCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetMouseEventsData(
+        physClient: b3PhysicsClientHandle,
+        mouseEventsData: *mut b3MouseEventsData,
+    );
 }
 
 #[repr(C)]
@@ -785,4 +785,30 @@ impl Default for b3KeyboardEventsData {
 pub struct b3KeyboardEvent {
     pub m_keyCode: c_int,
     pub m_keyState: c_int,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3MouseEventsData {
+    pub m_numMouseEvents: c_int,
+    pub m_mouseEvents: *mut b3MouseEvent,
+}
+
+impl Default for b3MouseEventsData {
+    fn default() -> Self {
+        b3MouseEventsData {
+            m_numMouseEvents: 0,
+            m_mouseEvents: [].as_mut_ptr(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3MouseEvent {
+    pub m_eventType: c_int,
+    pub m_mousePosX: f32,
+    pub m_mousePosY: f32,
+    pub m_buttonIndex: c_int,
+    pub m_buttonState: c_int,
 }
