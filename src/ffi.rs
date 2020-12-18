@@ -563,6 +563,21 @@ extern "C" {
         jointIndex: c_int,
         enable: c_int,
     ) -> c_int;
+    pub fn b3InitDebugDrawingCommand(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SetDebugObjectColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        objectUniqueId: c_int,
+        linkIndex: c_int,
+        objectColorRGB: *const f64,
+    );
+    pub fn b3RemoveDebugObjectColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        objectUniqueId: c_int,
+        linkIndex: c_int,
+    );
 }
 
 #[repr(C)]
