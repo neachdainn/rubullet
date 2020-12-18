@@ -519,6 +519,24 @@ extern "C" {
         torque: *const f64,
         flag: c_int,
     );
+
+    pub fn b3RequestKeyboardEventsCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetKeyboardEventsData(
+        physClient: b3PhysicsClientHandle,
+        keyboardEventsData: *mut b3KeyboardEventsData,
+    );
+
+    // pub fn b3RequestMouseEventsCommandInit(
+    //     physClient: b3PhysicsClientHandle,
+    // ) -> b3SharedMemoryCommandHandle;
+    //
+    // pub fn b3GetMouseEventsData(
+    //     physClient: b3PhysicsClientHandle,
+    //     mouseEventsData: *mut b3MouseEventsData,
+    // );
 }
 
 #[repr(C)]
@@ -744,4 +762,27 @@ impl Default for b3CameraImageData {
             m_segmentation_mask_values: &mut [0],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3KeyboardEventsData {
+    pub m_numKeyboardEvents: c_int,
+    pub m_keyboardEvents: *mut b3KeyboardEvent,
+}
+
+impl Default for b3KeyboardEventsData {
+    fn default() -> Self {
+        b3KeyboardEventsData {
+            m_numKeyboardEvents: 0,
+            m_keyboardEvents: [].as_mut_ptr(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct b3KeyboardEvent {
+    pub m_keyCode: c_int,
+    pub m_keyState: c_int,
 }

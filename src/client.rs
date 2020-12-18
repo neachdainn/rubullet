@@ -11,7 +11,10 @@ use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::{b3CameraImageData, b3JointInfo, b3JointSensorState, b3LinkState};
+use crate::ffi::{
+    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEvent, b3KeyboardEventsData,
+    b3LinkState,
+};
 use crate::{ffi, Error, Mode};
 
 use self::gui_marker::GuiMarker;
@@ -1446,6 +1449,30 @@ impl PhysicsClient {
         }
     }
 
+    pub fn get_keyboard_events(&mut self) -> Vec<KeyboardEvent> {
+        unsafe {
+            let mut keyboard_events = b3KeyboardEventsData::default();
+            let command_handle = ffi::b3RequestKeyboardEventsCommandInit(self.handle.as_ptr());
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            ffi::b3GetKeyboardEventsData(self.handle.as_ptr(), &mut keyboard_events);
+            let mut events =
+                Vec::<KeyboardEvent>::with_capacity(keyboard_events.m_numKeyboardEvents as usize);
+            let data = unsafe {
+                std::slice::from_raw_parts_mut(
+                    keyboard_events.m_keyboardEvents,
+                    keyboard_events.m_numKeyboardEvents as usize,
+                )
+            };
+            for &event in data.iter() {
+                events.push(KeyboardEvent {
+                    key_code: event.m_keyCode,
+                    key_state: event.m_keyState,
+                });
+            }
+            events
+        }
+    }
+
     pub fn apply_external_force(
         &mut self,
         body: BodyId,
@@ -1907,4 +1934,23 @@ pub struct Jacobian {
 pub enum ExternalForceFrame {
     LinkFrame = 1,
     WorldFrame = 2,
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+pub struct KeyboardEvent {
+    pub key_code: i32,
+    // TODO make this a char once assoc_char_funcs becomes stable
+    pub key_state: i32,
+}
+
+impl KeyboardEvent {
+    pub fn is_triggered(&self) -> bool {
+        self.key_state & 2 == 2
+    }
+    pub fn is_down(&self) -> bool {
+        self.key_state & 1 == 1
+    }
+    pub fn is_released(&self) -> bool {
+        self.key_state & 4 == 4
+    }
 }
