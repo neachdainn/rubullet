@@ -1465,7 +1465,7 @@ impl PhysicsClient {
             };
             for &event in data.iter() {
                 events.push(KeyboardEvent {
-                    key_code: event.m_keyCode,
+                    key: std::char::from_u32_unchecked(event.m_keyCode as u32),
                     key_state: event.m_keyState,
                 });
             }
@@ -1970,9 +1970,8 @@ pub enum ExternalForceFrame {
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct KeyboardEvent {
-    pub key_code: i32,
-    // TODO make this a char once assoc_char_funcs becomes stable
-    pub key_state: i32,
+    pub key: char,
+    key_state: i32,
 }
 
 impl KeyboardEvent {
