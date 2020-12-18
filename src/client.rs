@@ -323,6 +323,27 @@ impl PhysicsClient {
         }
     }
 
+    pub fn reset_base_transform(&mut self, body: BodyId, pose: &Isometry3<f64>) {
+        unsafe {
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+            ffi::b3CreatePoseCommandSetBasePosition(
+                command_handle,
+                pose.translation.x,
+                pose.translation.y,
+                pose.translation.z,
+            );
+            ffi::b3CreatePoseCommandSetBaseOrientation(
+                command_handle,
+                pose.rotation.i,
+                pose.rotation.j,
+                pose.rotation.k,
+                pose.rotation.w,
+            );
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+    }
+
     pub fn get_link_state(
         &mut self,
         body: BodyId,

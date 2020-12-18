@@ -193,6 +193,20 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
     ) -> b3SharedMemoryCommandHandle;
+    pub fn b3CreatePoseCommandSetBasePosition(
+        commandHandle: b3SharedMemoryCommandHandle,
+        startPosX: f64,
+        startPosY: f64,
+        startPosZ: f64,
+    ) -> c_int;
+
+    pub fn b3CreatePoseCommandSetBaseOrientation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        startOrnX: f64,
+        startOrnY: f64,
+        startOrnZ: f64,
+        startOrnW: f64,
+    ) -> c_int;
     pub fn b3CreatePoseCommandSetJointPosition(
         physClient: b3PhysicsClientHandle,
         commandHandle: b3SharedMemoryCommandHandle,
