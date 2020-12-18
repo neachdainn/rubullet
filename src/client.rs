@@ -1293,6 +1293,43 @@ impl PhysicsClient {
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
+
+    pub fn add_user_debug_line<'a, Options: Into<Option<AddDebugLineOptions<'a>>>>(
+        &mut self,
+        line_from_xyz: &[f64],
+        line_to_xyz: &[f64],
+        options: Options,
+    ) -> Result<BodyId, Error> {
+        unsafe {
+            let options = options.into().unwrap_or(AddDebugLineOptions::default());
+            let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
+                self.handle.as_ptr(),
+                line_from_xyz.as_ptr(),
+                line_to_xyz.as_ptr(),
+                options.line_color_rgb.as_ptr(),
+                options.line_width,
+                options.life_time,
+            );
+            if let Some(parent) = options.parent_object_id {
+                ffi::b3UserDebugItemSetParentObject(
+                    command_handle,
+                    parent.0,
+                    options.parent_link_index.unwrap_or(-1),
+                );
+            }
+            if let Some(replacment) = options.replace_item_id {
+                ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacment.0);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
+                let debug_item = BodyId(ffi::b3GetDebugItemUniqueId(status_handle));
+                return Ok(debug_item);
+            }
+            Err(Error::new("Error in addUserDebugLine."))
+        }
+    }
     ///
     /// Buttons are currently not working
     /// Examples:
@@ -1832,6 +1869,28 @@ impl<'a> Default for AddDebugTextOptions<'a> {
             text_size: 1.,
             life_time: 0.,
             text_orientation: None,
+            parent_object_id: None,
+            parent_link_index: None,
+            replace_item_id: None,
+        }
+    }
+}
+
+pub struct AddDebugLineOptions<'a> {
+    pub line_color_rgb: &'a [f64],
+    pub line_width: f64,
+    pub life_time: f64,
+    pub parent_object_id: Option<BodyId>,
+    pub parent_link_index: Option<i32>,
+    pub replace_item_id: Option<BodyId>,
+}
+
+impl<'a> Default for AddDebugLineOptions<'a> {
+    fn default() -> Self {
+        AddDebugLineOptions {
+            line_color_rgb: &[1.; 3],
+            line_width: 1.,
+            life_time: 0.,
             parent_object_id: None,
             parent_link_index: None,
             replace_item_id: None,

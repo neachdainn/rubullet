@@ -2,10 +2,10 @@ use std::f64::consts::PI;
 use std::time::Duration;
 
 use easy_error::Terminator;
-use nalgebra::{Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3, Translation3};
+use nalgebra::{Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 
+use rubullet::client::{InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder};
 use rubullet::*;
-use rubullet::client::{InverseKinematicsParametersBuilder, InverseKinematicsNullSpaceParameters};
 
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;

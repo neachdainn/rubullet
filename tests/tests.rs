@@ -1,7 +1,9 @@
 use easy_error::Terminator;
-use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, UnitQuaternion, Vector3, Translation3};
-use rubullet::client::{ControlModeArray, InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder};
+use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 use rubullet::client::ControlModeArray::Torques;
+use rubullet::client::{
+    ControlModeArray, InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder,
+};
 use rubullet::mode::Mode::Direct;
 use rubullet::{
     b3JointInfo, b3JointSensorState, BodyId, ControlMode, DebugVisualizerFlag, JointType,
