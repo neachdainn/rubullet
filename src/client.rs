@@ -21,7 +21,7 @@ use self::gui_marker::GuiMarker;
 use crate::ffi::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
     CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
 };
 use image::{ImageBuffer, RgbaImage};
@@ -1578,6 +1578,28 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
         Ok(())
+    }
+    pub fn enable_joint_torque_sensor(
+        &mut self,
+        body: BodyId,
+        joint_index: i32,
+        enable_sensor: bool,
+    ) -> Result<(), Error> {
+        unsafe {
+            let command_handle = ffi::b3CreateSensorCommandInit(self.handle.as_ptr(), body.0);
+            ffi::b3CreateSensorEnable6DofJointForceTorqueSensor(
+                command_handle,
+                joint_index,
+                enable_sensor as i32,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CLIENT_COMMAND_COMPLETED as i32 {
+                return Ok(());
+            }
+            Err(Error::new("Error creating sensor."))
+        }
     }
 }
 

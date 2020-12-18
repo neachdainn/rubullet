@@ -551,6 +551,18 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
         mouseEventsData: *mut b3MouseEventsData,
     );
+    #[doc = "We are currently not reading the sensor information from the URDF file, and programmatically assign sensors."]
+    #[doc = "This is rather inconsistent, to mix programmatical creation with loading from file."]
+    pub fn b3CreateSensorCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateSensorEnable6DofJointForceTorqueSensor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointIndex: c_int,
+        enable: c_int,
+    ) -> c_int;
 }
 
 #[repr(C)]
