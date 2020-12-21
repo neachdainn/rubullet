@@ -1474,13 +1474,13 @@ impl PhysicsClient {
         &mut self,
         body: BodyId,
         link_index: i32,
-        object_debug_color: Some(&[f64]),
+        object_debug_color: Option<(&[f64])>,
     ) {
         unsafe {
             let command_handle = ffi::b3InitDebugDrawingCommand(self.handle.as_ptr());
 
             if let Some(color) = object_debug_color {
-                ffi::b3SetDebugObjectColor(command_handle, body.0, link_index, color);
+                ffi::b3SetDebugObjectColor(command_handle, body.0, link_index, color.as_ptr());
             } else {
                 ffi::b3RemoveDebugObjectColor(command_handle, body.0, link_index);
             }
