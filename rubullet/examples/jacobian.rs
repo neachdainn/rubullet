@@ -1,6 +1,6 @@
 use easy_error::Terminator;
 use nalgebra::{DMatrix, Isometry3, Vector2, Vector3};
-use rubullet::client::{ControlModeArray, Jacobian};
+use rubullet::client::{ControlModeArray, Jacobian, JointInfo};
 use rubullet::mode::Mode::{Direct, Gui};
 use rubullet::{b3JointInfo, b3JointSensorState, BodyId, PhysicsClient, UrdfOptions};
 use std::time::Duration;
@@ -54,10 +54,10 @@ pub fn get_motor_joint_states(
     let num_joints = client.get_num_joints(robot);
     let indices = (0..num_joints).into_iter().collect::<Vec<i32>>();
     let joint_states = client.get_joint_states(robot, indices.as_slice()).unwrap();
-    let joint_infos: Vec<b3JointInfo> = (0..num_joints)
+    let joint_infos: Vec<JointInfo> = (0..num_joints)
         .into_iter()
         .map(|y| client.get_joint_info(robot, y))
-        .collect::<Vec<b3JointInfo>>();
+        .collect::<Vec<JointInfo>>();
     let joint_states = joint_states
         .iter()
         .zip(joint_infos.iter())
@@ -101,7 +101,7 @@ pub fn multiply_jacobian(
 fn main() -> Result<(), Terminator> {
     let delta_t = Duration::from_secs_f64(0.001);
     let mut p = PhysicsClient::connect(Direct).unwrap();
-    p.set_additional_search_path("bullet3/libbullet3/data")?;
+    p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
     let gravity_constant = -9.81;
     p.set_time_step(&delta_t);
     p.set_gravity(Vector3::new(0., 0., gravity_constant))?;

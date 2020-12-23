@@ -4,10 +4,10 @@
 pub use crate::{
     client::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions},
     error::Error,
-    ffi::{b3JointInfo, b3JointSensorState},
+
     mode::Mode,
 };
-
+pub use rubullet_ffi::{b3JointInfo, b3JointSensorState};
 /// A utility for creating C-string literals.
 /*
 macro_rules! cstr
@@ -21,5 +21,4 @@ macro_rules! cstr
 */
 pub mod client;
 pub mod error;
-mod ffi;
 pub mod mode;

@@ -11,20 +11,21 @@ use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
-use crate::ffi::{
-    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEvent, b3KeyboardEventsData,
-    b3LinkState, b3MouseEventsData,
-};
-use crate::{ffi, Error, Mode};
-
 use self::gui_marker::GuiMarker;
-use crate::ffi::EnumSharedMemoryServerStatus::{
+use crate::{Error, Mode};
+use image::{ImageBuffer, RgbaImage};
+use rubullet_ffi as ffi;
+use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
     CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
 };
-use image::{ImageBuffer, RgbaImage};
+use rubullet_ffi::{
+    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEvent, b3KeyboardEventsData,
+    b3LinkState, b3MouseEventsData,
+};
+use std::os::raw::c_char;
 use std::time::Duration;
 
 /// The "handle" to the physics client.
@@ -458,7 +459,7 @@ impl PhysicsClient {
     pub fn get_num_joints(&mut self, body: BodyId) -> i32 {
         unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) }
     }
-    pub fn get_joint_info(&mut self, body: BodyId, joint_index: i32) -> b3JointInfo {
+    pub fn get_joint_info(&mut self, body: BodyId, joint_index: i32) -> JointInfo {
         unsafe {
             let mut joint_info = b3JointInfo {
                 m_link_name: [2; 1024],
@@ -483,7 +484,7 @@ impl PhysicsClient {
             };
             // let mut joint_info: b3JointInfo = b3JointInfo::default();
             ffi::b3GetJointInfo(self.handle.as_ptr(), body.0, joint_index, &mut joint_info);
-            joint_info
+            joint_info.into()
         }
     }
     pub fn reset_joint_state(
@@ -868,7 +869,7 @@ impl PhysicsClient {
         let mut dof_count_org = 0;
         for j in 0..num_joints {
             let joint_info = self.get_joint_info(body_id, j);
-            match joint_info.get_joint_type() {
+            match joint_info.m_joint_type {
                 JointType::Revolute | JointType::Prismatic => {
                     dof_count_org += 1;
                 }
@@ -948,12 +949,16 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::{ControlMode, PhysicsClient, Mode};
-    /// let mut client = PhysicsClient::connect(Mode::Direct)?;
-    /// client.set_additional_search_path("bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
-    /// let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
-    /// let joint_index = 1;
-    /// client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);
-    /// client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
+    /// use easy_error::Terminator;
+    /// pub fn main() -> Result<(),Terminator> {
+    ///     let mut client = PhysicsClient::connect(Mode::Direct)?;
+    ///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
+    ///     let joint_index = 1;
+    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);
+    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
+    /// Ok(())
+    /// }
     /// ```
     pub fn set_joint_motor_control_2(
         &mut self,
@@ -1298,7 +1303,7 @@ impl PhysicsClient {
                         height as u32,
                         buffer[0..(width * height * 4) as usize].into(),
                     )
-                        .unwrap();
+                    .unwrap();
                     return Ok(img);
                 }
             }
@@ -1360,11 +1365,15 @@ impl PhysicsClient {
     /// ```no_run
     /// use rubullet::PhysicsClient;
     /// use rubullet::mode::Mode::Gui;
-    /// let mut client = PhysicsClient::connect(Gui)?;
-    /// let slider = client.add_user_debug_parameter("my_slider",0.,1.,0.5)?;
-    /// let button = client.add_user_debug_parameter("my_button",1.,0.,1.)?;
-    /// let value_slider = client.read_user_debug_parameter(slider)?;
-    /// let value_button = client.read_user_debug_parameter(button)?; // value increases by one for every press
+    ///   use easy_error::Terminator;
+    /// pub fn main() -> Result<(),Terminator> {
+    ///     let mut client = PhysicsClient::connect(Gui)?;
+    ///     let slider = client.add_user_debug_parameter("my_slider",0.,1.,0.5)?;
+    ///     let button = client.add_user_debug_parameter("my_button",1.,0.,1.)?;
+    ///     let value_slider = client.read_user_debug_parameter(slider)?;
+    ///     let value_button = client.read_user_debug_parameter(button)?; // value increases by one for every press
+    ///     Ok(())
+    /// }
     /// ```
     // TODO Figure out why button are not working
     pub fn add_user_debug_parameter<Text: Into<String>>(
@@ -1860,9 +1869,72 @@ impl TryFrom<i32> for JointType {
     }
 }
 
-impl b3JointInfo {
-    pub fn get_joint_type(&self) -> JointType {
-        JointType::try_from(self.m_joint_type).unwrap()
+pub struct JointInfo {
+    pub m_link_name: [c_char; 1024],
+    pub m_joint_name: [c_char; 1024],
+    pub m_joint_type: JointType,
+    pub m_q_index: i32,
+    pub m_u_index: i32,
+    pub m_joint_index: i32,
+    pub m_flags: i32,
+    pub m_joint_damping: f64,
+    pub m_joint_friction: f64,
+    pub m_joint_upper_limit: f64,
+    pub m_joint_lower_limit: f64,
+    pub m_joint_max_force: f64,
+    pub m_joint_max_velocity: f64,
+    pub m_parent_frame: [f64; 7],
+    pub m_child_frame: [f64; 7],
+    pub m_joint_axis: [f64; 3],
+    pub m_parent_index: i32,
+    pub m_q_size: i32,
+    pub m_u_size: i32,
+}
+impl From<b3JointInfo> for JointInfo {
+    fn from(b3: b3JointInfo) -> Self {
+        match b3 {
+            b3JointInfo {
+                m_link_name,
+                m_joint_name,
+                m_joint_type,
+                m_q_index,
+                m_u_index,
+                m_joint_index,
+                m_flags,
+                m_joint_damping,
+                m_joint_friction,
+                m_joint_upper_limit,
+                m_joint_lower_limit,
+                m_joint_max_force,
+                m_joint_max_velocity,
+                m_parent_frame,
+                m_child_frame,
+                m_joint_axis,
+                m_parent_index,
+                m_q_size,
+                m_u_size,
+            } => JointInfo {
+                m_link_name,
+                m_joint_name,
+                m_joint_type: JointType::try_from(m_joint_type).unwrap(),
+                m_q_index,
+                m_u_index,
+                m_joint_index,
+                m_flags,
+                m_joint_damping,
+                m_joint_friction,
+                m_joint_upper_limit,
+                m_joint_lower_limit,
+                m_joint_max_force,
+                m_joint_max_velocity,
+                m_parent_frame,
+                m_child_frame,
+                m_joint_axis,
+                m_parent_index,
+                m_q_size,
+                m_u_size,
+            },
+        }
     }
 }
 
@@ -1924,8 +1996,8 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         end_effector_link_index: Index,
         target_pose: &'a Isometry3<f64>,
     ) -> Self
-        where
-            Index: Into<i32>,
+    where
+        Index: Into<i32>,
     {
         let target_position: [f64; 3] = target_pose.translation.vector.into();
         let quat = &target_pose.rotation.coords;

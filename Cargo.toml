@@ -1,35 +1,5 @@
-[package]
-name = "rubullet"
-version = "0.1.0"
-authors = ["Nathan Kent <nkent2@cs.rochester.edu>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "rubullet"
-path = "src/lib.rs"
-
-[[example]]
-name = "panda_demo"
-path = "examples/panda_demo.rs"
-
-[[example]]
-name = "hello_rubullet"
-path = "examples/hello_rubullet.rs"
-
-[[example]]
-name = "inverse_dynamics"
-path = "examples/inverse_dynamics.rs"
-[profile.dev]
-opt-level = 3
-
-[dependencies]
-nalgebra = "0.23"
-image = "0.23.12"
-
-[build-dependencies]
-cmake = "0.1.42"
-
-[dev-dependencies]
-easy-error = "0.3.1"
+[workspace] 
+members = [
+    "rubullet",
+    "rubullet-ffi",
+    ]
