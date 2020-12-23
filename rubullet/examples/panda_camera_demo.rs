@@ -11,8 +11,9 @@ fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
-    physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    physics_client.set_additional_search_path(
+        "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+    )?;
     physics_client.set_time_step(&Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
 
@@ -25,6 +26,7 @@ fn main() -> Result<(), Terminator> {
             &panda.view_matrix,
             &panda.projection_matrix,
         )?;
+        _image.save("/tmp/test.png")?;
         panda.step(&mut physics_client);
         physics_client.step_simulation()?;
 
@@ -58,13 +60,15 @@ impl PandaSim {
 
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
         client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
-        client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+        client.set_additional_search_path(
+            "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+        )?;
         let transform = Isometry3::new(
             Vector3::new(0., 0., -0.6) + offset.clone(),
             Rotation3::from(UnitQuaternion::from_quaternion(Quaternion::new(
                 0.5, -0.5, -0.5, -0.5,
             )))
-                .scaled_axis(),
+            .scaled_axis(),
         );
         let urdf_options = UrdfOptions {
             base_transform: transform.clone(),
@@ -136,8 +140,7 @@ impl PandaSim {
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
-            if info.m_joint_type == JointType::Revolute
-                || info.m_joint_type == JointType::Prismatic
+            if info.m_joint_type == JointType::Revolute || info.m_joint_type == JointType::Prismatic
             {
                 client.reset_joint_state(
                     panda_id,
@@ -176,9 +179,9 @@ impl PandaSim {
             PandaSim::PANDA_END_EFFECTOR_INDEX,
             &pose,
         )
-            .set_max_num_iterations(5)
-            .use_null_space(PandaSim::NULL_SPACE_PARAMETERS)
-            .build();
+        .set_max_num_iterations(5)
+        .use_null_space(PandaSim::NULL_SPACE_PARAMETERS)
+        .build();
         let joint_poses = client
             .calculate_inverse_kinematics(inverse_kinematics_parameters)
             .unwrap();

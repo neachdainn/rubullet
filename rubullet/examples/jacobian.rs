@@ -1,8 +1,8 @@
 use easy_error::Terminator;
-use nalgebra::{DMatrix, Isometry3, Vector2, Vector3};
-use rubullet::client::{ControlModeArray, Jacobian, JointInfo};
-use rubullet::mode::Mode::{Direct, Gui};
-use rubullet::{b3JointInfo, b3JointSensorState, BodyId, PhysicsClient, UrdfOptions};
+use nalgebra::{DMatrix, Isometry3, Vector3};
+use rubullet::client::{ControlModeArray, JointInfo};
+use rubullet::mode::Mode::Direct;
+use rubullet::{b3JointSensorState, BodyId, PhysicsClient, UrdfOptions};
 use std::time::Duration;
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
@@ -12,17 +12,19 @@ pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: 
     let zero_vec = vec![0.; num_joints as usize];
     let position_gains = vec![1.; num_joints as usize];
     let velocity_gains = vec![0.3; num_joints as usize];
-    client.set_joint_motor_control_array(
-        robot,
-        indices.as_slice(),
-        ControlModeArray::PositionsWithPD {
-            target_positions: position,
-            target_velocities: zero_vec.as_slice(),
-            position_gains: position_gains.as_slice(),
-            velocity_gains: velocity_gains.as_slice(),
-        },
-        None,
-    );
+    client
+        .set_joint_motor_control_array(
+            robot,
+            indices.as_slice(),
+            ControlModeArray::PositionsWithPD {
+                target_positions: position,
+                target_velocities: zero_vec.as_slice(),
+                position_gains: position_gains.as_slice(),
+                velocity_gains: velocity_gains.as_slice(),
+            },
+            None,
+        )
+        .unwrap();
 }
 
 pub fn get_joint_states(
@@ -61,8 +63,8 @@ pub fn get_motor_joint_states(
     let joint_states = joint_states
         .iter()
         .zip(joint_infos.iter())
-        .filter(|(j, i)| i.m_q_index > -1)
-        .map(|(j, i)| *j)
+        .filter(|(_, i)| i.m_q_index > -1)
+        .map(|(j, _)| *j)
         .collect::<Vec<b3JointSensorState>>();
     let pos = joint_states
         .iter()
@@ -126,10 +128,10 @@ fn main() -> Result<(), Terminator> {
     let kuka_end_effector_index = num_joints - 1;
 
     set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints as usize].as_slice());
-    p.step_simulation();
+    p.step_simulation()?;
 
-    let (pos, vel, torq) = get_joint_states(&mut p, kuka_id);
-    let (mpos, mvel, mtorq) = get_motor_joint_states(&mut p, kuka_id);
+    let (_pos, vel, _torq) = get_joint_states(&mut p, kuka_id);
+    let (mpos, _mvel, _mtorq) = get_motor_joint_states(&mut p, kuka_id);
     let result = p.get_link_state(kuka_id, kuka_end_effector_index, true, true)?;
 
     let zero_vec = vec![0.; mpos.len()];

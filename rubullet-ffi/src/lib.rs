@@ -788,9 +788,9 @@ pub struct b3LinkState {
 pub struct b3CameraImageData {
     pub m_pixel_width: c_int,
     pub m_pixel_height: c_int,
-    pub m_rgb_color_data: *mut [u8],
-    pub m_depth_values: *mut [f32],
-    pub m_segmentation_mask_values: *mut [c_int],
+    pub m_rgb_color_data: *const c_uchar,
+    pub m_depth_values: *const f32,
+    pub m_segmentation_mask_values: *const c_int,
 }
 
 impl Default for b3CameraImageData {
@@ -798,9 +798,9 @@ impl Default for b3CameraImageData {
         b3CameraImageData {
             m_pixel_width: 0,
             m_pixel_height: 0,
-            m_rgb_color_data: &mut [0 as u8],
-            m_depth_values: &mut [0. as f32],
-            m_segmentation_mask_values: &mut [0],
+            m_rgb_color_data: &(0. as u8),
+            m_depth_values: &(0. as f32),
+            m_segmentation_mask_values: &0,
         }
     }
 }

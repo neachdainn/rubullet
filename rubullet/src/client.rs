@@ -22,8 +22,8 @@ use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
 };
 use rubullet_ffi::{
-    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEvent, b3KeyboardEventsData,
-    b3LinkState, b3MouseEventsData,
+    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
+    b3MouseEventsData,
 };
 use std::os::raw::c_char;
 use std::time::Duration;
@@ -594,7 +594,7 @@ impl PhysicsClient {
         body: BodyId,
         object_positions: &[f64],
     ) -> Result<DMatrix<f64>, Error> {
-        if object_positions.len() > 0 {
+        if !object_positions.is_empty() {
             let joint_positions = object_positions;
             let flags = 0; // TODO add flags
             unsafe {
@@ -684,8 +684,8 @@ impl PhysicsClient {
         } else if params.limits.is_some() {
             eprintln!("Warning! Null space parameter lengths do not match the number DoF and will be ignored!");
         }
-        if current_positions.is_some() {
-            if current_positions.unwrap().len() != dof_count {
+        if let Some(positions) = current_positions {
+            if positions.len() != dof_count {
                 return Err(Error::new(
                     "number of current_positions is not equal to the number of DoF's",
                 ));
@@ -693,8 +693,8 @@ impl PhysicsClient {
                 has_current_positions = true;
             }
         }
-        if joint_damping.is_some() {
-            if joint_damping.unwrap().len() < dof_count {
+        if let Some(damping) = joint_damping {
+            if damping.len() < dof_count {
                 return Err(Error::new("calculateInverseKinematics: the size of input joint damping values should be equal to the number of degrees of freedom, not using joint damping."));
             } else {
                 has_joint_damping = true;
@@ -724,13 +724,13 @@ impl PhysicsClient {
                 let upper_limits = limits.upper_limits;
                 let joint_ranges = limits.joint_ranges;
                 let rest_poses = limits.rest_poses;
-                if ori.is_some() {
+                if let Some(orientation) = ori {
                     ffi::b3CalculateInverseKinematicsPosOrnWithNullSpaceVel(
                         command,
                         dof_count as i32,
                         end_effector_link_index,
                         pos.as_ptr(),
-                        ori.unwrap().as_ptr(),
+                        orientation.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
@@ -1297,17 +1297,16 @@ impl PhysicsClient {
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
                     ffi::b3GetCameraImageData(self.handle.as_ptr(), &mut image_data);
-                    let buffer: &mut [u8] = std::mem::transmute(image_data.m_rgb_color_data);
-                    let img: RgbaImage = ImageBuffer::from_vec(
-                        width as u32,
-                        height as u32,
-                        buffer[0..(width * height * 4) as usize].into(),
-                    )
-                    .unwrap();
+                    let buffer = std::slice::from_raw_parts(
+                        image_data.m_rgb_color_data,
+                        (width * height * 4) as usize,
+                    );
+                    let img: RgbaImage =
+                        ImageBuffer::from_vec(width as u32, height as u32, buffer.into()).unwrap();
                     return Ok(img);
                 }
             }
-            return Err(Error::new("getCameraImage failed"));
+            Err(Error::new("getCameraImage failed"))
         }
     }
     // pub fn configure_debug_visualizer(&mut self,flag:DebugVisualizerFlag, enable:bool,light_position:Option<[f64;3]>, shadow_map_resolution:Option<i32>, shadow_map_world_size:Option<i32>) {
@@ -1330,7 +1329,7 @@ impl PhysicsClient {
         options: Options,
     ) -> Result<BodyId, Error> {
         unsafe {
-            let options = options.into().unwrap_or(AddDebugLineOptions::default());
+            let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
                 self.handle.as_ptr(),
                 line_from_xyz.as_ptr(),
@@ -1430,7 +1429,7 @@ impl PhysicsClient {
         options: Options,
     ) -> Result<BodyId, Error> {
         unsafe {
-            let options = options.into().unwrap_or(AddDebugTextOptions::default());
+            let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
                 self.handle.as_ptr(),
                 text.into().as_str().as_ptr(),
@@ -1483,7 +1482,7 @@ impl PhysicsClient {
         &mut self,
         body: BodyId,
         link_index: i32,
-        object_debug_color: Option<(&[f64])>,
+        object_debug_color: Option<&[f64]>,
     ) {
         unsafe {
             let command_handle = ffi::b3InitDebugDrawingCommand(self.handle.as_ptr());
@@ -1505,12 +1504,10 @@ impl PhysicsClient {
             ffi::b3GetKeyboardEventsData(self.handle.as_ptr(), &mut keyboard_events);
             let mut events =
                 Vec::<KeyboardEvent>::with_capacity(keyboard_events.m_numKeyboardEvents as usize);
-            let data = unsafe {
-                std::slice::from_raw_parts_mut(
-                    keyboard_events.m_keyboardEvents,
-                    keyboard_events.m_numKeyboardEvents as usize,
-                )
-            };
+            let data = std::slice::from_raw_parts_mut(
+                keyboard_events.m_keyboardEvents,
+                keyboard_events.m_numKeyboardEvents as usize,
+            );
             for &event in data.iter() {
                 events.push(KeyboardEvent {
                     key: std::char::from_u32_unchecked(event.m_keyCode as u32),
@@ -1528,12 +1525,10 @@ impl PhysicsClient {
             ffi::b3GetMouseEventsData(self.handle.as_ptr(), &mut mouse_events);
             let mut events =
                 Vec::<MouseEvent>::with_capacity(mouse_events.m_numMouseEvents as usize);
-            let data = unsafe {
-                std::slice::from_raw_parts_mut(
-                    mouse_events.m_mouseEvents,
-                    mouse_events.m_numMouseEvents as usize,
-                )
-            };
+            let data = std::slice::from_raw_parts_mut(
+                mouse_events.m_mouseEvents,
+                mouse_events.m_numMouseEvents as usize,
+            );
             for &event in data.iter() {
                 if event.m_eventType == 1 {
                     events.push(MouseEvent::Move {
@@ -1892,48 +1887,47 @@ pub struct JointInfo {
 }
 impl From<b3JointInfo> for JointInfo {
     fn from(b3: b3JointInfo) -> Self {
-        match b3 {
-            b3JointInfo {
-                m_link_name,
-                m_joint_name,
-                m_joint_type,
-                m_q_index,
-                m_u_index,
-                m_joint_index,
-                m_flags,
-                m_joint_damping,
-                m_joint_friction,
-                m_joint_upper_limit,
-                m_joint_lower_limit,
-                m_joint_max_force,
-                m_joint_max_velocity,
-                m_parent_frame,
-                m_child_frame,
-                m_joint_axis,
-                m_parent_index,
-                m_q_size,
-                m_u_size,
-            } => JointInfo {
-                m_link_name,
-                m_joint_name,
-                m_joint_type: JointType::try_from(m_joint_type).unwrap(),
-                m_q_index,
-                m_u_index,
-                m_joint_index,
-                m_flags,
-                m_joint_damping,
-                m_joint_friction,
-                m_joint_upper_limit,
-                m_joint_lower_limit,
-                m_joint_max_force,
-                m_joint_max_velocity,
-                m_parent_frame,
-                m_child_frame,
-                m_joint_axis,
-                m_parent_index,
-                m_q_size,
-                m_u_size,
-            },
+        let b3JointInfo {
+            m_link_name,
+            m_joint_name,
+            m_joint_type,
+            m_q_index,
+            m_u_index,
+            m_joint_index,
+            m_flags,
+            m_joint_damping,
+            m_joint_friction,
+            m_joint_upper_limit,
+            m_joint_lower_limit,
+            m_joint_max_force,
+            m_joint_max_velocity,
+            m_parent_frame,
+            m_child_frame,
+            m_joint_axis,
+            m_parent_index,
+            m_q_size,
+            m_u_size,
+        } = b3;
+        JointInfo {
+            m_link_name,
+            m_joint_name,
+            m_joint_type: JointType::try_from(m_joint_type).unwrap(),
+            m_q_index,
+            m_u_index,
+            m_joint_index,
+            m_flags,
+            m_joint_damping,
+            m_joint_friction,
+            m_joint_upper_limit,
+            m_joint_lower_limit,
+            m_joint_max_force,
+            m_joint_max_velocity,
+            m_parent_frame,
+            m_child_frame,
+            m_joint_axis,
+            m_parent_index,
+            m_q_size,
+            m_u_size,
         }
     }
 }
@@ -2002,7 +1996,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         let target_position: [f64; 3] = target_pose.translation.vector.into();
         let quat = &target_pose.rotation.coords;
         let target_orientation = [quat.x, quat.y, quat.z, quat.w];
-        let mut params = InverseKinematicsParameters {
+        let params = InverseKinematicsParameters {
             body,
             end_effector_link_index: end_effector_link_index.into(),
             target_position,

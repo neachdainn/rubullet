@@ -1,11 +1,11 @@
 use easy_error::Terminator;
-use nalgebra::{DMatrix, Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
 use rubullet::client::ControlModeArray::Torques;
-use rubullet::client::{ControlModeArray, InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo};
+use rubullet::client::{ControlModeArray, InverseKinematicsParametersBuilder, JointInfo};
 use rubullet::mode::Mode::Direct;
 use rubullet::{
-     b3JointSensorState, BodyId, ControlMode, DebugVisualizerFlag, JointType,
-    PhysicsClient, UrdfOptions,
+    b3JointSensorState, BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient,
+    UrdfOptions,
 };
 use std::f64::consts::PI;
 use std::time::Duration;
@@ -24,7 +24,7 @@ fn float_compare(a: f64, b: f64, thresh: f64) {
 
 #[test]
 fn test_connect() {
-    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    let _physics_client = PhysicsClient::connect(Direct).unwrap();
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn test_load_urdf() {
     physics_client
         .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
         .unwrap();
-    let plane_id = physics_client
+    let _plane_id = physics_client
         .load_urdf("plane.urdf", Default::default())
         .unwrap();
 }
@@ -45,17 +45,19 @@ pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: 
     let zero_vec = vec![0.; num_joints as usize];
     let position_gains = vec![1.; num_joints as usize];
     let velocity_gains = vec![0.3; num_joints as usize];
-    client.set_joint_motor_control_array(
-        robot,
-        indices.as_slice(),
-        ControlModeArray::PositionsWithPD {
-            target_positions: position,
-            target_velocities: zero_vec.as_slice(),
-            position_gains: position_gains.as_slice(),
-            velocity_gains: velocity_gains.as_slice(),
-        },
-        None,
-    );
+    client
+        .set_joint_motor_control_array(
+            robot,
+            indices.as_slice(),
+            ControlModeArray::PositionsWithPD {
+                target_positions: position,
+                target_velocities: zero_vec.as_slice(),
+                position_gains: position_gains.as_slice(),
+                velocity_gains: velocity_gains.as_slice(),
+            },
+            None,
+        )
+        .unwrap();
 }
 
 pub fn get_joint_states(
@@ -95,7 +97,7 @@ pub fn get_motor_joint_states(
         .iter()
         .zip(joint_infos.iter())
         .filter(|(_j, i)| i.m_q_index > -1)
-        .map(|(j, i)| *j)
+        .map(|(j, _i)| *j)
         .collect::<Vec<b3JointSensorState>>();
     let pos = joint_states
         .iter()
@@ -135,8 +137,8 @@ fn test_jacobian() {
     set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints as usize].as_slice());
     p.step_simulation().unwrap();
 
-    let (pos, vel, torq) = get_joint_states(&mut p, kuka_id);
-    let (mpos, mvel, mtorq) = get_motor_joint_states(&mut p, kuka_id);
+    let (_pos, vel, _torq) = get_joint_states(&mut p, kuka_id);
+    let (mpos, _mvel, _mtorq) = get_motor_joint_states(&mut p, kuka_id);
     let result = p
         .get_link_state(kuka_id, kuka_end_effector_index, true, true)
         .unwrap();
@@ -185,9 +187,8 @@ fn test_get_link_state() {
     let mut p = PhysicsClient::connect(Direct).unwrap();
     p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
         .unwrap();
-    let gravity_constant = -9.81;
+
     p.set_time_step(&delta_t);
-    // p.set_gravity(Vector3::new(0., 0., gravity_constant)).unwrap();
 
     let kuka_id = p
         .load_urdf(
@@ -202,7 +203,7 @@ fn test_get_link_state() {
     let num_joints = p.get_num_joints(kuka_id);
     let kuka_end_effector_index = num_joints - 1;
     set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints as usize].as_slice());
-    p.step_simulation();
+    p.step_simulation().unwrap();
 
     let result = p
         .get_link_state(kuka_id, kuka_end_effector_index, true, true)
@@ -365,7 +366,6 @@ fn test_mass_matrix_and_inverse_kinematics() -> Result<(), Terminator> {
     physics_client.set_time_step(&Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
 
-    let time_step = Duration::from_secs_f64(1. / 60.);
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;
     panda.step(&mut physics_client);
 
@@ -385,7 +385,9 @@ impl PandaSim {
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
         client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
-        client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+        client.set_additional_search_path(
+            "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+        )?;
         let cube_start_position = Isometry3::new(
             Vector3::new(0., 0., 0.),
             UnitQuaternion::from_euler_angles(-PI / 2., 0., 0.).scaled_axis(),
@@ -403,8 +405,7 @@ impl PandaSim {
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
-            if info.m_joint_type == JointType::Revolute
-                || info.m_joint_type == JointType::Prismatic
+            if info.m_joint_type == JointType::Revolute || info.m_joint_type == JointType::Prismatic
             {
                 client.reset_joint_state(
                     panda_id,
@@ -438,8 +439,8 @@ impl PandaSim {
             PandaSim::PANDA_END_EFFECTOR_INDEX,
             &pose,
         )
-            .set_max_num_iterations(5)
-            .build();
+        .set_max_num_iterations(5)
+        .build();
         let joint_poses = client
             .calculate_inverse_kinematics(inverse_kinematics_parameters)
             .unwrap();

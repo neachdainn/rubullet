@@ -11,7 +11,7 @@ fn main() -> Result<(), Terminator> {
     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
 
-    let plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
+    let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
 
     let cube_start_position = Isometry3::translation(0.0, 0.0, 1.0);
     let box_id = physics_client.load_urdf(

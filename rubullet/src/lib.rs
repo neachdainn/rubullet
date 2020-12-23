@@ -4,7 +4,6 @@
 pub use crate::{
     client::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions},
     error::Error,
-
     mode::Mode,
 };
 pub use rubullet_ffi::{b3JointInfo, b3JointSensorState};
