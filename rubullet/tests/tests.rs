@@ -1,12 +1,11 @@
 use easy_error::Terminator;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
 use rubullet::client::ControlModeArray::Torques;
-use rubullet::client::{ControlModeArray, InverseKinematicsParametersBuilder, JointInfo};
-use rubullet::mode::Mode::Direct;
-use rubullet::{
-    b3JointSensorState, BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient,
-    UrdfOptions,
+use rubullet::client::{
+    ControlModeArray, InverseKinematicsParametersBuilder, JointInfo, JointState,
 };
+use rubullet::mode::Mode::Direct;
+use rubullet::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions};
 use std::f64::consts::PI;
 use std::time::Duration;
 
@@ -69,15 +68,15 @@ pub fn get_joint_states(
     let joint_states = client.get_joint_states(robot, indices.as_slice()).unwrap();
     let pos = joint_states
         .iter()
-        .map(|x| x.m_joint_position)
+        .map(|x| x.joint_position)
         .collect::<Vec<f64>>();
     let vel = joint_states
         .iter()
-        .map(|x| x.m_joint_velocity)
+        .map(|x| x.joint_velocity)
         .collect::<Vec<f64>>();
     let torque = joint_states
         .iter()
-        .map(|x| x.m_joint_motor_torque)
+        .map(|x| x.joint_motor_torque)
         .collect::<Vec<f64>>();
     (pos, vel, torque)
 }
@@ -98,18 +97,18 @@ pub fn get_motor_joint_states(
         .zip(joint_infos.iter())
         .filter(|(_j, i)| i.m_q_index > -1)
         .map(|(j, _i)| *j)
-        .collect::<Vec<b3JointSensorState>>();
+        .collect::<Vec<JointState>>();
     let pos = joint_states
         .iter()
-        .map(|x| x.m_joint_position)
+        .map(|x| x.joint_position)
         .collect::<Vec<f64>>();
     let vel = joint_states
         .iter()
-        .map(|x| x.m_joint_velocity)
+        .map(|x| x.joint_velocity)
         .collect::<Vec<f64>>();
     let torque = joint_states
         .iter()
-        .map(|x| x.m_joint_motor_torque)
+        .map(|x| x.joint_motor_torque)
         .collect::<Vec<f64>>();
     (pos, vel, torque)
 }
@@ -333,12 +332,12 @@ pub fn inverse_dynamics_test() {
 
     for i in 0..t.len() {
         let joint_states = physics_client.get_joint_states(id_robot, &[0, 3]).unwrap();
-        q_pos[0][1] = joint_states[0].m_joint_position;
-        let a = joint_states[1].m_joint_position;
+        q_pos[0][1] = joint_states[0].joint_position;
+        let a = joint_states[1].joint_position;
         q_pos[1][i] = a;
 
-        q_vel[0][i] = joint_states[0].m_joint_velocity;
-        q_vel[1][i] = joint_states[1].m_joint_velocity;
+        q_vel[0][i] = joint_states[0].joint_velocity;
+        q_vel[1][i] = joint_states[1].joint_velocity;
 
         let obj_pos = [q_pos[0][i], q_pos[1][i]];
         let obj_vel = [q_vel[0][i], q_vel[1][i]];

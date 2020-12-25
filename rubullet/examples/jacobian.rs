@@ -1,8 +1,8 @@
 use easy_error::Terminator;
 use nalgebra::{DMatrix, Isometry3, Vector3};
-use rubullet::client::{ControlModeArray, JointInfo};
+use rubullet::client::{ControlModeArray, JointInfo, JointState};
 use rubullet::mode::Mode::Direct;
-use rubullet::{b3JointSensorState, BodyId, PhysicsClient, UrdfOptions};
+use rubullet::{BodyId, PhysicsClient, UrdfOptions};
 use std::time::Duration;
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
@@ -36,15 +36,15 @@ pub fn get_joint_states(
     let joint_states = client.get_joint_states(robot, indices.as_slice()).unwrap();
     let pos = joint_states
         .iter()
-        .map(|x| x.m_joint_position)
+        .map(|x| x.joint_position)
         .collect::<Vec<f64>>();
     let vel = joint_states
         .iter()
-        .map(|x| x.m_joint_velocity)
+        .map(|x| x.joint_velocity)
         .collect::<Vec<f64>>();
     let torque = joint_states
         .iter()
-        .map(|x| x.m_joint_motor_torque)
+        .map(|x| x.joint_motor_torque)
         .collect::<Vec<f64>>();
     (pos, vel, torque)
 }
@@ -65,18 +65,18 @@ pub fn get_motor_joint_states(
         .zip(joint_infos.iter())
         .filter(|(_, i)| i.m_q_index > -1)
         .map(|(j, _)| *j)
-        .collect::<Vec<b3JointSensorState>>();
+        .collect::<Vec<JointState>>();
     let pos = joint_states
         .iter()
-        .map(|x| x.m_joint_position)
+        .map(|x| x.joint_position)
         .collect::<Vec<f64>>();
     let vel = joint_states
         .iter()
-        .map(|x| x.m_joint_velocity)
+        .map(|x| x.joint_velocity)
         .collect::<Vec<f64>>();
     let torque = joint_states
         .iter()
-        .map(|x| x.m_joint_motor_torque)
+        .map(|x| x.joint_motor_torque)
         .collect::<Vec<f64>>();
     (pos, vel, torque)
 }

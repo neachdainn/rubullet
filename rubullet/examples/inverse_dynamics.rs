@@ -57,12 +57,12 @@ fn main() -> Result<(), Terminator> {
 
     for i in 0..t.len() {
         let joint_states = physics_client.get_joint_states(id_robot, &[0, 3])?;
-        q_pos[0][1] = joint_states[0].m_joint_position;
-        let a = joint_states[1].m_joint_position;
+        q_pos[0][1] = joint_states[0].joint_position;
+        let a = joint_states[1].joint_position;
         q_pos[1][i] = a;
 
-        q_vel[0][i] = joint_states[0].m_joint_velocity;
-        q_vel[1][i] = joint_states[1].m_joint_velocity;
+        q_vel[0][i] = joint_states[0].joint_velocity;
+        q_vel[1][i] = joint_states[1].joint_velocity;
 
         let obj_pos = [q_pos[0][i], q_pos[1][i]];
         let obj_vel = [q_vel[0][i], q_vel[1][i]];

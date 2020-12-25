@@ -517,11 +517,7 @@ impl PhysicsClient {
             Ok(())
         }
     }
-    pub fn get_joint_state(
-        &mut self,
-        body: BodyId,
-        joint_index: i32,
-    ) -> Result<b3JointSensorState, Error> {
+    pub fn get_joint_state(&mut self, body: BodyId, joint_index: i32) -> Result<JointState, Error> {
         unsafe {
             if body.0 < 0 {
                 return Err(Error::new("getJointState failed; invalid BodyId"));
@@ -543,7 +539,7 @@ impl PhysicsClient {
                 joint_index,
                 &mut sensor_state,
             ) {
-                return Ok(sensor_state);
+                return Ok(sensor_state.into());
             }
         }
         Err(Error::new("getJointState failed (2)."))
@@ -552,7 +548,7 @@ impl PhysicsClient {
         &mut self,
         body: BodyId,
         joint_indices: &[i32],
-    ) -> Result<Vec<b3JointSensorState>, Error> {
+    ) -> Result<Vec<JointState>, Error> {
         unsafe {
             if body.0 < 0 {
                 return Err(Error::new("getJointState failed; invalid BodyId"));
@@ -569,7 +565,7 @@ impl PhysicsClient {
                 return Err(Error::new("getJointState failed."));
             }
             let mut result_list_joint_states =
-                Vec::<b3JointSensorState>::with_capacity(num_joints as usize);
+                Vec::<JointState>::with_capacity(num_joints as usize);
             for &joint_index in joint_indices.iter() {
                 if joint_index < 0 || joint_index >= num_joints {
                     return Err(Error::new("getJointStates failed; invalid joint_index"));
@@ -581,7 +577,7 @@ impl PhysicsClient {
                     joint_index,
                     &mut sensor_state,
                 ) {
-                    result_list_joint_states.push(sensor_state);
+                    result_list_joint_states.push(sensor_state.into());
                 } else {
                     return Err(Error::new("getJointState failed (2)."));
                 }
@@ -638,8 +634,7 @@ impl PhysicsClient {
         }
         Err(Error::new("error in calculate_mass_matrix"))
     }
-    // TODO make some of the parameters optional
-    #[allow(clippy::too_many_arguments)]
+
     pub fn calculate_inverse_kinematics(
         &mut self,
         params: InverseKinematicsParameters,
@@ -2136,5 +2131,30 @@ impl MouseEvent {
     }
     pub fn is_released(flag: i32) -> bool {
         flag & 4 == 4
+    }
+}
+
+#[derive(Debug, Default, Copy, Clone)]
+pub struct JointState {
+    pub joint_position: f64,
+    pub joint_velocity: f64,
+    /// note to roboticists: this is NOT the motor torque/force, but the spatial reaction force vector at joint.
+    pub joint_force_torque: [f64; 6],
+    pub joint_motor_torque: f64,
+}
+impl From<b3JointSensorState> for JointState {
+    fn from(b3: b3JointSensorState) -> Self {
+        let b3JointSensorState {
+            m_joint_position,
+            m_joint_velocity,
+            m_joint_force_torque,
+            m_joint_motor_torque,
+        } = b3;
+        JointState {
+            joint_position: m_joint_position,
+            joint_velocity: m_joint_velocity,
+            joint_force_torque: m_joint_force_torque,
+            joint_motor_torque: m_joint_motor_torque,
+        }
     }
 }
