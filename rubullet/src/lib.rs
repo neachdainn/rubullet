@@ -6,7 +6,6 @@ pub use crate::{
     error::Error,
     mode::Mode,
 };
-pub use rubullet_ffi::{b3JointInfo, b3JointSensorState};
 /// A utility for creating C-string literals.
 /*
 macro_rules! cstr

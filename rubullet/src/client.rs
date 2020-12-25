@@ -25,7 +25,7 @@ use rubullet_ffi::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
     b3MouseEventsData,
 };
-use std::os::raw::c_char;
+use std::ffi::CStr;
 use std::time::Duration;
 
 /// The "handle" to the physics client.
@@ -459,7 +459,17 @@ impl PhysicsClient {
     pub fn get_num_joints(&mut self, body: BodyId) -> i32 {
         unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) }
     }
+    /// Query info about a joint like its name and type
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::client::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_index` - an index in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
+    ///
+    /// See [JointInfo](`crate::client::JointInfo`) for an example use
     pub fn get_joint_info(&mut self, body: BodyId, joint_index: i32) -> JointInfo {
+        self.get_joint_info_intern(body, joint_index).into()
+    }
+
+    fn get_joint_info_intern(&mut self, body: BodyId, joint_index: i32) -> b3JointInfo {
         unsafe {
             let mut joint_info = b3JointInfo {
                 m_link_name: [2; 1024],
@@ -471,8 +481,8 @@ impl PhysicsClient {
                 m_flags: 0,
                 m_joint_damping: 0.0,
                 m_joint_friction: 0.0,
-                m_joint_upper_limit: 0.0,
                 m_joint_lower_limit: 0.0,
+                m_joint_upper_limit: 0.0,
                 m_joint_max_force: 0.0,
                 m_joint_max_velocity: 0.0,
                 m_parent_frame: [0.; 7],
@@ -482,9 +492,8 @@ impl PhysicsClient {
                 m_q_size: 0,
                 m_u_size: 0,
             };
-            // let mut joint_info: b3JointInfo = b3JointInfo::default();
             ffi::b3GetJointInfo(self.handle.as_ptr(), body.0, joint_index, &mut joint_info);
-            joint_info.into()
+            joint_info
         }
     }
     pub fn reset_joint_state(
@@ -863,8 +872,9 @@ impl PhysicsClient {
         let num_joints = self.get_num_joints(body_id);
         let mut dof_count_org = 0;
         for j in 0..num_joints {
-            let joint_info = self.get_joint_info(body_id, j);
-            match joint_info.m_joint_type {
+            let joint_type =
+                JointType::try_from(self.get_joint_info_intern(body_id, j).m_joint_type).unwrap();
+            match joint_type {
                 JointType::Revolute | JointType::Prismatic => {
                     dof_count_org += 1;
                 }
@@ -972,7 +982,7 @@ impl PhysicsClient {
                 body.0,
                 control_mode.get_int(),
             );
-            let info = self.get_joint_info(body, joint_index);
+            let info = self.get_joint_info_intern(body, joint_index);
 
             match control_mode {
                 ControlMode::Position(target_position) => {
@@ -1072,7 +1082,7 @@ impl PhysicsClient {
                         ));
                     }
                     for i in 0..target_positions.len() {
-                        let info = self.get_joint_info(body, joint_indices[i]);
+                        let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredPosition(
                             command_handle,
                             info.m_q_index,
@@ -1126,7 +1136,7 @@ impl PhysicsClient {
                         ));
                     }
                     for i in 0..pos.len() {
-                        let info = self.get_joint_info(body, joint_indices[i]);
+                        let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredPosition(
                             command_handle,
                             info.m_q_index,
@@ -1155,7 +1165,7 @@ impl PhysicsClient {
                         ));
                     }
                     for i in 0..vel.len() {
-                        let info = self.get_joint_info(body, joint_indices[i]);
+                        let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredVelocity(
                             command_handle,
                             info.m_u_index,
@@ -1176,7 +1186,7 @@ impl PhysicsClient {
                         ));
                     }
                     for i in 0..f.len() {
-                        let info = self.get_joint_info(body, joint_indices[i]);
+                        let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredForceTorque(
                             command_handle,
                             info.m_u_index,
@@ -1858,71 +1868,115 @@ impl TryFrom<i32> for JointType {
         }
     }
 }
-
+#[derive(Debug)]
+/// Contains basic information about a joint like its type and name.
+/// # Example
+/// ```rust
+/// use rubullet::{PhysicsClient, UrdfOptions};
+/// use nalgebra::Isometry3;
+/// use rubullet::mode::Mode::Direct;
+/// use easy_error::Terminator;
+/// fn main() -> Result<(),Terminator> {
+///
+///     let mut client = PhysicsClient::connect(Direct)?;
+///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+///     client.set_additional_search_path(
+///         "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+///         )?;
+///     let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default())?;
+///     let joint_info = client.get_joint_info(panda_id,4);
+///     assert_eq!("panda_joint5",joint_info.joint_name);
+///     Ok(())
+/// }
+/// ```
+/// # See also
+/// * [`JointState`](`crate::client::JointState`) - For information about the current state of the joint.
 pub struct JointInfo {
-    pub m_link_name: [c_char; 1024],
-    pub m_joint_name: [c_char; 1024],
-    pub m_joint_type: JointType,
-    pub m_q_index: i32,
-    pub m_u_index: i32,
-    pub m_joint_index: i32,
-    pub m_flags: i32,
-    pub m_joint_damping: f64,
-    pub m_joint_friction: f64,
-    pub m_joint_upper_limit: f64,
-    pub m_joint_lower_limit: f64,
-    pub m_joint_max_force: f64,
-    pub m_joint_max_velocity: f64,
-    pub m_parent_frame: [f64; 7],
-    pub m_child_frame: [f64; 7],
-    pub m_joint_axis: [f64; 3],
-    pub m_parent_index: i32,
-    pub m_q_size: i32,
-    pub m_u_size: i32,
+    /// the same joint index as the input parameter
+    pub joint_index: i32,
+    /// the name of the joint, as specified in the URDF (or SDF etc) file
+    pub joint_name: String,
+    /// type of the joint, this also implies the number of position and velocity variables.
+    pub joint_type: JointType,
+    /// the first position index in the positional state variables for this body
+    pub q_index: i32,
+    /// the first velocity index in the velocity state variables for this body
+    pub u_index: i32,
+    /// reserved
+    pub flags: i32,
+    /// the joint damping value, as specified in the URDF file
+    pub joint_damping: f64,
+    /// the joint friction value, as specified in the URDF file
+    pub joint_friction: f64,
+    /// Positional lower limit for slider and revolute (hinge) joints.
+    pub joint_lower_limit: f64,
+    /// Positional upper limit for slider and revolute joints. Values ignored in case upper limit <lower limit.
+    pub joint_upper_limit: f64,
+    /// Maximum force specified in URDF (possibly other file formats) Note that this value is not automatically used. You can use maxForce in 'setJointMotorControl2'.
+    pub joint_max_force: f64,
+    /// Maximum velocity specified in URDF. Note that the maximum velocity is not used in actual motor control commands at the moment.
+    pub joint_max_velocity: f64,
+    /// the name of the link, as specified in the URDF (or SDF etc.) file
+    pub link_name: String,
+    ///joint axis in local frame (ignored for fixed joints)
+    pub joint_axis: Vector3<f64>,
+    /// joint pose in parent frame
+    pub parent_frame_pose: Isometry3<f64>,
+    /// parent link index, -1 for base
+    pub parent_index: i32,
 }
 impl From<b3JointInfo> for JointInfo {
     fn from(b3: b3JointInfo) -> Self {
-        let b3JointInfo {
-            m_link_name,
-            m_joint_name,
-            m_joint_type,
-            m_q_index,
-            m_u_index,
-            m_joint_index,
-            m_flags,
-            m_joint_damping,
-            m_joint_friction,
-            m_joint_upper_limit,
-            m_joint_lower_limit,
-            m_joint_max_force,
-            m_joint_max_velocity,
-            m_parent_frame,
-            m_child_frame,
-            m_joint_axis,
-            m_parent_index,
-            m_q_size,
-            m_u_size,
-        } = b3;
-        JointInfo {
-            m_link_name,
-            m_joint_name,
-            m_joint_type: JointType::try_from(m_joint_type).unwrap(),
-            m_q_index,
-            m_u_index,
-            m_joint_index,
-            m_flags,
-            m_joint_damping,
-            m_joint_friction,
-            m_joint_upper_limit,
-            m_joint_lower_limit,
-            m_joint_max_force,
-            m_joint_max_velocity,
-            m_parent_frame,
-            m_child_frame,
-            m_joint_axis,
-            m_parent_index,
-            m_q_size,
-            m_u_size,
+        unsafe {
+            let b3JointInfo {
+                m_link_name,
+                m_joint_name,
+                m_joint_type,
+                m_q_index,
+                m_u_index,
+                m_joint_index,
+                m_flags,
+                m_joint_damping,
+                m_joint_friction,
+                m_joint_upper_limit,
+                m_joint_lower_limit,
+                m_joint_max_force,
+                m_joint_max_velocity,
+                m_parent_frame,
+                m_child_frame: _,
+                m_joint_axis,
+                m_parent_index,
+                m_q_size: _,
+                m_u_size: _,
+            } = b3;
+            JointInfo {
+                link_name: CStr::from_ptr(m_link_name.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+                joint_name: CStr::from_ptr(m_joint_name.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+                joint_type: JointType::try_from(m_joint_type).unwrap(),
+                q_index: m_q_index,
+                u_index: m_u_index,
+                joint_index: m_joint_index,
+                flags: m_flags,
+                joint_damping: m_joint_damping,
+                joint_friction: m_joint_friction,
+                joint_upper_limit: m_joint_upper_limit,
+                joint_lower_limit: m_joint_lower_limit,
+                joint_max_force: m_joint_max_force,
+                joint_max_velocity: m_joint_max_velocity,
+                parent_frame_pose: Isometry3::<f64>::from_parts(
+                    Translation3::from(Vector3::from_column_slice(&m_parent_frame[0..4])),
+                    UnitQuaternion::from_quaternion(Quaternion::from_parts(
+                        m_parent_frame[6],
+                        Vector3::from_column_slice(&m_parent_frame[3..6]),
+                    )),
+                ),
+                joint_axis: m_joint_axis.into(),
+                parent_index: m_parent_index,
+            }
         }
     }
 }

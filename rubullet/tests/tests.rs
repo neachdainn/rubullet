@@ -12,12 +12,12 @@ use std::time::Duration;
 fn slice_compare(a: &[f64], b: &[f64], thresh: f64) {
     assert_eq!(a.len(), b.len());
     for i in 0..a.len() {
-        println!("{} {}", a[i], b[i]);
         float_compare(a[i], b[i], thresh);
     }
 }
 
 fn float_compare(a: f64, b: f64, thresh: f64) {
+    println!("{} {}", a, b);
     assert!((a - b).abs() < thresh);
 }
 
@@ -35,6 +35,73 @@ fn test_load_urdf() {
     let _plane_id = physics_client
         .load_urdf("plane.urdf", Default::default())
         .unwrap();
+}
+#[test]
+// tests a fixed joint and a revolute joint
+fn test_get_joint_info() {
+    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    physics_client
+        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .unwrap();
+    let r2d2 = physics_client
+        .load_urdf("r2d2.urdf", Default::default())
+        .unwrap();
+    let joint_info = physics_client.get_joint_info(r2d2, 1);
+    assert_eq!(1, joint_info.joint_index);
+    assert_eq!("right_base_joint", joint_info.joint_name);
+
+    assert_eq!(JointType::Fixed, joint_info.joint_type);
+    assert_eq!(-1, joint_info.q_index);
+    assert_eq!(-1, joint_info.u_index);
+    assert_eq!(0, joint_info.flags);
+    float_compare(0., joint_info.joint_damping, 1e-10);
+    float_compare(0., joint_info.joint_friction, 1e-10);
+    float_compare(0., joint_info.joint_lower_limit, 1e-10);
+    float_compare(-1., joint_info.joint_upper_limit, 1e-10);
+    float_compare(0., joint_info.joint_max_force, 1e-10);
+    float_compare(0., joint_info.joint_max_velocity, 1e-10);
+    assert_eq!("right_base", joint_info.link_name);
+    slice_compare(&[0.; 3], joint_info.joint_axis.as_slice(), 1e-10);
+    println!("{}", joint_info.parent_frame_pose.rotation.quaternion());
+    slice_compare(
+        &[0.2999999996780742, 0., -1.3898038463944216e-05],
+        joint_info.parent_frame_pose.translation.vector.as_slice(),
+        1e-7,
+    );
+    slice_compare(
+        &[0.0, 0.7070904020014416, 0.0, 0.7071231599922604],
+        joint_info.parent_frame_pose.rotation.coords.as_slice(),
+        1e-7,
+    );
+    assert_eq!(0, joint_info.parent_index);
+    let joint_info = physics_client.get_joint_info(r2d2, 2);
+    assert_eq!(2, joint_info.joint_index);
+    assert_eq!("right_front_wheel_joint", joint_info.joint_name);
+
+    assert_eq!(JointType::Revolute, joint_info.joint_type);
+    assert_eq!(7, joint_info.q_index);
+    assert_eq!(6, joint_info.u_index);
+    assert_eq!(1, joint_info.flags);
+    float_compare(0., joint_info.joint_damping, 1e-10);
+    float_compare(0., joint_info.joint_friction, 1e-10);
+    float_compare(0., joint_info.joint_lower_limit, 1e-10);
+    float_compare(-1., joint_info.joint_upper_limit, 1e-10);
+    float_compare(100., joint_info.joint_max_force, 1e-10);
+    float_compare(100., joint_info.joint_max_velocity, 1e-10);
+    assert_eq!("right_front_wheel", joint_info.link_name);
+    slice_compare(&[0., 0., 1.], joint_info.joint_axis.as_slice(), 1e-10);
+    println!("{}", joint_info.parent_frame_pose.rotation.quaternion());
+    slice_compare(
+        &[0.0, 0.133333333333, -0.085],
+        joint_info.parent_frame_pose.translation.vector.as_slice(),
+        1e-7,
+    );
+    slice_compare(
+        &[0.0, -0.7070904020014416, 0.0, 0.7071231599922604],
+        joint_info.parent_frame_pose.rotation.coords.as_slice(),
+        1e-7,
+    );
+    assert_eq!(1, joint_info.parent_index);
 }
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
@@ -95,7 +162,7 @@ pub fn get_motor_joint_states(
     let joint_states = joint_states
         .iter()
         .zip(joint_infos.iter())
-        .filter(|(_j, i)| i.m_q_index > -1)
+        .filter(|(_j, i)| i.q_index > -1)
         .map(|(j, _i)| *j)
         .collect::<Vec<JointState>>();
     let pos = joint_states
@@ -404,8 +471,7 @@ impl PandaSim {
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
-            if info.m_joint_type == JointType::Revolute || info.m_joint_type == JointType::Prismatic
-            {
+            if info.joint_type == JointType::Revolute || info.joint_type == JointType::Prismatic {
                 client.reset_joint_state(
                     panda_id,
                     i,

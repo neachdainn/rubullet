@@ -10,9 +10,6 @@ use rubullet::*;
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
-    // physics_client.set_additional_search_path("/home/marco/CLionProjects/rubullet-github/rubullet-ffi/bullet3/libbullet3/data")?;
-    // physics_client
-    //     .set_additional_search_path("../../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     physics_client.set_time_step(&Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
 
@@ -128,8 +125,7 @@ impl PandaSim {
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
-            if info.m_joint_type == JointType::Revolute || info.m_joint_type == JointType::Prismatic
-            {
+            if info.joint_type == JointType::Revolute || info.joint_type == JointType::Prismatic {
                 client.reset_joint_state(
                     panda_id,
                     i,

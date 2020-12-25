@@ -63,7 +63,7 @@ pub fn get_motor_joint_states(
     let joint_states = joint_states
         .iter()
         .zip(joint_infos.iter())
-        .filter(|(_, i)| i.m_q_index > -1)
+        .filter(|(_, i)| i.q_index > -1)
         .map(|(j, _)| *j)
         .collect::<Vec<JointState>>();
     let pos = joint_states
@@ -90,7 +90,7 @@ pub fn multiply_jacobian(
     let mut result = Vector3::new(0., 0., 0.);
     let mut i = 0;
     for c in 0..vector.len() {
-        if client.get_joint_info(robot, c as i32).m_q_index > -1 {
+        if client.get_joint_info(robot, c as i32).q_index > -1 {
             for r in 0..3 {
                 result[r] += jacobian[(r, i)] * vector[c];
             }

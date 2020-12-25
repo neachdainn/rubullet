@@ -23,6 +23,7 @@ name = "inverse_dynamics"
 path = "examples/inverse_dynamics.rs"
 [profile.dev]
 opt-level = 3
+incremental = true
 
 [dependencies]
 nalgebra = "0.23"

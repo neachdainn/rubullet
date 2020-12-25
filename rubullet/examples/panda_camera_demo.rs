@@ -140,8 +140,7 @@ impl PandaSim {
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
-            if info.m_joint_type == JointType::Revolute || info.m_joint_type == JointType::Prismatic
-            {
+            if info.joint_type == JointType::Revolute || info.joint_type == JointType::Prismatic {
                 client.reset_joint_state(
                     panda_id,
                     i,
