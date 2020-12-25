@@ -2,11 +2,16 @@
 #![allow(dead_code)]
 
 pub use crate::{
-    client::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions},
+    client::PhysicsClient,
     error::Error,
     mode::Mode,
+    types::{
+        BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag,
+        InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo,
+        JointState, JointType, UrdfOptions,
+    },
 };
-/// A utility for creating C-string literals.
+// A utility for creating C-string literals.
 /*
 macro_rules! cstr
 {
@@ -20,3 +25,4 @@ macro_rules! cstr
 pub mod client;
 pub mod error;
 pub mod mode;
+pub mod types;

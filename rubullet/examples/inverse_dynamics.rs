@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use easy_error::Terminator;
 
-use rubullet::client::ControlModeArray;
-use rubullet::client::ControlModeArray::Torques;
+use rubullet::types::ControlModeArray::Torques;
 use rubullet::*;
 
 fn main() -> Result<(), Terminator> {

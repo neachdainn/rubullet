@@ -1,8 +1,7 @@
 use easy_error::Terminator;
 use nalgebra::{DMatrix, Isometry3, Vector3};
-use rubullet::client::{ControlModeArray, JointInfo, JointState};
 use rubullet::mode::Mode::Direct;
-use rubullet::{BodyId, PhysicsClient, UrdfOptions};
+use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {

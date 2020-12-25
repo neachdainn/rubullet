@@ -1,11 +1,13 @@
 use easy_error::Terminator;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
-use rubullet::client::ControlModeArray::Torques;
-use rubullet::client::{
-    ControlModeArray, InverseKinematicsParametersBuilder, JointInfo, JointState,
-};
+
 use rubullet::mode::Mode::Direct;
-use rubullet::{BodyId, ControlMode, DebugVisualizerFlag, JointType, PhysicsClient, UrdfOptions};
+use rubullet::types::ControlModeArray::Torques;
+use rubullet::types::{JointInfo, JointState};
+use rubullet::{
+    BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, InverseKinematicsParametersBuilder,
+    JointType, PhysicsClient, UrdfOptions,
+};
 use std::f64::consts::PI;
 use std::time::Duration;
 

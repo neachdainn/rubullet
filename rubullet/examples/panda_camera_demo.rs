@@ -4,7 +4,6 @@ use std::time::Duration;
 use easy_error::Terminator;
 use nalgebra::{Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 
-use rubullet::client::{InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder};
 use rubullet::*;
 
 fn main() -> Result<(), Terminator> {
