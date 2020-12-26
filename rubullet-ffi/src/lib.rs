@@ -798,8 +798,8 @@ impl Default for b3CameraImageData {
         b3CameraImageData {
             m_pixel_width: 0,
             m_pixel_height: 0,
-            m_rgb_color_data: &(0. as u8),
-            m_depth_values: &(0. as f32),
+            m_rgb_color_data: &(0_u8),
+            m_depth_values: &(0_f32),
             m_segmentation_mask_values: &0,
         }
     }

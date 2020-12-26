@@ -1243,7 +1243,7 @@ impl PhysicsClient {
         camera_target_position: &[f32; 3],
         camera_up_vector: &[f32; 3],
     ) -> [f32; 16] {
-        let mut view_matrix = [0. as f32; 16];
+        let mut view_matrix = [0_f32; 16];
         unsafe {
             ffi::b3ComputeViewMatrixFromPositions(
                 camera_eye_position.as_ptr(),
@@ -1262,7 +1262,7 @@ impl PhysicsClient {
         roll: f32,
         up_axis_index: i32,
     ) -> [f32; 16] {
-        let mut view_matrix = [0. as f32; 16];
+        let mut view_matrix = [0_f32; 16];
         unsafe {
             ffi::b3ComputeViewMatrixFromYawPitchRoll(
                 camera_target_position.as_ptr(),
@@ -1285,7 +1285,7 @@ impl PhysicsClient {
         near_val: f32,
         far_val: f32,
     ) -> [f32; 16] {
-        let mut projection_matrix = [0. as f32; 16];
+        let mut projection_matrix = [0_f32; 16];
         unsafe {
             ffi::b3ComputeProjectionMatrix(
                 left,
@@ -1305,7 +1305,7 @@ impl PhysicsClient {
         near_val: f32,
         far_val: f32,
     ) -> [f32; 16] {
-        let mut projection_matrix = [0. as f32; 16];
+        let mut projection_matrix = [0_f32; 16];
         unsafe {
             ffi::b3ComputeProjectionMatrixFOV(
                 fov,
@@ -1693,12 +1693,11 @@ mod gui_marker {
         pub fn acquire() -> Result<GuiMarker, crate::Error> {
             // We can probably use a weaker ordering but this will be called so little that we
             // may as well be sure about it.
-            if GUI_EXISTS.compare_and_swap(false, true, Ordering::SeqCst) {
-                Err(crate::Error::new(
+            match GUI_EXISTS.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+                Ok(false) =>{Ok(GuiMarker { _unused: () })},
+                _ => {Err(crate::Error::new(
                     "Only one in-process GUI connection allowed",
-                ))
-            } else {
-                Ok(GuiMarker { _unused: () })
+                ))}
             }
         }
     }
