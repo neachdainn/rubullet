@@ -4,6 +4,7 @@ fn main() {
     // model.
     let dst = cmake::Config::new("bullet3")
         //.very_verbose(true)
+        .profile("Release")
         .build();
 
     println!("cargo:rustc-link-search=native={}/lib", dst.display());

@@ -9,8 +9,7 @@ edition = "2018"
 [lib]
 name = "rubullet_ffi"
 src = "src/lib.rs"
-[profile.dev]
-opt-level = 3
+
 
 [build-dependencies]
 cmake = "0.1.42"

@@ -216,7 +216,7 @@ fn test_jacobian() {
         .calculate_jacobian(
             kuka_id,
             kuka_end_effector_index,
-            &result.m_local_inertial_position,
+            &result.local_inertial_pose.translation,
             mpos.as_slice(),
             zero_vec.as_slice(),
             zero_vec.as_slice(),
@@ -284,37 +284,57 @@ fn test_get_link_state() {
     let m_world_link_frame_orientation = [0.0, 0.0, 0.06550618261098862, 0.9978521466255188];
     let m_world_linear_velocity = [-18.107084901818524, 161.0722445230232, 0.0];
     let m_world_angular_velocity = [0.0, 0.0, 131.10623082146793];
-    slice_compare(&result.m_world_position, &m_world_position, 1e-6);
-    slice_compare(&result.m_world_orientation, &m_world_orientation, 1e-6);
     slice_compare(
-        &result.m_local_inertial_position,
+        &result.world_pose.translation.vector.as_slice(),
+        &m_world_position,
+        1e-6,
+    );
+    slice_compare(
+        &result.world_pose.rotation.coords.as_slice(),
+        &m_world_orientation,
+        1e-6,
+    );
+    slice_compare(
+        &result.local_inertial_pose.translation.vector.as_slice(),
         &m_local_inertial_position,
         1e-6,
     );
     slice_compare(
-        &result.m_local_inertial_orientation,
+        &result.local_inertial_pose.rotation.coords.as_slice(),
         &m_local_inertial_orientation,
         1e-6,
     );
     slice_compare(
-        &result.m_world_link_frame_position,
+        &result.world_link_frame_pose.translation.vector.as_slice(),
         &m_world_link_frame_position,
         1e-6,
     );
     slice_compare(
-        &result.m_world_link_frame_orientation,
+        &result.world_link_frame_pose.rotation.coords.as_slice(),
         &m_world_link_frame_orientation,
         1e-6,
     );
     slice_compare(
-        &result.m_world_linear_velocity,
+        &result.world_linear_velocity,
         &m_world_linear_velocity,
         1e-5,
     );
     slice_compare(
-        &result.m_world_angular_velocity,
+        &result.world_angular_velocity,
         &m_world_angular_velocity,
         1e-6,
+    );
+    let mut link_states = p
+        .get_link_states(kuka_id, &[kuka_end_effector_index], true, true)
+        .unwrap();
+    let link_state_from_link_states = link_states.get(0).unwrap();
+    slice_compare(
+        link_state_from_link_states
+            .world_link_frame_pose
+            .to_homogeneous()
+            .as_slice(),
+        result.world_link_frame_pose.to_homogeneous().as_slice(),
+        1e-10,
     );
 }
 

@@ -29,7 +29,7 @@ use rubullet_ffi::{
 use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ControlModeArray, ExternalForceFrame,
     InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    MouseEvent,
+    LinkState, MouseEvent,
 };
 use std::time::Duration;
 
@@ -349,14 +349,29 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
-
+    /// Querys the Cartesian world pose for the center of mass for a link.
+    /// It will also report the local inertial frame of the center of mass to the URDF link frame,
+    /// to make it easier to compute the graphics/visualization frame.
+    ///
+    /// # Warning
+    /// * the returned link velocity will only be valid if `compute_link_velocity` is set to true
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index
+    /// * `compute_link_velocity` - will compute the link velocity and put it into the [`LinkState`](`crate::types::LinkState`) if set to true. Otherwise the velocity within the LinkState will be invalid.
+    /// * `compute_forward_kinematics` - if true  the Cartesian world pose will be recomputed using forward kinematics.
+    ///
+    /// # See also
+    /// * [`LinkState`](`crate::types::LinkState`) for more information about different types of link frames
+    /// * [`get_link_states()`](`Self::get_link_states()`) to get multiple link states
     pub fn get_link_state(
         &mut self,
         body: BodyId,
         link_index: i32,
         compute_link_velocity: bool,
         compute_forward_kinematics: bool,
-    ) -> Result<b3LinkState, Error> {
+    ) -> Result<LinkState, Error> {
         unsafe {
             if body.0 < 0 {
                 return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
@@ -385,18 +400,35 @@ impl PhysicsClient {
                 &mut link_state,
             ) != 0
             {
-                return Ok(link_state);
+                return Ok(link_state.into());
             }
         }
         Err(Error::new("getLinkState failed."))
     }
+    /// getLinkStates will return the information for multiple links.
+    /// Instead of link_index it will accept link_indices as an array of i32.
+    /// This can improve performance by reducing calling overhead of multiple calls to
+    /// [`get_link_state()`](`Self::get_link_states()`) .
+    ///
+    /// # Warning
+    /// * the returned link velocity will only be valid if `compute_link_velocity` is set to true
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_indices` - link indices
+    /// * `compute_link_velocity` - will compute the link velocity and put it into the [`LinkState`](`crate::types::LinkState`) if set to true. Otherwise the velocity within the LinkState will be invalid.
+    /// * `compute_forward_kinematics` - if true  the Cartesian world pose will be recomputed using forward kinematics.
+    ///
+    /// # See also
+    /// * [`LinkState`](`crate::types::LinkState`) for more information about different types of link frames
+    /// * [`get_link_state()`](`Self::get_link_states()`) to get only a single link state
     pub fn get_link_states(
         &mut self,
         body: BodyId,
         link_indices: &[i32],
         compute_link_velocity: bool,
         compute_forward_kinematics: bool,
-    ) -> Result<Vec<b3LinkState>, Error> {
+    ) -> Result<Vec<LinkState>, Error> {
         unsafe {
             if body.0 < 0 {
                 return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
@@ -417,7 +449,7 @@ impl PhysicsClient {
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getLinkState failed."));
             }
-            let mut link_states = Vec::<b3LinkState>::with_capacity(link_indices.len());
+            let mut link_states = Vec::<LinkState>::with_capacity(link_indices.len());
             for &link_index in link_indices.iter() {
                 let mut link_state = b3LinkState::default();
                 if ffi::b3GetLinkState(
@@ -427,7 +459,7 @@ impl PhysicsClient {
                     &mut link_state,
                 ) != 0
                 {
-                    link_states.push(link_state);
+                    link_states.push(link_state.into());
                 } else {
                     return Err(Error::new("getLinkStates failed."));
                 }
@@ -859,7 +891,7 @@ impl PhysicsClient {
         &mut self,
         body_id: BodyId,
         link_index: i32,
-        local_position: &[f64; 3],
+        local_position: &Translation3<f64>,
         object_positions: &[f64],
         object_velocities: &[f64],
         object_accelerations: &[f64],
@@ -897,7 +929,7 @@ impl PhysicsClient {
             }
         }
         if dof_count_org != 0 && dof_count_org == object_positions.len() {
-            let local_point = local_position;
+            let local_point = local_position.vector.as_slice();
             let joint_positions = object_positions;
             let joint_velocities = object_velocities;
             let joint_accelerations = object_accelerations;

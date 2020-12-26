@@ -21,8 +21,6 @@ path = "examples/hello_rubullet.rs"
 [[example]]
 name = "inverse_dynamics"
 path = "examples/inverse_dynamics.rs"
-[profile.dev]
-opt-level = 3
 
 [dependencies]
 nalgebra = "0.23"

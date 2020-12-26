@@ -137,20 +137,20 @@ fn main() -> Result<(), Terminator> {
     let jacobian = p.calculate_jacobian(
         kuka_id,
         kuka_end_effector_index,
-        &result.m_local_inertial_position,
+        &result.local_inertial_pose.translation,
         mpos.as_slice(),
         zero_vec.as_slice(),
         zero_vec.as_slice(),
     )?;
     println!("Link linear velocity of CoM from getLinkState:");
-    println!("{:?}", result.m_world_linear_velocity);
+    println!("{:?}", result.world_linear_velocity);
     println!("Link linear velocity of CoM from linearJacobian * q_dot:");
     println!(
         "{:?}",
         multiply_jacobian(&mut p, kuka_id, &jacobian.linear_jacobian, vel.as_slice())
     );
     println!("Link angular velocity of CoM from getLinkState:");
-    println!("{:?}", result.m_world_angular_velocity);
+    println!("{:?}", result.world_angular_velocity);
     println!("Link angular velocity of CoM from angularJacobian * q_dot:");
     println!(
         "{:?}",

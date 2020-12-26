@@ -2,7 +2,7 @@
 
 use crate::Error;
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
-use rubullet_ffi::{b3JointInfo, b3JointSensorState};
+use rubullet_ffi::{b3JointInfo, b3JointSensorState, b3LinkState};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -544,4 +544,95 @@ pub enum DebugVisualizerFlag {
     COV_ENABLE_SEGMENTATION_MARK_PREVIEW,
     COV_ENABLE_PLANAR_REFLECTION,
     COV_ENABLE_SINGLE_STEP_RENDERING,
+}
+
+#[derive(Debug)]
+/// Describes the State of a Link
+/// # Kind of Frames
+/// * `world_frame` - center of mass
+/// * `local_intertial_frame` - offset to the CoM expressed in the URDF link frame
+/// * `world_link_frame` - URDF link frame
+/// ### Relationships between Frames
+/// urdfLinkFrame = comLinkFrame * localInertialFrame.inverse()
+/// ```rust
+/// use rubullet::{PhysicsClient, UrdfOptions};
+/// use nalgebra::Isometry3;
+/// use rubullet::mode::Mode::Direct;
+/// use easy_error::Terminator;
+/// fn main() -> Result<(),Terminator> {
+///     let mut client = PhysicsClient::connect(Direct)?;
+///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+///     client.set_additional_search_path(
+///         "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+///         )?;
+///     let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default())?;
+///     let link_state = client.get_link_state(panda_id, 11, true, true)?;
+///     // urdfLinkFrame = comLinkFrame * localInertialFrame.inverse()
+///     let urdf_frame = link_state.world_pose * link_state.local_inertial_pose.inverse();
+///     // print both frames to see that they are about the same
+///     println!("{}", link_state.world_link_frame_pose);
+///     println!("{}", urdf_frame);
+///     // as they are both almost the same calculating the difference:
+///     // urdfLinkFrame.inverse() * world_link_frame_pose
+///     // should return something very close the identity matrix I.
+///     let identity = urdf_frame.inverse() * link_state.world_link_frame_pose;
+///     assert!(identity.translation.vector.norm() < 1e-7);
+///     assert!(identity.rotation.angle() < 1e-7);
+///     Ok(())
+/// }
+/// ```
+///
+/// # See also
+/// * [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
+/// * [`get_link_states()`](`crate::client::PhysicsClient::get_link_states()`)
+pub struct LinkState {
+    /// Cartesian pose of the center of mass
+    pub world_pose: Isometry3<f64>,
+    /// local offset of the intertial frame (center of mass) express in the URDF link frame
+    pub local_inertial_pose: Isometry3<f64>,
+    /// world pose of the URDF link frame
+    pub world_link_frame_pose: Isometry3<f64>,
+    ///Cartesian world linear  velocity. Only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
+    pub world_linear_velocity: [f64; 3],
+    ///Cartesian world angular velocity. Only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
+    pub world_angular_velocity: [f64; 3],
+}
+impl From<b3LinkState> for LinkState {
+    fn from(b3: b3LinkState) -> Self {
+        let b3LinkState {
+            m_world_position,
+            m_world_orientation,
+            m_local_inertial_position,
+            m_local_inertial_orientation,
+            m_world_link_frame_position,
+            m_world_link_frame_orientation,
+            m_world_linear_velocity,
+            m_world_angular_velocity,
+            m_world_aabb_min: _,
+            m_world_aabb_max: _,
+        } = b3;
+        LinkState {
+            world_pose: position_orientation_to_isometry(m_world_position, m_world_orientation),
+            local_inertial_pose: position_orientation_to_isometry(
+                m_local_inertial_position,
+                m_local_inertial_orientation,
+            ),
+            world_link_frame_pose: position_orientation_to_isometry(
+                m_world_link_frame_position,
+                m_world_link_frame_orientation,
+            ),
+            world_linear_velocity: m_world_linear_velocity,
+            world_angular_velocity: m_world_angular_velocity,
+        }
+    }
+}
+
+fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -> Isometry3<f64> {
+    Isometry3::<f64>::from_parts(
+        Translation3::from(Vector3::from_column_slice(&position)),
+        UnitQuaternion::from_quaternion(Quaternion::from_parts(
+            orientation[3],
+            Vector3::from_column_slice(&orientation[0..3]),
+        )),
+    )
 }
