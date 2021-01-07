@@ -657,7 +657,9 @@ impl PhysicsClient {
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
     }
-
+    /// returns the number of joints of a body
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     pub fn get_num_joints(&mut self, body: BodyId) -> i32 {
         unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) }
     }
@@ -698,11 +700,21 @@ impl PhysicsClient {
             joint_info
         }
     }
-    pub fn reset_joint_state(
+    /// You can reset the state of the joint. It is best only to do this at the start,
+    /// while not running the simulation: resetJointState overrides all physics simulation.
+    /// Note that we only support 1-DOF motorized joints at the moment,
+    /// sliding joint or revolute joints.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_index` - a joint index in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
+    /// * `value` - the joint position (angle in radians or position)
+    /// * `velocity`- optional joint velocity (angular or linear velocity)
+    pub fn reset_joint_state<Velocity: Into<Option<f64>>>(
         &mut self,
         body: BodyId,
         joint_index: i32,
-        value: Option<f64>,
+        value: f64,
+        velocity: Velocity,
     ) -> Result<(), Error> {
         unsafe {
             let num_joints = ffi::b3GetNumJoints(self.handle.as_ptr(), body.0);
@@ -715,13 +727,13 @@ impl PhysicsClient {
                 self.handle.as_ptr(),
                 command_handle,
                 joint_index,
-                value.unwrap_or(0.),
+                value,
             );
             ffi::b3CreatePoseCommandSetJointVelocity(
                 self.handle.as_ptr(),
                 command_handle,
                 joint_index,
-                0.,
+                velocity.into().unwrap_or(0.),
             );
             let _handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);

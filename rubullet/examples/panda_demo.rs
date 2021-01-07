@@ -128,7 +128,8 @@ impl PandaSim {
                 client.reset_joint_state(
                     panda_id,
                     i,
-                    Some(PandaSim::INITIAL_JOINT_POSITIONS[index]),
+                    PandaSim::INITIAL_JOINT_POSITIONS[index],
+                    None,
                 )?;
                 index += 1;
             }
