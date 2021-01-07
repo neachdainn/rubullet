@@ -207,6 +207,15 @@ extern "C" {
         startOrnZ: f64,
         startOrnW: f64,
     ) -> c_int;
+    pub fn b3CreatePoseCommandSetBaseLinearVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linVel: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreatePoseCommandSetBaseAngularVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        angVel: *const f64,
+    ) -> c_int;
     pub fn b3CreatePoseCommandSetJointPosition(
         physClient: b3PhysicsClientHandle,
         commandHandle: b3SharedMemoryCommandHandle,

@@ -387,6 +387,133 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
+    /// You get access to the linear and angular velocity of the base of a body.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// # Return
+    ///  Returns a result which is either a velocity array of size 6 (linear velocity, angular velocity)
+    ///  or an Error
+    /// # See also
+    /// [reset_base_velocity](`Self::reset_base_velocity()`) to reset a base velocity and for examples
+    pub fn get_base_velocity(&mut self, body: BodyId) -> Result<[f64; 6], Error> {
+        let mut base_velocity = [0.; 6];
+        unsafe {
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            let actual_state_qdot: *mut f64 = ptr::null_mut();
+            if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("get_base_velocity_failed."));
+            }
+            ffi::b3GetStatusActualState(
+                status_handle,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                &actual_state_qdot,
+                ptr::null_mut(),
+            );
+            let base_velocity_slice = std::slice::from_raw_parts(actual_state_qdot, 6);
+            base_velocity[..6].clone_from_slice(&base_velocity_slice[..6]);
+        }
+        Ok(base_velocity)
+    }
+    /// Reset the linear and/or angular velocity of the base of a body
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `linear_velocity` - either a &[f64;3] which contains the desired linear velocity (x,y,z)
+    ///  in Cartesian world coordinates or `None` to not change the linear velocity
+    /// * `angular_velocity` - either a &[f64;3] which contains the desired angular velocity
+    /// (wx,wy,wz) in Cartesian world coordinates or `None` to not change the linear velocity
+    ///
+    /// # Errors
+    /// * When you set both linear_velocity and angular_velocity to `None`
+    ///
+    /// # Example
+    /// ```rust
+    ///use easy_error::Terminator;
+    ///use nalgebra::{Isometry3, Vector3};
+    ///use rubullet::*;
+    ///
+    ///fn main() -> Result<(), Terminator> {
+    ///    let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    ///    let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
+    ///    let cube_start_position = Isometry3::translation(0.0, 0.0, 1.0);
+    ///    let box_id = physics_client.load_urdf(
+    ///        "r2d2.urdf",
+    ///        UrdfOptions {
+    ///            base_transform: cube_start_position,
+    ///            ..Default::default()
+    ///        },
+    ///    )?;
+    ///
+    ///    physics_client
+    ///        .reset_base_velocity(box_id, &[1., 2., 3.], &[4., 5., 6.])?;
+    ///    let velocity = physics_client.get_base_velocity(box_id)?;
+    ///    assert_eq!(velocity, [1., 2., 3., 4., 5., 6.]);
+    ///
+    ///    physics_client
+    ///        .reset_base_velocity(box_id, &[0., 0., 0.], None)?;
+    ///    let velocity = physics_client.get_base_velocity(box_id)?;
+    ///    assert_eq!(velocity, [0., 0., 0., 4., 5., 6.]);
+    ///
+    ///    physics_client
+    ///        .reset_base_velocity(box_id, None, &[0., 0., 0.])?;
+    ///    let velocity = physics_client.get_base_velocity(box_id)?;
+    ///    assert_eq!(velocity, [0.; 6]);
+    ///
+    ///    assert!(physics_client
+    ///        .reset_base_velocity(box_id, None, None)
+    ///        .is_err());
+    ///    Ok(())
+    ///}
+    /// ```
+    pub fn reset_base_velocity<
+        'a,
+        Linear: Into<Option<&'a [f64; 3]>>,
+        Angular: Into<Option<&'a [f64; 3]>>,
+    >(
+        &mut self,
+        body: BodyId,
+        linear_velocity: Linear,
+        angular_velocity: Angular,
+    ) -> Result<(), Error> {
+        let maybe_lin = linear_velocity.into();
+        let maybe_angular = angular_velocity.into();
+        unsafe {
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+            match (maybe_lin, maybe_angular) {
+                (None, None) => {
+                    return Err(Error::new(
+                        "expected at least linearVelocity and/or angularVelocity.",
+                    ));
+                }
+                (Some(linear), Some(angular)) => {
+                    ffi::b3CreatePoseCommandSetBaseLinearVelocity(command_handle, linear.as_ptr());
+                    ffi::b3CreatePoseCommandSetBaseAngularVelocity(
+                        command_handle,
+                        angular.as_ptr(),
+                    );
+                }
+                (Some(linear), None) => {
+                    ffi::b3CreatePoseCommandSetBaseLinearVelocity(command_handle, linear.as_ptr());
+                }
+                (None, Some(angular)) => {
+                    ffi::b3CreatePoseCommandSetBaseAngularVelocity(
+                        command_handle,
+                        angular.as_ptr(),
+                    );
+                }
+            }
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+        }
+        Ok(())
+    }
     /// Queries the Cartesian world pose for the center of mass for a link.
     /// It will also report the local inertial frame of the center of mass to the URDF link frame,
     /// to make it easier to compute the graphics/visualization frame.
@@ -1440,7 +1567,7 @@ impl PhysicsClient {
     }
     ///
     /// Buttons are currently not working
-    /// Examples:
+    /// # Example
     /// ```no_run
     /// use rubullet::PhysicsClient;
     /// use rubullet::mode::Mode::Gui;

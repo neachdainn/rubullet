@@ -324,7 +324,7 @@ fn test_get_link_state() {
         &m_world_angular_velocity,
         1e-6,
     );
-    let mut link_states = p
+    let link_states = p
         .get_link_states(kuka_id, &[kuka_end_effector_index], true, true)
         .unwrap();
     let link_state_from_link_states = link_states.get(0).unwrap();
