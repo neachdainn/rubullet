@@ -740,6 +740,11 @@ impl PhysicsClient {
             Ok(())
         }
     }
+    /// get information about the [joint state](`crate::types::JointState`)
+    /// such as the joint position, velocity, joint reaction forces and joint motor torque.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_index` - a joint index in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
     pub fn get_joint_state(&mut self, body: BodyId, joint_index: i32) -> Result<JointState, Error> {
         unsafe {
             if body.0 < 0 {
@@ -767,6 +772,11 @@ impl PhysicsClient {
         }
         Err(Error::new("getJointState failed (2)."))
     }
+    /// get_joint_states is the array version of [get_joint_state](`Self::get_joint_state()`).
+    /// Instead of passing in a single joint_index, you pass in a list of joint_indices.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_indices` - a list of joint indices which each index  in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
     pub fn get_joint_states(
         &mut self,
         body: BodyId,
