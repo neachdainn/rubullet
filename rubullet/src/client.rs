@@ -818,6 +818,17 @@ impl PhysicsClient {
             Ok(result_list_joint_states)
         }
     }
+    /// calculate_mass_matrix will compute the system inertia for an articulated body given
+    /// its joint positions.
+    /// The composite rigid body algorithm (CBRA) is used to compute the mass matrix.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `object_positions` - joint positions for each link
+    /// # Return
+    /// The result is the square mass matrix with dimensions dofCount * dofCount, stored as a
+    /// list of dofCount rows, each row is a list of dofCount mass matrix elements.
+    /// Note that when multidof (spherical) joints are involved, calculate_mass_matrix will use a
+    /// different code path, that is a bit slower.
     pub fn calculate_mass_matrix(
         &mut self,
         body: BodyId,
@@ -1020,10 +1031,28 @@ impl PhysicsClient {
         }
         Err(Error::new("Error in calculateInverseKinematics"))
     }
-
+    /// calculate_inverse_dynamics will compute the forces needed to reach the given
+    /// joint accelerations, starting from specified joint positions and velocities.
+    /// The inverse dynamics is computed using the recursive Newton Euler algorithm (RNEA).
+    /// 
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `object_positions` - joint positions for each degree of freedom (DoF).
+    ///  Note that fixed joints have 0 degrees of freedom. The base is skipped/ignored in all cases (floating base and fixed base).
+    /// * `object_velocities` - joint velocities for each degree of freedom (DoF)
+    /// * `object_acceleration` - desired joint accelerations for each degree of freedom (DoF)
+    ///
+    /// # Note
+    /// When multidof (spherical) joints are involved, the calculate_inverse_dynamics uses a
+    /// different code path and is a bit slower. Also note that calculate_inverse_dynamics ignores
+    /// the joint/link damping, while forward dynamics (in stepSimulation) includes those damping
+    /// terms. So if you want to compare the inverse dynamics and forward dynamics,
+    /// make sure to set those damping terms to zero using
+    /// [change_dynamics_linear_damping](`Self::change_dynamics_linear_damping`) and 
+    /// [change_dynamics_angular_damping](`Self::change_dynamics_angular_damping`).
     pub fn calculate_inverse_dynamics(
         &mut self,
-        body_id: BodyId,
+        body: BodyId,
         object_positions: &[f64],
         object_velocities: &[f64],
         object_accelerations: &[f64],
@@ -1037,7 +1066,7 @@ impl PhysicsClient {
         unsafe {
             let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
                 self.handle.as_ptr(),
-                body_id.0,
+                body.0,
                 object_positions.as_ptr(),
                 object_positions.len() as i32,
                 object_velocities.as_ptr(),
@@ -1076,7 +1105,7 @@ impl PhysicsClient {
 
     pub fn calculate_jacobian(
         &mut self,
-        body_id: BodyId,
+        body: BodyId,
         link_index: i32,
         local_position: &Translation3<f64>,
         object_positions: &[f64],
@@ -1093,11 +1122,11 @@ impl PhysicsClient {
                 "object_accelerations  has not the same size as object_positions",
             ));
         }
-        let num_joints = self.get_num_joints(body_id);
+        let num_joints = self.get_num_joints(body);
         let mut dof_count_org = 0;
         for j in 0..num_joints {
             let joint_type =
-                JointType::try_from(self.get_joint_info_intern(body_id, j).m_joint_type).unwrap();
+                JointType::try_from(self.get_joint_info_intern(body, j).m_joint_type).unwrap();
             match joint_type {
                 JointType::Revolute | JointType::Prismatic => {
                     dof_count_org += 1;
@@ -1124,7 +1153,7 @@ impl PhysicsClient {
             unsafe {
                 let command_handle = ffi::b3CalculateJacobianCommandInit(
                     self.handle.as_ptr(),
-                    body_id.0,
+                    body.0,
                     link_index,
                     local_point.as_ptr(),
                     joint_positions.as_ptr(),
