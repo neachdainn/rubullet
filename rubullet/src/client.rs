@@ -114,6 +114,7 @@ impl PhysicsClient {
         // The client is up and running
         Ok(client)
     }
+    /// reset_simulation will remove all objects from the world and reset the world to initial conditions.
     pub fn reset_simulation(&mut self) {
         unsafe {
             let command_handle = ffi::b3InitResetSimulationCommand(self.handle.as_ptr());
@@ -122,6 +123,16 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
+    /// Warning: in many cases it is best to leave the timeStep to default, which is 240Hz.
+    /// Several parameters are tuned with this value in mind. For example the number of solver
+    /// iterations and the error reduction parameters (erp) for contact, friction and non-contact
+    /// joints are related to the time step. If you change the time step, you may need to re-tune
+    /// those values accordingly, especially the erp values.
+    ///
+    /// You can set the physics engine timestep that is used when calling
+    /// [`step_simulation`](`Self::step_simulation()`).
+    /// It is best to only call this method at the start of a simulation.
+    /// Don't change this time step regularly.
     pub fn set_time_step(&mut self, time_step: &Duration) {
         unsafe {
             let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
@@ -130,6 +141,25 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
     }
+    /// By default, the physics server will not step the simulation, unless you explicitly send a
+    /// [`step_simulation`](`Self::step_simulation()`) command.
+    /// This way you can maintain control determinism of the simulation
+    /// It is possible to run the simulation in real-time by letting the physics server
+    /// automatically step the simulation according to its real-time-clock (RTC) using the
+    /// set_real_time_simulation command. If you enable the real-time simulation,
+    /// you don't need to call [`step_simulation`](`Self::step_simulation()`).
+    ///
+    /// Note that set_real_time_simulation has no effect in
+    /// [`Direct mode`](`crate::mode::Mode::Direct`) :
+    /// in [`Direct mode`](`crate::mode::Mode::Direct`) mode the physics
+    /// server and client happen in the same thread and you trigger every command.
+    /// In [`Gui mode`](`crate::mode::Mode::Gui`) and in Virtual Reality mode, and TCP/UDP mode,
+    /// the physics server runs in a separate thread from the client (RuBullet),
+    /// and set_real_time_simulation allows the physicsserver thread
+    /// to add additional calls to  [`step_simulation`](`Self::step_simulation()`).
+    ///
+    /// # Arguments
+    /// * `enable_real_time_simulation` - activates or deactivates real-time simulation
     pub fn set_real_time_simulation(&mut self, enable_real_time_simulation: bool) {
         unsafe {
             let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
@@ -328,7 +358,15 @@ impl PhysicsClient {
             ))
         }
     }
-
+    /// You can reset the position and orientation of the base (root) of each object.
+    /// It is best only to do this at the start, and not during a running simulation,
+    /// since the command will override the effect of all physics simulation.
+    /// The linear and angular velocity is set to zero.
+    /// You can use [reset_base_velocity](`Self::reset_base_velocity()`)
+    /// to reset to a non-zero linear and/or angular velocity.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `pose` - reset the base of the object at the specified position in world space coordinates
     pub fn reset_base_transform(&mut self, body: BodyId, pose: &Isometry3<f64>) {
         unsafe {
             let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
@@ -349,7 +387,7 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
-    /// Querys the Cartesian world pose for the center of mass for a link.
+    /// Queries the Cartesian world pose for the center of mass for a link.
     /// It will also report the local inertial frame of the center of mass to the URDF link frame,
     /// to make it easier to compute the graphics/visualization frame.
     ///
@@ -1694,10 +1732,10 @@ mod gui_marker {
             // We can probably use a weaker ordering but this will be called so little that we
             // may as well be sure about it.
             match GUI_EXISTS.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
-                Ok(false) =>{Ok(GuiMarker { _unused: () })},
-                _ => {Err(crate::Error::new(
+                Ok(false) => Ok(GuiMarker { _unused: () }),
+                _ => Err(crate::Error::new(
                     "Only one in-process GUI connection allowed",
-                ))}
+                )),
             }
         }
     }
