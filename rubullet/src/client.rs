@@ -1016,7 +1016,7 @@ impl PhysicsClient {
                 status_handle,
                 &mut result_body_index,
                 &mut num_pos,
-                &mut 0.,
+                std::ptr::null_mut(),
             );
             if result != 0 && num_pos != 0 {
                 let mut ik_output_joint_pos = vec![0.; num_pos as usize];
@@ -1034,7 +1034,7 @@ impl PhysicsClient {
     /// calculate_inverse_dynamics will compute the forces needed to reach the given
     /// joint accelerations, starting from specified joint positions and velocities.
     /// The inverse dynamics is computed using the recursive Newton Euler algorithm (RNEA).
-    /// 
+    ///
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `object_positions` - joint positions for each degree of freedom (DoF).
@@ -1048,7 +1048,7 @@ impl PhysicsClient {
     /// the joint/link damping, while forward dynamics (in stepSimulation) includes those damping
     /// terms. So if you want to compare the inverse dynamics and forward dynamics,
     /// make sure to set those damping terms to zero using
-    /// [change_dynamics_linear_damping](`Self::change_dynamics_linear_damping`) and 
+    /// [change_dynamics_linear_damping](`Self::change_dynamics_linear_damping`) and
     /// [change_dynamics_angular_damping](`Self::change_dynamics_angular_damping`).
     pub fn calculate_inverse_dynamics(
         &mut self,
@@ -1084,7 +1084,7 @@ impl PhysicsClient {
                     status_handle,
                     &mut body_unique_id,
                     &mut dof_count,
-                    &mut 0.,
+                    std::ptr::null_mut(),
                 );
                 if dof_count != 0 {
                     let mut joint_forces_output = vec![0.; dof_count as usize];
