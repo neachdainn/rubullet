@@ -6,7 +6,7 @@ pub use crate::{
     error::Error,
     mode::Mode,
     types::{
-        BodyId, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
+        BodyId, BodyInfo, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
         DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
         InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo,
         JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId,

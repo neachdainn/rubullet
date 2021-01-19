@@ -2,7 +2,7 @@
 
 use crate::Error;
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
-use rubullet_ffi::{b3JointInfo, b3JointSensorState, b3LinkState};
+use rubullet_ffi::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -892,6 +892,30 @@ impl Default for ChangeVisualShapeOptions {
             rgba_color: None,
             specular_color: None,
             flags: None,
+        }
+    }
+}
+/// Contains the body name and base name of a Body. BodyInfo is returned by
+/// [get_body_info](`crate::PhysicsClient::get_body_info`)
+#[derive(Debug)]
+pub struct BodyInfo {
+    /// base name (first link) as extracted from the URDF etc.
+    pub base_name: String,
+    /// body name (robot name) as extracted from the URDF etc.
+    pub body_name: String,
+}
+
+impl From<b3BodyInfo> for BodyInfo {
+    fn from(info: b3BodyInfo) -> Self {
+        unsafe {
+            BodyInfo {
+                base_name: CStr::from_ptr(info.m_baseName.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+                body_name: CStr::from_ptr(info.m_bodyName.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+            }
         }
     }
 }

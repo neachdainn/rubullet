@@ -18,7 +18,7 @@ use crate::types::{
     InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
     LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
 };
-use crate::{ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions};
+use crate::{BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions};
 use image::{ImageBuffer, RgbaImage};
 use rubullet_ffi as ffi;
 use rubullet_ffi::EnumSharedMemoryServerStatus::{
@@ -2464,6 +2464,31 @@ impl PhysicsClient {
             }
         }
         Ok(())
+    }
+    /// will remove a body by its body unique id
+    pub fn remove_body(&mut self, body: BodyId) {
+        unsafe {
+            if body.0 >= 0 && self.can_submit_command() {
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(
+                    self.handle.as_ptr(),
+                    ffi::b3InitRemoveBodyCommand(self.handle.as_ptr(), body.0),
+                );
+                let _status_type = ffi::b3GetStatusType(status_handle);
+            }
+        }
+    }
+    /// gets the BodyInfo (base name and body name) of a body
+    pub fn get_body_info(&mut self, body: BodyId) -> Result<BodyInfo, Error> {
+        let mut body_info_c = ffi::b3BodyInfo {
+            m_baseName: [0; 1024],
+            m_bodyName: [0; 1024],
+        };
+        unsafe {
+            if ffi::b3GetBodyInfo(self.handle.as_ptr(), body.0, &mut body_info_c) != 0 {
+                return Ok(body_info_c.into());
+            }
+        }
+        Err(Error::new("Couldn't get body info"))
     }
 }
 

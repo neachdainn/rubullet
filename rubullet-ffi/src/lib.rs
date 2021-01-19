@@ -182,6 +182,24 @@ extern "C" {
         linear_damping: f64,
     ) -> c_int;
 
+    pub fn b3InitRemoveBodyCommand(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    #[doc = "return the total number of bodies in the simulation"]
+    pub fn b3GetNumBodies(physClient: b3PhysicsClientHandle) -> c_int;
+
+    #[doc = " return the body unique id, given the index in range [0 , b3GetNumBodies() )"]
+    pub fn b3GetBodyUniqueId(physClient: b3PhysicsClientHandle, serialIndex: c_int) -> c_int;
+
+    #[doc = "given a body unique id, return the body information. See b3BodyInfo in SharedMemoryPublic.h"]
+    pub fn b3GetBodyInfo(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        info: *mut b3BodyInfo,
+    ) -> c_int;
+
     pub fn b3GetNumJoints(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
     pub fn b3GetJointInfo(
         physClient: b3PhysicsClientHandle,
@@ -1071,6 +1089,12 @@ pub struct b3LinkState {
     pub m_world_aabb_max: [f64; 3],
 }
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct b3BodyInfo {
+    pub m_baseName: [c_char; 1024usize],
+    pub m_bodyName: [c_char; 1024usize],
+}
 #[repr(C)]
 #[derive(Debug)]
 pub struct b3CameraImageData {

@@ -38,6 +38,20 @@ fn test_load_urdf() {
         .load_urdf("plane.urdf", Default::default())
         .unwrap();
 }
+
+#[test]
+fn test_get_body_info() {
+    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    physics_client
+        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .unwrap();
+    let r2d2 = physics_client
+        .load_urdf("r2d2.urdf", Default::default())
+        .unwrap();
+    let body_info = physics_client.get_body_info(r2d2).unwrap();
+    assert_eq!(body_info.base_name.as_str(), "base_link");
+    assert_eq!(body_info.body_name.as_str(), "physics");
+}
 #[test]
 // tests a fixed joint and a revolute joint
 fn test_get_joint_info() {
