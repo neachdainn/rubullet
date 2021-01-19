@@ -2603,6 +2603,10 @@ impl PhysicsClient {
         }
         Err(Error::new("Couldn't get body info"))
     }
+    /// returns the total number of bodies in the physics server
+    pub fn get_num_bodies(&mut self) -> i32 {
+        unsafe { ffi::b3GetNumBodies(self.handle.as_ptr()) }
+    }
 }
 
 impl Drop for PhysicsClient {

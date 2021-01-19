@@ -39,6 +39,26 @@ fn test_load_urdf() {
         .unwrap();
 }
 #[test]
+fn test_add_and_remove_bodies() {
+    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    physics_client
+        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .unwrap();
+    assert_eq!(physics_client.get_num_bodies(), 0);
+    let _plane_id = physics_client
+        .load_urdf("plane.urdf", Default::default())
+        .unwrap();
+    assert_eq!(physics_client.get_num_bodies(), 1);
+    let r2d2 = physics_client
+        .load_urdf("r2d2.urdf", Default::default())
+        .unwrap();
+    assert_eq!(physics_client.get_num_bodies(), 2);
+    physics_client.remove_body(r2d2);
+    assert_eq!(physics_client.get_num_bodies(), 1);
+    physics_client.reset_simulation();
+    assert_eq!(physics_client.get_num_bodies(), 0);
+}
+#[test]
 fn test_get_and_reset_base_transformation() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
