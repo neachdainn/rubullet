@@ -104,7 +104,7 @@ fn main() -> Result<(), Terminator> {
     let mut p = PhysicsClient::connect(Direct).unwrap();
     p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
     let gravity_constant = -9.81;
-    p.set_time_step(&delta_t);
+    p.set_time_step(delta_t);
     p.set_gravity(Vector3::new(0., 0., gravity_constant))?;
     p.load_urdf(
         "plane.urdf",

@@ -188,7 +188,7 @@ fn test_jacobian() {
     let mut p = PhysicsClient::connect(Direct).unwrap();
     p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
         .unwrap();
-    p.set_time_step(&delta_t);
+    p.set_time_step(delta_t);
 
     let kuka_id = p
         .load_urdf(
@@ -256,7 +256,7 @@ fn test_get_link_state() {
     p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
         .unwrap();
 
-    p.set_time_step(&delta_t);
+    p.set_time_step(delta_t);
 
     let kuka_id = p
         .load_urdf(
@@ -371,7 +371,7 @@ pub fn inverse_dynamics_test() {
     physics_client
         .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
         .unwrap();
-    physics_client.set_time_step(&delta_t);
+    physics_client.set_time_step(delta_t);
     let id_revolute_joints = [0, 3];
     let id_robot = physics_client
         .load_urdf(
@@ -451,7 +451,7 @@ pub fn inverse_dynamics_test() {
 fn test_mass_matrix_and_inverse_kinematics() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Direct)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
-    physics_client.set_time_step(&Duration::from_secs_f64(1. / 60.));
+    physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
 
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;

@@ -10,7 +10,20 @@ use std::os::raw::c_int;
 /// The unique ID for a body within a physics server.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct BodyId(pub(crate) c_int);
-#[derive(Debug, PartialEq)]
+
+/// The unique ID for a Visual Shape
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct VisualId(pub c_int);
+
+/// The unique ID for a Collision Shape
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct CollisionId(pub c_int);
+
+/// The unique ID for a Texture
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct TextureId(pub(crate) c_int);
+
+#[derive(Debug, PartialEq, Copy, Clone)]
 /// An enum to represent different types of joints
 pub enum JointType {
     Revolute = 0,
@@ -635,4 +648,250 @@ fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -
             Vector3::from_column_slice(&orientation[0..3]),
         )),
     )
+}
+
+/// VisualShape options are for the [create_visual_shape](`crate::PhysicsClient::create_visual_shape`)
+/// function to specify additional options like the color.
+pub struct VisualShapeOptions {
+    /// offset of the shape with respect to the link frame
+    pub frame_offset: Isometry3<f64>,
+    /// color components for red, green, blue and alpha, each in range [0,1]
+    pub rgba_colors: [f64; 4],
+    /// specular reflection color, red, green, blue components in range [0,1]
+    pub specular_colors: [f64; 3],
+    /// Additional flags. Currently not used
+    pub flags: Option<i32>,
+}
+impl Default for VisualShapeOptions {
+    fn default() -> Self {
+        VisualShapeOptions {
+            frame_offset: Isometry3::translation(0., 0., 0.),
+            rgba_colors: [1.; 4],
+            specular_colors: [1.; 3],
+            flags: None,
+        }
+    }
+}
+
+pub enum GeometricCollisionShape {
+    /// A Sphere determined by the radius in meter
+    Sphere {
+        /// radius in meter
+        radius: f64,
+    },
+    /// A Cuboid
+    Box {
+        /// [x,y,z] lengths starting from the middle of the box.
+        /// For example [0.5,0.5,0.5] is a unit cube.
+        half_extents: [f64; 3],
+    },
+    /// Like a cylinder but with a half sphere on each end. The total length of a capsule is
+    /// length + 2 * radius.
+    Capsule {
+        /// radius of the cylindric part of the capsule in meter.
+        radius: f64,
+        /// height of the cylindric part in meter. The half spheres are put on top on that
+        height: f64,
+    },
+    /// A Cylinder
+    Cylinder {
+        /// radius in meter
+        radius: f64,
+        /// height in meter
+        height: f64,
+    },
+    /// A Plane.
+    Plane {
+        /// normal of the plane.
+        plane_normal: [f64; 3],
+    },
+    /// Load a .obj (Wavefront) file. Will create convex hulls for each object.
+    MeshFile {
+        /// Path to the .obj file as String.
+        filename: String,
+        /// Scaling of the Mesh. Use [1.;3] for original scaling.
+        mesh_scale: [f64; 3],
+        /// Set to 1 if you want to activate have the GEOM_FORCE_CONCAVE_TRIMESH Flag.
+        /// this will create a concave static triangle mesh. This should not be used with
+        /// dynamic / moving objects, only for static (mass = 0) terrain.
+        flags: Option<i32>,
+    },
+    /// Create your own mesh.
+    Mesh {
+        /// list of [x,y,z] coordinates.
+        vertices: Vec<[f64; 3]>,
+        /// triangle indices, should be a multiple of 3
+        indices: Option<Vec<i32>>,
+        /// Scaling of the Mesh. Use [1.;3] for normal scaling.
+        mesh_scale: [f64; 3],
+    },
+    /// Loads a Heightfield from a file
+    HeigthfieldFile {
+        /// Path to the .obj file as String.
+        filename: String,
+        /// Scaling of the Mesh. Use [1.;3] for original scaling.
+        mesh_scale: [f64; 3],
+        /// Texture scaling. Use 1. for original scaling.
+        texture_scaling: f64,
+    },
+    /// Create your own Heightfiled. See heightfield.rs for an example.
+    Heigthfield {
+        /// Scaling of the Mesh. Use [1.;3] for normal scaling.
+        mesh_scale: [f64; 3],
+        /// Texture scaling. Use 1. for normal scaling.
+        texture_scaling: f64,
+        /// Heigthfield data. Should be of size num_rows * num_columns
+        data: Vec<f32>,
+        /// number of rows in data
+        num_rows: i32,
+        /// number of columns in data
+        num_columns: i32,
+        /// replacing an existing heightfield (updating its heights)
+        /// (much faster than removing and re-creating a heightfield)
+        replace_heightfield: Option<CollisionId>,
+    },
+}
+/// Visual shapes to put into the [create_visual_shape](`crate::PhysicsClient::create_visual_shape`)
+/// method together with [VisualShapeOptions](`VisualShapeOptions`)
+pub enum GeometricVisualShape {
+    /// A Sphere determined by the radius in meter
+    Sphere {
+        /// radius in meter
+        radius: f64,
+    },
+    /// A Cuboid
+    Box {
+        /// [x,y,z] lengths starting from the middle of the box.
+        /// For example [0.5,0.5,0.5] is a unit cube.
+        half_extents: [f64; 3],
+    },
+    /// Like a cylinder but with a half sphere on each end. The total length of a capsule is
+    /// length + 2 * radius.
+    Capsule {
+        /// radius of the cylindric part of the capsule in meter.
+        radius: f64,
+        /// length of the cylindric part in meter. The half spheres are put on top on that
+        length: f64,
+    },
+    /// A Cylinder
+    Cylinder {
+        /// radius in meter
+        radius: f64,
+        /// length in meter
+        length: f64,
+    },
+    /// A flat Plane. Note that you cannot use a Plane VisualShape in combination with a non Plane
+    /// CollisionShape. Also it seems like the visual plane is determined by the collision plane and
+    /// thus cannot be adapted through the normal of the visual.
+    Plane {
+        /// Normal of the plane. Seems to have no effect!
+        plane_normal: [f64; 3],
+    },
+    /// Loads a .obj (Wavefront) file. Will create convex hulls for each object.
+    MeshFile {
+        /// Path to the .obj file as String
+        filename: String,
+        /// Scaling of the Mesh. Use [1.;3] for original scaling.
+        mesh_scale: [f64; 3],
+    },
+    /// Create your own mesh.
+    Mesh {
+        /// Scaling of the Mesh. Use [1.;3] for normal scaling.
+        mesh_scale: [f64; 3],
+        /// list of [x,y,z] coordinates.
+        vertices: Vec<[f64; 3]>,
+        /// triangle indices, should be a multiple of 3
+        indices: Vec<i32>,
+        /// uv texture coordinates for vertices.
+        /// Use [change_visual_shape](`crate::PhysicsClient::change_visual_shape`)
+        /// to choose the texture image. The number of uvs should be equal to number of vertices
+        uvs: Option<Vec<[f64; 2]>>,
+        /// vertex normals, number should be equal to number of vertices.
+        normals: Option<Vec<[f64; 3]>>,
+    },
+}
+/// Specifies all options for [create_multi_body](`crate::PhysicsClient::create_multi_body`).
+/// Most of the the time you are probably fine using `MultiBodyOptions::default()` or just setting
+/// the base_pose and/or mass
+pub struct MultiBodyOptions {
+    /// mass of the base, in kg (if using SI units)
+    pub base_mass: f64,
+    /// Cartesian world pose of the base
+    pub base_pose: Isometry3<f64>,
+    /// Local pose of inertial frame
+    pub base_inertial_frame_pose: Isometry3<f64>,
+    /// List of the mass values, one for each link.
+    pub link_masses: Vec<f64>,
+    /// List of the collision shape unique id, one for each link.
+    pub link_collision_shapes: Vec<CollisionId>,
+    /// List of the visual shape unique id, one for each link.
+    pub link_visual_shapes: Vec<VisualId>,
+    /// list of local link poses, with respect to parent
+    pub link_poses: Vec<Isometry3<f64>>,
+    /// list of local inertial frame poses, in the link frame
+    pub link_inertial_frame_poses: Vec<Isometry3<f64>>,
+    /// Link index of the parent link or 0 for the base.
+    pub link_parent_indices: Vec<i32>,
+    /// list of joint types, one for each link.
+    pub link_joint_types: Vec<JointType>,
+    /// List of joint axis in local frame
+    pub link_joint_axis: Vec<[f64; 3]>,
+    /// experimental, best to leave it false.
+    pub use_maximal_coordinates: bool,
+    /// similar to the flags passed in load_urdf, for example URDF_USE_SELF_COLLISION.
+    /// See [load_urdf](`crate::PhysicsClient::load_urdf()`) for flags explanation.
+    pub flags: Option<i32>,
+    /// array of base positions, for fast batch creation of many multibodies.
+    /// See create_multi_body_batch.rs example.
+    pub batch_positions: Option<Vec<[f64; 3]>>,
+}
+impl Default for MultiBodyOptions {
+    fn default() -> Self {
+        MultiBodyOptions {
+            base_pose: Isometry3::translation(0., 0., 0.),
+            base_inertial_frame_pose: Isometry3::translation(0., 0., 0.),
+            base_mass: 0.0,
+            link_masses: Vec::new(),
+            link_collision_shapes: Vec::new(),
+            link_visual_shapes: Vec::new(),
+            link_poses: Vec::new(),
+            link_inertial_frame_poses: Vec::new(),
+            link_parent_indices: Vec::new(),
+            link_joint_types: Vec::new(),
+            link_joint_axis: Vec::new(),
+            use_maximal_coordinates: false,
+            flags: None,
+
+            batch_positions: None,
+        }
+    }
+}
+
+/// This struct keeps the information to change a visual shape with the
+/// [change_visual_shape](`crate::PhysicsClient::change_visual_shape`) method.
+pub struct ChangeVisualShapeOptions {
+    /// Experimental for internal use, recommended ignore shapeIndex or leave it -1.
+    /// Intention is to let you pick a specific shape index to modify, since URDF (and SDF etc)
+    pub shape: VisualId,
+    /// texture unique id, as returned by [load_texture](`crate::PhysicsClient::load_texture`) method
+    pub texture_id: Option<TextureId>,
+    /// color components for RED, GREEN, BLUE and ALPHA, each in range [0..1].
+    /// Alpha has to be 0 (invisible) or 1 (visible) at the moment.
+    /// Note that TinyRenderer doesn't support transparency, but the GUI/EGL OpenGL3 renderer does.
+    pub rgba_color: Option<[f64; 4]>,
+    /// specular color components, RED, GREEN and BLUE, can be from 0 to large number (>100).
+    pub specular_color: Option<[f64; 3]>,
+    /// Not yet used anywhere. But it is in the code.
+    pub flags: Option<i32>,
+}
+impl Default for ChangeVisualShapeOptions {
+    fn default() -> Self {
+        ChangeVisualShapeOptions {
+            shape: VisualId(-1),
+            texture_id: None,
+            rgba_color: None,
+            specular_color: None,
+            flags: None,
+        }
+    }
 }

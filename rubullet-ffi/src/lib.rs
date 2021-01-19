@@ -587,6 +587,285 @@ extern "C" {
         objectUniqueId: c_int,
         linkIndex: c_int,
     );
+
+    #[doc = "the creation of collision shapes and rigid bodies etc is likely going to change,"]
+    #[doc = "but good to have a b3CreateBoxShapeCommandInit for now"]
+    pub fn b3CreateCollisionShapeCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateCollisionShapeAddSphere(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+    ) -> c_int;
+    pub fn b3CreateCollisionShapeAddBox(
+        commandHandle: b3SharedMemoryCommandHandle,
+        halfExtents: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddCapsule(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+        height: f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddCylinder(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+        height: f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddHeightfield(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fileName: *const c_char,
+        meshScale: *const f64,
+        textureScaling: f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddHeightfield2(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        meshScale: *const f64,
+        textureScaling: f64,
+        heightfieldData: *mut f32,
+        numHeightfieldRows: c_int,
+        numHeightfieldColumns: c_int,
+        replaceHeightfieldIndex: c_int,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddPlane(
+        commandHandle: b3SharedMemoryCommandHandle,
+        planeNormal: *const f64,
+        planeConstant: f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddMesh(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fileName: *const c_char,
+        meshScale: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddConvexMesh(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        meshScale: *const f64,
+        vertices: *const f64,
+        numVertices: c_int,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionShapeAddConcaveMesh(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        meshScale: *const f64,
+        vertices: *const f64,
+        numVertices: c_int,
+        indices: *const c_int,
+        numIndices: c_int,
+    ) -> c_int;
+
+    pub fn b3CreateCollisionSetFlag(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        flags: c_int,
+    );
+
+    pub fn b3CreateCollisionShapeSetChildTransform(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        childPosition: *const f64,
+        childOrientation: *const f64,
+    );
+    pub fn b3GetStatusCollisionShapeUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    pub fn b3InitRemoveCollisionShapeCommand(
+        physClient: b3PhysicsClientHandle,
+        collisionShapeId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+    pub fn b3CreateVisualShapeCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateVisualShapeAddSphere(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+    ) -> c_int;
+    pub fn b3CreateVisualShapeAddBox(
+        commandHandle: b3SharedMemoryCommandHandle,
+        halfExtents: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateVisualShapeAddCapsule(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+        height: f64,
+    ) -> c_int;
+
+    pub fn b3CreateVisualShapeAddCylinder(
+        commandHandle: b3SharedMemoryCommandHandle,
+        radius: f64,
+        height: f64,
+    ) -> c_int;
+
+    pub fn b3CreateVisualShapeAddPlane(
+        commandHandle: b3SharedMemoryCommandHandle,
+        planeNormal: *const f64,
+        planeConstant: f64,
+    ) -> c_int;
+
+    pub fn b3CreateVisualShapeAddMesh(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fileName: *const c_char,
+        meshScale: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateVisualShapeAddMesh2(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        meshScale: *const f64,
+        vertices: *const f64,
+        numVertices: c_int,
+        indices: *const c_int,
+        numIndices: c_int,
+        normals: *const f64,
+        numNormals: c_int,
+        uvs: *const f64,
+        numUVs: c_int,
+    ) -> c_int;
+
+    pub fn b3CreateVisualSetFlag(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        flags: c_int,
+    );
+
+    pub fn b3CreateVisualShapeSetChildTransform(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        childPosition: *const f64,
+        childOrientation: *const f64,
+    );
+
+    pub fn b3CreateVisualShapeSetSpecularColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        specularColor: *const f64,
+    );
+
+    pub fn b3CreateVisualShapeSetRGBAColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        shapeIndex: c_int,
+        rgbaColor: *const f64,
+    );
+
+    pub fn b3GetStatusVisualShapeUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    pub fn b3CreateMultiBodyCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateMultiBodyBase(
+        commandHandle: b3SharedMemoryCommandHandle,
+        mass: f64,
+        collisionShapeUnique: c_int,
+        visualShapeUniqueId: c_int,
+        basePosition: *const f64,
+        baseOrientation: *const f64,
+        baseInertialFramePosition: *const f64,
+        baseInertialFrameOrientation: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateMultiBodyLink(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linkMass: f64,
+        linkCollisionShapeIndex: f64,
+        linkVisualShapeIndex: f64,
+        linkPosition: *const f64,
+        linkOrientation: *const f64,
+        linkInertialFramePosition: *const f64,
+        linkInertialFrameOrientation: *const f64,
+        linkParentIndex: c_int,
+        linkJointType: c_int,
+        linkJointAxis: *const f64,
+    ) -> c_int;
+
+    pub fn b3CreateMultiBodySetBatchPositions(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        batchPositions: *mut f64,
+        numBatchObjects: c_int,
+    ) -> c_int;
+
+    pub fn b3CreateMultiBodyUseMaximalCoordinates(commandHandle: b3SharedMemoryCommandHandle);
+
+    pub fn b3CreateMultiBodySetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
+
+    pub fn b3InitRequestVisualShapeInformation(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueIdA: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    // pub fn b3GetVisualShapeInformation(
+    //     physClient: b3PhysicsClientHandle,
+    //     visualShapeInfo: *mut b3VisualShapeInformation,
+    // );
+
+    pub fn b3InitRequestCollisionShapeInformation(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    // pub fn b3GetCollisionShapeInformation(
+    //     physClient: b3PhysicsClientHandle,
+    //     collisionShapeInfo: *mut b3CollisionShapeInformation,
+    // );
+
+    pub fn b3InitLoadTexture(
+        physClient: b3PhysicsClientHandle,
+        filename: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusTextureUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    pub fn b3CreateChangeTextureCommandInit(
+        physClient: b3PhysicsClientHandle,
+        textureUniqueId: c_int,
+        width: c_int,
+        height: c_int,
+        rgbPixels: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitUpdateVisualShape(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        jointIndex: c_int,
+        shapeIndex: c_int,
+        textureUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitUpdateVisualShape2(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        jointIndex: c_int,
+        shapeIndex: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3UpdateVisualShapeTexture(
+        commandHandle: b3SharedMemoryCommandHandle,
+        textureUniqueId: c_int,
+    );
+
+    pub fn b3UpdateVisualShapeRGBAColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        rgbaColor: *const f64,
+    );
+
+    pub fn b3UpdateVisualShapeFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
+
+    pub fn b3UpdateVisualShapeSpecularColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        specularColor: *const f64,
+    );
 }
 
 #[repr(C)]
@@ -862,3 +1141,14 @@ pub struct b3MouseEvent {
     pub m_buttonIndex: c_int,
     pub m_buttonState: c_int,
 }
+
+pub const B3_MAX_NUM_INDICES: usize = if cfg!(target_os = "macos") {
+    32768
+} else {
+    524288
+};
+pub const B3_MAX_NUM_VERTICES: usize = if cfg!(target_os = "macos") {
+    8192
+} else {
+    131072
+};

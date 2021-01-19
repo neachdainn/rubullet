@@ -15,6 +15,22 @@ name = "panda_demo"
 path = "examples/panda_demo.rs"
 
 [[example]]
+name = "panda_camera_demo"
+path = "examples/panda_camera_demo.rs"
+
+[[example]]
+name = "heightfield"
+path = "examples/heightfield.rs"
+
+[[example]]
+name = "create_visual_shape"
+path = "examples/create_visual_shape.rs"
+
+[[example]]
+name = "create_multi_body_batch"
+path = "examples/create_multi_body_batch.rs"
+
+[[example]]
 name = "hello_rubullet"
 path = "examples/hello_rubullet.rs"
 
@@ -29,3 +45,4 @@ rubullet-ffi = { path = "../rubullet-ffi" }
 
 [dev-dependencies]
 easy-error = "0.3.1"
+rand = "0.8.2"

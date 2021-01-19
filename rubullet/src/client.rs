@@ -12,24 +12,26 @@ use std::os::unix::ffi::OsStrExt;
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 
 use self::gui_marker::GuiMarker;
+use crate::types::{
+    AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
+    ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape,
+    InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
+    LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
+};
 use crate::{ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions};
 use image::{ImageBuffer, RgbaImage};
 use rubullet_ffi as ffi;
 use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
-    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
+    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
+    CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
+    CMD_SYNC_BODY_INFO_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_ffi::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
-    b3MouseEventsData,
-};
-
-use crate::types::{
-    AddDebugLineOptions, AddDebugTextOptions, BodyId, ControlModeArray, ExternalForceFrame,
-    InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, MouseEvent,
+    b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES,
 };
 use std::time::Duration;
 
@@ -133,7 +135,7 @@ impl PhysicsClient {
     /// [`step_simulation`](`Self::step_simulation()`).
     /// It is best to only call this method at the start of a simulation.
     /// Don't change this time step regularly.
-    pub fn set_time_step(&mut self, time_step: &Duration) {
+    pub fn set_time_step(&mut self, time_step: Duration) {
         unsafe {
             let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
             let _ret = ffi::b3PhysicsParamSetTimeStep(command, time_step.as_secs_f64());
@@ -1880,6 +1882,588 @@ impl PhysicsClient {
             }
             Err(Error::new("Error creating sensor."))
         }
+    }
+    /// You can create a collision shape in a similar way to creating a visual shape. If you have
+    /// both you can use them to create objects in RuBullet.
+    /// # Arguments
+    /// * `shape` - A geometric body from which to create the shape
+    /// * `frame_offset` - offset of the shape with respect to the link frame.
+    ///
+    /// # Return
+    /// Returns a unique [CollisionId](crate::CollisionId) which can then be used to create a body.
+    /// # See also
+    /// * [create_visual_shape](`Self::create_visual_shape`)
+    /// * [create_multi_body](`Self::create_multi_body`)
+    pub fn create_collision_shape(
+        &mut self,
+        shape: GeometricCollisionShape,
+        frame_offset: Isometry3<f64>,
+    ) -> Result<CollisionId, Error> {
+        unsafe {
+            let mut shape_index = -1;
+            let command_handle = ffi::b3CreateCollisionShapeCommandInit(self.handle.as_ptr());
+
+            match shape {
+                GeometricCollisionShape::Sphere { radius } if radius > 0. => {
+                    shape_index = ffi::b3CreateCollisionShapeAddSphere(command_handle, radius);
+                }
+                GeometricCollisionShape::Box { half_extents } => {
+                    shape_index =
+                        ffi::b3CreateCollisionShapeAddBox(command_handle, half_extents.as_ptr());
+                }
+                GeometricCollisionShape::Capsule { radius, height }
+                    if radius > 0. && height >= 0. =>
+                {
+                    shape_index =
+                        ffi::b3CreateCollisionShapeAddCapsule(command_handle, radius, height);
+                }
+                GeometricCollisionShape::Cylinder { radius, height }
+                    if radius > 0. && height >= 0. =>
+                {
+                    shape_index =
+                        ffi::b3CreateCollisionShapeAddCylinder(command_handle, radius, height);
+                }
+                GeometricCollisionShape::HeigthfieldFile {
+                    filename,
+                    mesh_scale,
+                    texture_scaling,
+                } => {
+                    let file = CString::new(filename.as_str()).unwrap();
+                    shape_index = ffi::b3CreateCollisionShapeAddHeightfield(
+                        command_handle,
+                        file.as_ptr(),
+                        mesh_scale.as_ptr(),
+                        texture_scaling,
+                    );
+                }
+                GeometricCollisionShape::Heigthfield {
+                    mesh_scale,
+                    texture_scaling: heightfield_texture_scaling,
+                    data: mut heightfield_data,
+                    num_rows: num_heightfield_rows,
+                    num_columns: num_heightfield_columns,
+                    replace_heightfield,
+                } => {
+                    if num_heightfield_columns > 0 && num_heightfield_rows > 0 {
+                        let num_height_field_points = heightfield_data.len();
+                        if num_heightfield_rows * num_heightfield_columns
+                            != num_height_field_points as i32
+                        {
+                            return Err(Error::new("Size of heightfield_data doesn't match num_heightfield_columns*num_heightfield_rows"));
+                        }
+                        shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
+                            self.handle.as_ptr(),
+                            command_handle,
+                            mesh_scale.as_ptr(),
+                            heightfield_texture_scaling,
+                            heightfield_data.as_mut_slice().as_mut_ptr(),
+                            num_heightfield_rows,
+                            num_heightfield_columns,
+                            replace_heightfield.unwrap_or_else(|| CollisionId(-1)).0,
+                        );
+                    }
+                }
+                GeometricCollisionShape::MeshFile {
+                    filename,
+                    mesh_scale,
+                    flags,
+                } => {
+                    let file = CString::new(filename.as_str()).unwrap();
+                    shape_index = ffi::b3CreateCollisionShapeAddMesh(
+                        command_handle,
+                        file.as_ptr(),
+                        mesh_scale.as_ptr(),
+                    );
+                    if shape_index >= 0 {
+                        if let Some(flags) = flags {
+                            ffi::b3CreateCollisionSetFlag(command_handle, shape_index, flags);
+                        }
+                    }
+                }
+                GeometricCollisionShape::Mesh {
+                    vertices,
+                    indices,
+                    mesh_scale,
+                } => {
+                    if vertices.len() > B3_MAX_NUM_VERTICES {
+                        return Err(Error::new("Number of vertices exceeds the maximum."));
+                    }
+
+                    let mut new_vertices = Vec::<f64>::with_capacity(vertices.len() * 3);
+                    for vertex in vertices.iter() {
+                        new_vertices.extend_from_slice(vertex);
+                    }
+                    if let Some(indices) = indices {
+                        if indices.len() > B3_MAX_NUM_INDICES {
+                            return Err(Error::new("Number of indices exceeds the maximum."));
+                        }
+                        shape_index = ffi::b3CreateCollisionShapeAddConcaveMesh(
+                            self.handle.as_ptr(),
+                            command_handle,
+                            mesh_scale.as_ptr(),
+                            new_vertices.as_slice().as_ptr(),
+                            vertices.len() as i32,
+                            indices.as_slice().as_ptr(),
+                            indices.len() as i32,
+                        );
+                    } else {
+                        shape_index = ffi::b3CreateCollisionShapeAddConvexMesh(
+                            self.handle.as_ptr(),
+                            command_handle,
+                            mesh_scale.as_ptr(),
+                            new_vertices.as_slice().as_ptr(),
+                            vertices.len() as i32,
+                        );
+                    }
+                }
+                GeometricCollisionShape::Plane { plane_normal } => {
+                    let plane_constant = 0.;
+                    shape_index = ffi::b3CreateCollisionShapeAddPlane(
+                        command_handle,
+                        plane_normal.as_ptr(),
+                        plane_constant,
+                    );
+                }
+                _ => {}
+            }
+            if shape_index >= 0 {
+                let position_vector = &frame_offset.translation.vector;
+                let rotation = &frame_offset.rotation;
+                let position_array = [position_vector.x, position_vector.y, position_vector.z];
+                let rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+                ffi::b3CreateCollisionShapeSetChildTransform(
+                    command_handle,
+                    shape_index,
+                    position_array.as_ptr(),
+                    rotation_array.as_ptr(),
+                );
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_COLLISION_SHAPE_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusCollisionShapeUniqueId(status_handle);
+                return Ok(CollisionId(uid));
+            }
+            Err(Error::new("create_collision_shape failed."))
+        }
+    }
+    /// You can create a visual shape in a similar way to creating a collision shape, with some
+    /// additional arguments to control the visual appearance, such as diffuse and specular color.
+    /// When you use the [GeometricVisualShape::MeshFile](`crate::GeometricVisualShape::MeshFile`)
+    /// type, you can point to a Wavefront OBJ file, and the
+    /// visual shape will parse some parameters from the material file (.mtl) and load a texture.
+    /// Note that large textures (above 1024x1024 pixels)
+    /// can slow down the loading and run-time performance.
+    ///
+    /// # Arguments
+    /// * `shape` - A geometric body from which to create the shape
+    /// * `options` - additional option to specify, like colors.
+    ///
+    /// # Return
+    /// Returns a unique [VisualId](crate::VisualId) which can then be used to create a body.
+    /// # See also
+    /// * [create_collision_shape](`Self::create_collision_shape`)
+    /// * [create_multi_body](`Self::create_multi_body`)
+    pub fn create_visual_shape(
+        &mut self,
+        shape: GeometricVisualShape,
+        options: VisualShapeOptions,
+    ) -> Result<VisualId, Error> {
+        unsafe {
+            let mut shape_index = -1;
+            let command_handle = ffi::b3CreateVisualShapeCommandInit(self.handle.as_ptr());
+
+            match shape {
+                GeometricVisualShape::Sphere { radius } if radius > 0. => {
+                    shape_index = ffi::b3CreateVisualShapeAddSphere(command_handle, radius);
+                }
+                GeometricVisualShape::Box { half_extents } => {
+                    shape_index =
+                        ffi::b3CreateVisualShapeAddBox(command_handle, half_extents.as_ptr());
+                }
+                GeometricVisualShape::Capsule { radius, length } if radius > 0. && length > 0. => {
+                    shape_index =
+                        ffi::b3CreateVisualShapeAddCapsule(command_handle, radius, length);
+                }
+                GeometricVisualShape::Cylinder { radius, length } => {
+                    shape_index =
+                        ffi::b3CreateVisualShapeAddCylinder(command_handle, radius, length);
+                }
+
+                GeometricVisualShape::MeshFile {
+                    filename,
+                    mesh_scale,
+                } => {
+                    let file = CString::new(filename.as_str()).unwrap();
+                    shape_index = ffi::b3CreateVisualShapeAddMesh(
+                        command_handle,
+                        file.as_ptr(),
+                        mesh_scale.as_ptr(),
+                    );
+                }
+                GeometricVisualShape::Mesh {
+                    mesh_scale,
+                    vertices,
+                    indices,
+                    uvs,
+                    normals,
+                } => {
+                    let mut new_vertices = Vec::<f64>::with_capacity(vertices.len() * 3);
+                    let mut new_normals = Vec::<f64>::with_capacity(vertices.len() * 3);
+                    let mut new_uvs = Vec::<f64>::with_capacity(vertices.len() * 2);
+
+                    if vertices.len() > B3_MAX_NUM_VERTICES {
+                        return Err(Error::new("Number of vertices exceeds the maximum."));
+                    }
+                    for vertex in vertices.iter() {
+                        new_vertices.extend_from_slice(vertex);
+                    }
+
+                    if indices.len() > B3_MAX_NUM_INDICES {
+                        return Err(Error::new("Number of indices exceeds the maximum."));
+                    }
+                    let new_indices = indices;
+
+                    if let Some(uvs) = uvs {
+                        if uvs.len() > B3_MAX_NUM_VERTICES {
+                            return Err(Error::new("Number of uvs exceeds the maximum."));
+                        }
+                        for uv in uvs.iter() {
+                            new_uvs.extend_from_slice(uv);
+                        }
+                    }
+                    if let Some(normals) = normals {
+                        if normals.len() > B3_MAX_NUM_VERTICES {
+                            return Err(Error::new("Number of normals exceeds the maximum."));
+                        }
+                        for normal in normals.iter() {
+                            new_normals.extend_from_slice(normal);
+                        }
+                    }
+                    shape_index = ffi::b3CreateVisualShapeAddMesh2(
+                        self.handle.as_ptr(),
+                        command_handle,
+                        mesh_scale.as_ptr(),
+                        new_vertices.as_slice().as_ptr(),
+                        new_vertices.len() as i32 / 3,
+                        new_indices.as_slice().as_ptr(),
+                        new_indices.len() as i32,
+                        new_normals.as_slice().as_ptr(),
+                        new_normals.len() as i32 / 3,
+                        new_uvs.as_slice().as_ptr(),
+                        new_uvs.len() as i32 / 2,
+                    );
+                }
+                GeometricVisualShape::Plane { plane_normal } => {
+                    let plane_constant = 0.;
+                    shape_index = ffi::b3CreateVisualShapeAddPlane(
+                        command_handle,
+                        plane_normal.as_ptr(),
+                        plane_constant,
+                    );
+                }
+                _ => {}
+            }
+
+            if shape_index >= 0 {
+                if let Some(flags) = options.flags {
+                    ffi::b3CreateVisualSetFlag(command_handle, shape_index, flags);
+                }
+                ffi::b3CreateVisualShapeSetRGBAColor(
+                    command_handle,
+                    shape_index,
+                    options.rgba_colors.as_ptr(),
+                );
+                ffi::b3CreateVisualShapeSetSpecularColor(
+                    command_handle,
+                    shape_index,
+                    options.specular_colors.as_ptr(),
+                );
+                let position_vector = &options.frame_offset.translation.vector;
+                let rotation = &options.frame_offset.rotation;
+                let position_array = [position_vector.x, position_vector.y, position_vector.z];
+                let rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+                ffi::b3CreateVisualShapeSetChildTransform(
+                    command_handle,
+                    shape_index,
+                    position_array.as_ptr(),
+                    rotation_array.as_ptr(),
+                );
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_VISUAL_SHAPE_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusVisualShapeUniqueId(status_handle);
+                if uid == -1 {
+                    return Err(Error::new("create visual Shape failed."));
+                }
+                return Ok(VisualId(uid));
+            }
+            Err(Error::new("create visual Shape failed."))
+        }
+    }
+    /// You can create a multi body with only a single base without joints/child links or
+    /// you can create a multi body with joints/child links. If you provide links, make sure
+    /// the length of every vector is the same .
+    /// # Arguments
+    /// * `base_collision_shape` - unique id from [create_collision_shape](`Self::create_collision_shape`)
+    /// or -1. You can re-use the collision shape for multiple multibodies (instancing)
+    /// * `base_visual_shape` - unique id from [create_visual_shape](`Self::create_visual_shape`)
+    /// or -1. You can re-use the visual shape (instancing)
+    /// * `options` - additional options for creating a multi_body. See [MultiBodyOptions](`crate::MultiBodyOptions`)
+    /// for details
+    ///
+    /// # Return
+    /// returns the [BodyId](`crate::BodyId`) of the newly created body.
+    ///
+    /// Note: Currently, if you use `batch_positions` you will not get back a list of Id's, like in PyBullet.
+    /// Instead you will get the Id of the last body in the batch.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use easy_error::Terminator;
+    ///# use nalgebra::Isometry3;
+    ///# use rubullet::mode::Mode::Direct;
+    ///# use rubullet::*;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<(), Terminator> {
+    ///#
+    ///# let mut physics_client = PhysicsClient::connect(Direct)?;
+    ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_shape = GeometricVisualShape::Box {
+    ///        half_extents: [0.5; 3],
+    ///    };
+    ///    let box_visual = physics_client.create_visual_shape(
+    ///        box_shape,
+    ///        VisualShapeOptions {
+    ///            rgba_colors: [0., 1., 0., 1.],
+    ///            ..Default::default()
+    ///        },
+    ///    )?;
+    ///    let box_id =
+    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///#    Ok(())
+    ///# }
+    /// ```
+    // TODO: think about splitting this function in two function. A normal one. And one for batches which returns a list instead
+    pub fn create_multi_body(
+        &mut self,
+        base_collision_shape: CollisionId,
+        base_visual_shape: VisualId,
+        options: MultiBodyOptions,
+    ) -> Result<BodyId, Error> {
+        unsafe {
+            if options.link_masses.len() == options.link_collision_shapes.len()
+                && options.link_masses.len() == options.link_visual_shapes.len()
+                && options.link_masses.len() == options.link_poses.len()
+                && options.link_masses.len() == options.link_joint_types.len()
+                && options.link_masses.len() == options.link_joint_axis.len()
+                && options.link_masses.len() == options.link_inertial_frame_poses.len()
+                && options.link_masses.len() == options.link_collision_shapes.len()
+            {
+                let command_handle = ffi::b3CreateMultiBodyCommandInit(self.handle.as_ptr());
+                let position_vector = &options.base_pose.translation.vector;
+                let rotation = &options.base_pose.rotation;
+                let base_position_array = [position_vector.x, position_vector.y, position_vector.z];
+                let base_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+
+                let position_vector = &options.base_inertial_frame_pose.translation.vector;
+                let rotation = &options.base_inertial_frame_pose.rotation;
+                let base_inertial_position_array =
+                    [position_vector.x, position_vector.y, position_vector.z];
+                let base_inertial_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+                let _base_index = ffi::b3CreateMultiBodyBase(
+                    command_handle,
+                    options.base_mass,
+                    base_collision_shape.0,
+                    base_visual_shape.0,
+                    base_position_array.as_ptr(),
+                    base_rotation_array.as_ptr(),
+                    base_inertial_position_array.as_ptr(),
+                    base_inertial_rotation_array.as_ptr(),
+                );
+                if let Some(batch_positions) = options.batch_positions {
+                    let mut new_batch_positions =
+                        Vec::<f64>::with_capacity(batch_positions.len() * 3);
+                    for pos in batch_positions.iter() {
+                        new_batch_positions.extend_from_slice(pos);
+                    }
+                    ffi::b3CreateMultiBodySetBatchPositions(
+                        self.handle.as_ptr(),
+                        command_handle,
+                        new_batch_positions.as_mut_slice().as_mut_ptr(),
+                        batch_positions.len() as i32,
+                    );
+                }
+                for i in 0..options.link_masses.len() {
+                    let link_mass = options.link_masses[i];
+                    let link_collision_shape_index = options.link_collision_shapes[i].0;
+                    let link_visual_shape_index = options.link_visual_shapes[i].0;
+                    let position_vector = &options.link_poses[i].translation.vector;
+                    let rotation = &options.link_poses[i].rotation;
+                    let link_position = [position_vector.x, position_vector.y, position_vector.z];
+                    let link_orientation = [rotation.i, rotation.j, rotation.k, rotation.w];
+
+                    let link_joint_axis = options.link_joint_axis[i];
+
+                    let position_vector = &options.link_inertial_frame_poses[i].translation.vector;
+                    let rotation = &options.link_inertial_frame_poses[i].rotation;
+                    let link_inertial_frame_position =
+                        [position_vector.x, position_vector.y, position_vector.z];
+                    let link_inertial_frame_orientation =
+                        [rotation.i, rotation.j, rotation.k, rotation.w];
+
+                    let link_parent_index = options.link_parent_indices[i];
+                    let link_joint_type = options.link_joint_types[i] as i32;
+
+                    ffi::b3CreateMultiBodyLink(
+                        command_handle,
+                        link_mass,
+                        link_collision_shape_index as f64,
+                        link_visual_shape_index as f64,
+                        link_position.as_ptr(),
+                        link_orientation.as_ptr(),
+                        link_inertial_frame_position.as_ptr(),
+                        link_inertial_frame_orientation.as_ptr(),
+                        link_parent_index,
+                        link_joint_type,
+                        link_joint_axis.as_ptr(),
+                    );
+                }
+                if options.use_maximal_coordinates {
+                    ffi::b3CreateMultiBodyUseMaximalCoordinates(command_handle);
+                }
+                if let Some(flags) = options.flags {
+                    ffi::b3CreateMultiBodySetFlags(command_handle, flags);
+                }
+                let status_handle =
+                    b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                let status_type = ffi::b3GetStatusType(status_handle);
+                if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                    let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                    return Ok(BodyId(uid));
+                }
+            } else {
+                return Err(Error::new("All link arrays need to be same size."));
+            }
+        }
+        Err(Error::new("create_multi_body failed."))
+    }
+    /// Use this function to change the texture of a shape,
+    /// the RGBA color and other properties.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index
+    /// * `options` - optional parameters to change the visual shape.
+    /// See [ChangeVisualShapeOptions](`crate::types::ChangeVisualShapeOptions`)
+    /// # Example
+    /// In this example we change the color of a shape
+    /// ```rust
+    ///# use easy_error::Terminator;
+    ///# use nalgebra::Isometry3;
+    ///# use rubullet::mode::Mode::Direct;
+    ///# use rubullet::*;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<(), Terminator> {
+    ///#
+    ///# let mut physics_client = PhysicsClient::connect(Direct)?;
+    ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_shape = GeometricVisualShape::Box {
+    ///        half_extents: [0.5; 3],
+    ///    };
+    ///    let box_visual = physics_client.create_visual_shape(
+    ///        box_shape,
+    ///        VisualShapeOptions {
+    ///            rgba_colors: [0., 1., 0., 1.],
+    ///            ..Default::default()
+    ///        },
+    ///    )?;
+    ///    let box_id =
+    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///    physics_client.change_visual_shape(
+    ///        box_id,
+    ///        -1,
+    ///        ChangeVisualShapeOptions {
+    ///            rgba_color: Some([1., 0., 0., 1.]),
+    ///            ..Default::default()
+    ///        },
+    ///    )?;
+    ///#    Ok(())
+    ///# }
+    /// ```
+    // TODO verify example with get_visual_shape_data
+    pub fn change_visual_shape(
+        &mut self,
+        body: BodyId,
+        link_index: i32,
+        options: ChangeVisualShapeOptions,
+    ) -> Result<(), Error> {
+        unsafe {
+            let command_handle = ffi::b3InitUpdateVisualShape2(
+                self.handle.as_ptr(),
+                body.0,
+                link_index,
+                options.shape.0,
+            );
+            if let Some(texutre_id) = options.texture_id {
+                ffi::b3UpdateVisualShapeTexture(command_handle, texutre_id.0);
+            }
+            if let Some(specular) = options.specular_color {
+                ffi::b3UpdateVisualShapeSpecularColor(command_handle, specular.as_ptr());
+            }
+            if let Some(rgba) = options.rgba_color {
+                ffi::b3UpdateVisualShapeRGBAColor(command_handle, rgba.as_ptr());
+            }
+            if let Some(flags) = options.flags {
+                ffi::b3UpdateVisualShapeFlags(command_handle, flags);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+
+            if status_type != CMD_VISUAL_SHAPE_UPDATE_COMPLETED as i32 {
+                return Err(Error::new("Error resetting visual shape info"));
+            }
+        }
+        Ok(())
+    }
+    /// Load a texture from file and return a non-negative texture unique id if the loading succeeds.
+    /// This unique id can be used with [change_visual_shape](`Self::change_visual_shape`).
+    ///
+    ///
+    /// See create_multi_body_batch.rs for an example
+    pub fn load_texture<File: AsRef<Path>>(&mut self, file: File) -> Result<TextureId, Error> {
+        unsafe {
+            let cfilename = CString::new(file.as_ref().as_os_str().as_bytes()).unwrap();
+            let command_handle = ffi::b3InitLoadTexture(self.handle.as_ptr(), cfilename.as_ptr());
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_LOAD_TEXTURE_COMPLETED as i32 {
+                let texture_id = TextureId(ffi::b3GetStatusTextureUniqueId(status_handle));
+                return Ok(texture_id);
+            }
+        }
+        Err(Error::new("Error loading texture"))
+    }
+    /// sync_body_info will synchronize the body information (get_body_info) in case of multiple
+    /// clients connected to one physics server changing the world ( [`load_urdf`](`Self::load_urdf()`), remove_body etc).
+    // TODO add get_body_info
+    pub fn sync_body_info(&mut self) -> Result<(), Error> {
+        unsafe {
+            let command = ffi::b3InitSyncBodyInfoCommand(self.handle.as_ptr());
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SYNC_BODY_INFO_COMPLETED as i32 {
+                return Err(Error::new("Error in sync_body_info command"));
+            }
+        }
+        Ok(())
     }
 }
 

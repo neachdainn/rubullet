@@ -6,9 +6,11 @@ pub use crate::{
     error::Error,
     mode::Mode,
     types::{
-        BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag,
+        BodyId, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
+        DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
         InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo,
-        JointState, JointType, UrdfOptions,
+        JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId,
+        VisualShapeOptions,
     },
 };
 // A utility for creating C-string literals.

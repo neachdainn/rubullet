@@ -10,7 +10,7 @@ fn main() -> Result<(), Terminator> {
     let delta_t = Duration::from_secs_f64(0.0001);
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
-    physics_client.set_time_step(&delta_t);
+    physics_client.set_time_step(delta_t);
     let id_revolute_joints = [0, 3];
     let id_robot = physics_client.load_urdf(
         "TwoJointRobot_w_fixedJoints.urdf",
