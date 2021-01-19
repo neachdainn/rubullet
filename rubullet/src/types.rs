@@ -2,7 +2,7 @@
 
 use crate::Error;
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
-use rubullet_ffi::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState};
+use rubullet_ffi::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -649,6 +649,11 @@ fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -
         )),
     )
 }
+fn combined_position_orientation_array_to_isometry(combined: [f64; 7]) -> Isometry3<f64> {
+    let position = [combined[0], combined[1], combined[2]];
+    let orientation = [combined[3], combined[4], combined[5], combined[6]];
+    position_orientation_to_isometry(position, orientation)
+}
 
 /// VisualShape options are for the [create_visual_shape](`crate::PhysicsClient::create_visual_shape`)
 /// function to specify additional options like the color.
@@ -915,6 +920,49 @@ impl From<b3BodyInfo> for BodyInfo {
                 body_name: CStr::from_ptr(info.m_bodyName.as_ptr())
                     .to_string_lossy()
                     .into_owned(),
+            }
+        }
+    }
+}
+/// Contains information about the visual shape of a body. It is returned by
+/// [get_visual_shape_data](`crate::PhysicsClient::get_visual_shape_data`)
+#[derive(Debug)]
+pub struct VisualShapeData {
+    /// same id as in the input of [get_visual_shape_data](`crate::PhysicsClient::get_visual_shape_data`)
+    pub body_id: BodyId,
+    /// link index or -1 for the base
+    pub link_index: i32,
+    /// visual geometry type (TBD)
+    pub visual_geometry_type: i32,
+    /// dimensions (size, local scale) of the geometry
+    pub dimensions: [f64; 3],
+    /// path to the triangle mesh, if any. Typically relative to the URDF, SDF or
+    /// MJCF file location, but could be absolute.
+    pub mesh_asset_file_name: String,
+    /// of local visual frame relative to link/joint frame
+    pub local_visual_frame_pose: Isometry3<f64>,
+    /// URDF color (if any specified) in red/green/blue/alpha
+    pub rgba_color: [f64; 4],
+    /// Id of the texture. Is only some when request_texture_id was set to true
+    pub texture_id: Option<TextureId>,
+}
+
+impl From<b3VisualShapeData> for VisualShapeData {
+    fn from(b3: b3VisualShapeData) -> Self {
+        unsafe {
+            VisualShapeData {
+                body_id: BodyId(b3.m_objectUniqueId),
+                link_index: b3.m_linkIndex,
+                visual_geometry_type: b3.m_visualGeometryType,
+                dimensions: b3.m_dimensions,
+                mesh_asset_file_name: CStr::from_ptr(b3.m_meshAssetFileName.as_ptr())
+                    .to_string_lossy()
+                    .into_owned(),
+                local_visual_frame_pose: combined_position_orientation_array_to_isometry(
+                    b3.m_localVisualFrame,
+                ),
+                rgba_color: b3.m_rgbaColor,
+                texture_id: None,
             }
         }
     }

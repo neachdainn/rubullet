@@ -9,7 +9,7 @@ pub use crate::{
         BodyId, BodyInfo, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
         DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
         InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo,
-        JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId,
+        JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId, VisualShapeData,
         VisualShapeOptions,
     },
 };

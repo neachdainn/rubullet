@@ -822,10 +822,10 @@ extern "C" {
         bodyUniqueIdA: c_int,
     ) -> b3SharedMemoryCommandHandle;
 
-    // pub fn b3GetVisualShapeInformation(
-    //     physClient: b3PhysicsClientHandle,
-    //     visualShapeInfo: *mut b3VisualShapeInformation,
-    // );
+    pub fn b3GetVisualShapeInformation(
+        physClient: b3PhysicsClientHandle,
+        visualShapeInfo: *mut b3VisualShapeInformation,
+    );
 
     pub fn b3InitRequestCollisionShapeInformation(
         physClient: b3PhysicsClientHandle,
@@ -1176,3 +1176,47 @@ pub const B3_MAX_NUM_VERTICES: usize = if cfg!(target_os = "macos") {
 } else {
     131072
 };
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3VisualShapeInformation {
+    pub m_numVisualShapes: c_int,
+    pub m_visualShapeData: *mut b3VisualShapeData,
+}
+impl Default for b3VisualShapeInformation {
+    fn default() -> Self {
+        b3VisualShapeInformation {
+            m_numVisualShapes: 0,
+            m_visualShapeData: [].as_mut_ptr(),
+        }
+    }
+}
+impl Default for b3VisualShapeData {
+    fn default() -> Self {
+        b3VisualShapeData {
+            m_objectUniqueId: 0,
+            m_linkIndex: 0,
+            m_visualGeometryType: 0,
+            m_dimensions: [0.; 3],
+            m_meshAssetFileName: [0; 1024],
+            m_localVisualFrame: [0.; 7],
+            m_rgbaColor: [0.; 4],
+            m_tinyRendererTextureId: 0,
+            m_textureUniqueId: 0,
+            m_openglTextureId: 0,
+        }
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct b3VisualShapeData {
+    pub m_objectUniqueId: c_int,
+    pub m_linkIndex: c_int,
+    pub m_visualGeometryType: c_int,
+    pub m_dimensions: [f64; 3usize],
+    pub m_meshAssetFileName: [c_char; 1024usize],
+    pub m_localVisualFrame: [f64; 7usize],
+    pub m_rgbaColor: [f64; 4usize],
+    pub m_tinyRendererTextureId: c_int,
+    pub m_textureUniqueId: c_int,
+    pub m_openglTextureId: c_int,
+}

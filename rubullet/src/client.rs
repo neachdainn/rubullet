@@ -18,7 +18,9 @@ use crate::types::{
     InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
     LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
 };
-use crate::{BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions};
+use crate::{
+    BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
+};
 use image::{ImageBuffer, RgbaImage};
 use rubullet_ffi as ffi;
 use rubullet_ffi::EnumSharedMemoryServerStatus::{
@@ -27,7 +29,8 @@ use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
     CMD_SYNC_BODY_INFO_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
-    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
+    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_ffi::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
@@ -2384,6 +2387,10 @@ impl PhysicsClient {
     ///    )?;
     ///    let box_id =
     ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///
+    ///    let color = physics_client.get_visual_shape_data(box_id,false)?[0].rgba_color;
+    ///    assert_eq!(color, [0.,1.,0.,1.]);
+    ///
     ///    physics_client.change_visual_shape(
     ///        box_id,
     ///        -1,
@@ -2392,10 +2399,12 @@ impl PhysicsClient {
     ///            ..Default::default()
     ///        },
     ///    )?;
+    ///
+    ///    let color = physics_client.get_visual_shape_data(box_id,false)?[0].rgba_color;
+    ///    assert_eq!(color, [1.,0.,0.,1.]);
     ///#    Ok(())
     ///# }
     /// ```
-    // TODO verify example with get_visual_shape_data
     pub fn change_visual_shape(
         &mut self,
         body: BodyId,
@@ -2431,6 +2440,38 @@ impl PhysicsClient {
         }
         Ok(())
     }
+    pub fn get_visual_shape_data(
+        &mut self,
+        body: BodyId,
+        request_texture_id: bool,
+    ) -> Result<Vec<VisualShapeData>, Error> {
+        unsafe {
+            let command_handle =
+                ffi::b3InitRequestVisualShapeInformation(self.handle.as_ptr(), body.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_VISUAL_SHAPE_INFO_COMPLETED as i32 {
+                let mut visual_shape_info = ffi::b3VisualShapeInformation::default();
+                ffi::b3GetVisualShapeInformation(self.handle.as_ptr(), &mut visual_shape_info);
+                let mut visual_shapes: Vec<VisualShapeData> =
+                    Vec::with_capacity(visual_shape_info.m_numVisualShapes as usize);
+                let data = std::slice::from_raw_parts_mut(
+                    visual_shape_info.m_visualShapeData,
+                    visual_shape_info.m_numVisualShapes as usize,
+                );
+                for i in 0..visual_shape_info.m_numVisualShapes {
+                    let mut shape_data: VisualShapeData = data[i as usize].into();
+                    if request_texture_id {
+                        shape_data.texture_id = Some(TextureId(data[i as usize].m_textureUniqueId));
+                    }
+                    visual_shapes.push(shape_data);
+                }
+                return Ok(visual_shapes);
+            }
+        }
+        Err(Error::new("Error receiving visual shape info"))
+    }
     /// Load a texture from file and return a non-negative texture unique id if the loading succeeds.
     /// This unique id can be used with [change_visual_shape](`Self::change_visual_shape`).
     ///
@@ -2451,8 +2492,8 @@ impl PhysicsClient {
         Err(Error::new("Error loading texture"))
     }
     /// sync_body_info will synchronize the body information (get_body_info) in case of multiple
-    /// clients connected to one physics server changing the world ( [`load_urdf`](`Self::load_urdf()`), remove_body etc).
-    // TODO add get_body_info
+    /// clients connected to one physics server changing the world
+    /// ( [`load_urdf`](`Self::load_urdf()`), [remove_body](`Self::remove_body`) etc).
     pub fn sync_body_info(&mut self) -> Result<(), Error> {
         unsafe {
             let command = ffi::b3InitSyncBodyInfoCommand(self.handle.as_ptr());
