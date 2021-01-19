@@ -38,7 +38,49 @@ fn test_load_urdf() {
         .load_urdf("plane.urdf", Default::default())
         .unwrap();
 }
+#[test]
+fn test_get_and_reset_base_transformation() {
+    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    physics_client
+        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .unwrap();
+    let r2d2 = physics_client
+        .load_urdf("r2d2.urdf", Default::default())
+        .unwrap();
+    let desired_transform = Isometry3::from_parts(
+        Translation3::new(0.2, 0.3, 0.4),
+        UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
+    );
+    physics_client.reset_base_transform(r2d2, &desired_transform);
+    let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
+    slice_compare(
+        desired_transform.translation.vector.as_slice(),
+        actual_transform.translation.vector.as_slice(),
+        1e-5,
+    );
+    slice_compare(
+        desired_transform.rotation.coords.as_slice(),
+        actual_transform.rotation.coords.as_slice(),
+        1e-5,
+    );
 
+    let desired_transform = Isometry3::from_parts(
+        Translation3::new(3.7, -0.23, 10.4),
+        UnitQuaternion::from_euler_angles(1.1, -0.2, 2.3),
+    );
+    physics_client.reset_base_transform(r2d2, &desired_transform);
+    let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
+    slice_compare(
+        desired_transform.translation.vector.as_slice(),
+        actual_transform.translation.vector.as_slice(),
+        1e-5,
+    );
+    slice_compare(
+        desired_transform.rotation.coords.as_slice(),
+        actual_transform.rotation.coords.as_slice(),
+        1e-5,
+    );
+}
 #[test]
 fn test_get_body_info() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
