@@ -1458,7 +1458,19 @@ impl PhysicsClient {
         }
         Ok(())
     }
-
+    /// computes the view matrix which can be used together with the projection matrix to generate
+    /// camera images within the simulation
+    ///
+    /// # Arguments
+    /// * `camera_eye_position` - eye position in Cartesian world coordinates
+    /// * `camera_target_position` - position of the target (focus) point, in Cartesian world coordinates
+    /// * `camera_up_vector` - up vector of the camera, in Cartesian world coordinates
+    ///
+    /// # See also
+    /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
+    /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
+    /// * [get_camera_image](`Self::get_camera_image`)
     pub fn compute_view_matrix(
         camera_eye_position: &[f32; 3],
         camera_target_position: &[f32; 3],
@@ -1475,6 +1487,22 @@ impl PhysicsClient {
             view_matrix
         }
     }
+    /// computes the view matrix which can be used together with the projection matrix to generate
+    /// camera images within the simulation
+    ///
+    /// # Arguments
+    /// * `camera_target_position` - position of the target (focus) point, in Cartesian world coordinates
+    /// * `distance` - distance from eye to focus point
+    /// * `yaw` - yaw angle in degrees left/right around up-axis.
+    /// * `pitch` - pitch in degrees up/down.
+    /// * `roll` - roll in degrees around forward vector
+    /// * `up_axis_index` - either 1 for Y axis or 2 for Z axis up
+    ///
+    /// # See also
+    /// * [compute_view_matrix](`Self::compute_view_matrix`)
+    /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
+    /// * [get_camera_image](`Self::get_camera_image`)
     pub fn compute_view_matrix_from_yaw_pitch_roll(
         camera_target_position: &[f32; 3],
         distance: f32,
@@ -1497,7 +1525,22 @@ impl PhysicsClient {
             view_matrix
         }
     }
-
+    /// computes the projection matrix which can be used together with the view matrix to generate
+    /// camera images within the simulation
+    ///
+    /// # Arguments
+    /// * `left` - left screen (canvas) coordinate
+    /// * `right` - right screen (canvas) coordinate
+    /// * `bottom` - bottom screen (canvas) coordinate
+    /// * `top` - top screen (canvas) coordinate
+    /// * `near` - near plane distance
+    /// * `far` - far plane distance
+    ///
+    /// # See also
+    /// * [compute_view_matrix](`Self::compute_view_matrix`)
+    /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
+    /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
+    /// * [get_camera_image](`Self::get_camera_image`)
     pub fn compute_projection_matrix(
         left: f32,
         right: f32,
@@ -1520,6 +1563,20 @@ impl PhysicsClient {
             projection_matrix
         }
     }
+    /// computes the projection matrix which can be used together with the view matrix to generate
+    /// camera images within the simulation
+    ///
+    /// # Arguments
+    /// * `fov` - left screen (canvas) coordinate
+    /// * `aspect` - right screen (canvas) coordinate
+    /// * `near_val` - near plane distance
+    /// * `far_val` - far plane distance
+    ///
+    /// # See also
+    /// * [compute_view_matrix](`Self::compute_view_matrix`)
+    /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
+    /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * [get_camera_image](`Self::get_camera_image`)
     pub fn compute_projection_matrix_fov(
         fov: f32,
         aspect: f32,
@@ -1538,6 +1595,21 @@ impl PhysicsClient {
             projection_matrix
         }
     }
+    /// returns an RGBA image.
+    ///
+    /// # Note
+    /// Depth and Segmentation images are currently not exposed
+    ///
+    /// # Arguments
+    /// * `width` - eye position in Cartesian world coordinates
+    /// * `height` - position of the target (focus) point, in Cartesian world coordinates
+    /// * `view_matrix` -  view matrix, see [compute_view_matrix](`Self::compute_view_matrix`)
+    /// * `projection_matrix` - projection matrix, see [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// # See also
+    /// * [compute_view_matrix](`Self::compute_view_matrix`)
+    /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
+    /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     pub fn get_camera_image(
         &mut self,
         width: i32,
@@ -2573,5 +2645,116 @@ mod gui_marker {
             // We are the only marker so no need to CAS
             GUI_EXISTS.store(false, Ordering::SeqCst)
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use crate::PhysicsClient;
+
+    #[test]
+    fn compute_view_matrix_test() {
+        let eye_position = [1.; 3];
+        let target_position = [1., 0., 0.];
+        let up_vector = [0., 1., 0.];
+        let view_matrix =
+            PhysicsClient::compute_view_matrix(&eye_position, &target_position, &up_vector);
+        let desired_matrix = [
+            0.99999994,
+            0.0,
+            -0.0,
+            0.0,
+            -0.0,
+            0.7071067,
+            0.70710677,
+            0.0,
+            0.0,
+            -0.7071067,
+            0.70710677,
+            0.0,
+            -0.99999994,
+            -0.0,
+            -1.4142135,
+            1.0,
+        ];
+        assert_eq!(view_matrix, desired_matrix);
+    }
+    #[test]
+    fn compute_view_matrix_from_yaw_pitch_roll_test() {
+        let target_position = [1., 0., 0.];
+        let view_matrix = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
+            &target_position,
+            0.6,
+            0.2,
+            0.3,
+            0.5,
+            1,
+        );
+        let desired_matrix = [
+            -0.9999939799308777,
+            -1.8276923583471216e-05,
+            -0.0034906466025859118,
+            0.0,
+            2.2373569663614035e-10,
+            0.9999864101409912,
+            -0.005235963501036167,
+            0.0,
+            0.003490694332867861,
+            -0.00523593183606863,
+            -0.9999802708625793,
+            0.0,
+            0.9999939799308777,
+            1.8277205526828766e-05,
+            -0.5965093970298767,
+            1.0,
+        ];
+        assert_eq!(view_matrix, desired_matrix);
+    }
+    #[test]
+    fn compute_projection_matrix_fov_test() {
+        let projection_matrix = PhysicsClient::compute_projection_matrix_fov(0.4, 0.6, 0.2, 0.6);
+        let desired_matrix = [
+            477.4628601074219,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            286.47772216796875,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.9999998807907104,
+            -1.0,
+            0.0,
+            0.0,
+            -0.5999999642372131,
+            0.0,
+        ];
+        assert_eq!(projection_matrix, desired_matrix);
+    }
+    #[test]
+    fn compute_projection_matrix_test() {
+        let projection_matrix =
+            PhysicsClient::compute_projection_matrix(0.1, 0.2, 0.3, 0.4, 0.2, 0.6);
+        let desired_matrix = [
+            4.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            4.000000476837158,
+            0.0,
+            0.0,
+            3.0,
+            7.000000953674316,
+            -1.9999998807907104,
+            -1.0,
+            0.0,
+            0.0,
+            -0.5999999642372131,
+            0.0,
+        ];
+        assert_eq!(projection_matrix, desired_matrix);
     }
 }
