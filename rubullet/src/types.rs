@@ -163,29 +163,49 @@ impl From<b3JointInfo> for JointInfo {
         }
     }
 }
-
+/// Parameters for Inverse Kinematics using the Nullspace
 pub struct InverseKinematicsNullSpaceParameters<'a> {
     pub lower_limits: &'a [f64],
     pub upper_limits: &'a [f64],
     pub joint_ranges: &'a [f64],
+    /// Favor an IK solution closer to a given rest pose
     pub rest_poses: &'a [f64],
 }
-
+/// Parameters for the [`calculate_inverse_kinematics()`](`crate::client::PhysicsClient::calculate_inverse_kinematics()`)
+/// You can easily create them using the [`InverseKinematicsParametersBuilder`](`InverseKinematicsParametersBuilder`)
 pub struct InverseKinematicsParameters<'a> {
+    /// The [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
     pub body: BodyId,
+    /// end effector link index
     pub end_effector_link_index: i32,
+    /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
+    /// By default this is in Cartesian world space, unless you provide current_position joint angles.
     pub target_position: [f64; 3],
+    /// Target orientation in Cartesian world space, quaternion [x,y,z,w].
+    /// If not specified, pure position IK will be used.
     pub target_orientation: Option<[f64; 4]>,
+    /// Optional null-space IK
     pub limits: Option<InverseKinematicsNullSpaceParameters<'a>>,
+    /// joint_damping allows to tune the IK solution using joint damping factors
     pub joint_damping: Option<&'a [f64]>,
+    /// Solver which should be used for the Inverse Kinematics
     pub solver: IKSolver,
+    /// By default RuBullet uses the joint positions of the body.#
+    /// If provided, the targetPosition and targetOrientation is in local space!
     pub current_position: Option<&'a [f64]>,
+    /// Refine the IK solution until the distance between target and actual end effector position
+    /// is below this threshold, or the max_num_iterations is reached
     pub max_num_iterations: i32,
+    /// Refine the IK solution until the distance between target and actual end effector position
+    /// is below this threshold, or the max_num_iterations is reached
     pub residual_threshold: Option<f64>,
 }
-
+/// Specifies which Inverse Kinematics Solver to use in
+/// [`calculate_inverse_kinematics()`](`crate::client::PhysicsClient::calculate_inverse_kinematics()`)
 pub enum IKSolver {
+    /// Damped Least Squares
     DLS = 0,
+    /// Selective Damped Least
     SDLS = 1,
 }
 
@@ -212,11 +232,53 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
     }
 }
 
+/// creates [`InverseKinematicsParameters`](`InverseKinematicsParameters`) using the Builder Pattern
+/// which can then be used in [`calculate_inverse_kinematics()`](`crate::client::PhysicsClient::calculate_inverse_kinematics()`).
+/// Use the [build()](`Self::build()`) method to get the parameters.
+/// ```rust
+/// # use rubullet::{InverseKinematicsParametersBuilder, BodyId, InverseKinematicsNullSpaceParameters, PhysicsClient, UrdfOptions};
+/// # use nalgebra::Isometry3;
+/// # use rubullet::mode::Mode::Direct;
+/// #    let mut client = PhysicsClient::connect(Direct).unwrap();
+/// #    client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data").unwrap();
+/// #    client.set_additional_search_path(
+/// #        "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+/// #        ).unwrap();
+/// #    let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default()).unwrap();
+/// const INITIAL_JOINT_POSITIONS: [f64; 9] =
+///     [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
+/// const PANDA_NUM_DOFS: usize = 7;
+/// const PANDA_END_EFFECTOR_INDEX: i32 = 11;
+/// const LL: [f64; 9] = [-7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
+/// const UL: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
+/// const JR: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
+/// const NULL_SPACE_PARAMETERS: InverseKinematicsNullSpaceParameters<'static> =
+///    InverseKinematicsNullSpaceParameters {
+///        lower_limits: &LL,
+///        upper_limits: &UL,
+///        joint_ranges: &JR,
+///        rest_poses: &INITIAL_JOINT_POSITIONS,
+///    };
+/// let inverse_kinematics_parameters = InverseKinematicsParametersBuilder::new(
+///             panda_id,
+///             PANDA_END_EFFECTOR_INDEX,
+///             &Isometry3::translation(0.3,0.3,0.3),
+///         )
+///         .set_max_num_iterations(5)
+///         .use_null_space(NULL_SPACE_PARAMETERS)
+///         .build();
+/// ```
 pub struct InverseKinematicsParametersBuilder<'a> {
     params: InverseKinematicsParameters<'a>,
 }
 
 impl<'a> InverseKinematicsParametersBuilder<'a> {
+    /// creates a new InverseKinematicsParametersBuilder
+    /// # Arguments
+    /// * `body` -  the [`BodyId`](`BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
+    /// * `end_effector_link_index` -  end effector link index
+    /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
+    /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
     pub fn new<Index>(
         body: BodyId,
         end_effector_link_index: Index,
@@ -237,34 +299,44 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         };
         InverseKinematicsParametersBuilder { params }
     }
+    /// Do not consider the orientation while calculating the IK
     pub fn ignore_orientation(mut self) -> Self {
         self.params.target_orientation = None;
         self
     }
+    /// Consider the nullspace when calculating the IK
     pub fn use_null_space(mut self, limits: InverseKinematicsNullSpaceParameters<'a>) -> Self {
         self.params.limits = Some(limits);
         self
     }
+    /// Allow to tune the IK solution using joint damping factors
     pub fn set_joint_damping(mut self, joint_damping: &'a [f64]) -> Self {
         self.params.joint_damping = Some(joint_damping);
         self
     }
+    /// Use a different IK-Solver. The default is DLS
     pub fn set_ik_solver(mut self, solver: IKSolver) -> Self {
         self.params.solver = solver;
         self
     }
+    /// Specify the current position if you do not want to use the position of the body.
+    /// If you use it the target pose will be in local space!
     pub fn set_current_position(mut self, current_position: &'a [f64]) -> Self {
         self.params.current_position = Some(current_position);
         self
     }
+    /// Sets the maximum number of iterations. The default is 20.
     pub fn set_max_num_iterations(mut self, iterations: u32) -> Self {
         self.params.max_num_iterations = iterations as i32;
         self
     }
+    /// Recalculate the IK until the distance between target and actual end effector is smaller than
+    /// the residual threshold or max_num_iterations is reached.
     pub fn set_residual_threshold(mut self, residual_threshold: f64) -> Self {
         self.params.residual_threshold = Some(residual_threshold);
         self
     }
+    /// creates the parameters
     pub fn build(self) -> InverseKinematicsParameters<'a> {
         self.params
     }

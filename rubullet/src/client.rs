@@ -578,7 +578,7 @@ impl PhysicsClient {
     /// getLinkStates will return the information for multiple links.
     /// Instead of link_index it will accept link_indices as an array of i32.
     /// This can improve performance by reducing calling overhead of multiple calls to
-    /// [`get_link_state()`](`Self::get_link_states()`) .
+    /// [`get_link_state()`](`Self::get_link_state()`) .
     ///
     /// # Warning
     /// * the returned link velocity will only be valid if `compute_link_velocity` is set to true
@@ -883,7 +883,20 @@ impl PhysicsClient {
         }
         Err(Error::new("error in calculate_mass_matrix"))
     }
-
+    /// You can compute the joint angles that makes the end-effector reach a given target position
+    /// in Cartesian world space. Internally, Bullet uses an improved version of
+    /// Samuel Buss Inverse Kinematics library. At the moment only the Damped Least Squares method
+    /// with or without Null Space control is exposed, with a single end-effector target.
+    /// Optionally you can also specify the target orientation of the end effector.
+    /// In addition, there is an option to use the null-space to specify joint limits and
+    /// rest poses.
+    ///
+    /// See [`InverseKinematicsParametersBuilder`](`crate::types::InverseKinematicsParametersBuilder`) and
+    /// [`InverseKinematicsParameters`](`crate::types::InverseKinematicsParameters`) for more details.
+    ///
+    /// # Note
+    /// If you set the [`NullSpaceParameters`](`crate::types::InverseKinematicsNullSpaceParameters`)
+    /// wrong this function will return an error, while the PyBullet just uses the normal Ik instead.
     pub fn calculate_inverse_kinematics(
         &mut self,
         params: InverseKinematicsParameters,
@@ -926,7 +939,7 @@ impl PhysicsClient {
         {
             has_null_space = true;
         } else if params.limits.is_some() {
-            eprintln!("Warning! Null space parameter lengths do not match the number DoF and will be ignored!");
+            return Err(Error::new("Warning! Null space parameter lengths do not match the number DoF and will be ignored!"));
         }
         if let Some(positions) = current_positions {
             if positions.len() != dof_count {
