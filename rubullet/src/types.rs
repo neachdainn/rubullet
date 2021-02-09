@@ -620,34 +620,6 @@ impl ControlModeArray<'_> {
     }
 }
 
-pub struct JointMotorControlOptions {
-    pub body_unique_id: BodyId,
-    pub joint_index: i32,
-    pub control_mode: ControlMode,
-    pub target_position: Option<f64>,
-    pub target_velocity: Option<f64>,
-    pub force: Option<f64>,
-    pub position_gain: Option<f64>,
-    pub velocity_gain: Option<f64>,
-    pub max_velocity: Option<f64>,
-}
-
-impl JointMotorControlOptions {
-    fn new(body_unique_id: BodyId, joint_index: i32, control_mode: ControlMode) -> Self {
-        JointMotorControlOptions {
-            body_unique_id,
-            joint_index,
-            control_mode,
-            target_position: None,
-            target_velocity: None,
-            force: None,
-            position_gain: None,
-            velocity_gain: None,
-            max_velocity: None,
-        }
-    }
-}
-
 #[allow(non_camel_case_types)]
 pub enum DebugVisualizerFlag {
     COV_ENABLE_GUI = 1,
