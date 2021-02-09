@@ -1,6 +1,7 @@
 //! Custom data types for RuBullet
 
 use crate::Error;
+use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
 use rubullet_ffi::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
 use std::convert::TryFrom;
@@ -1048,4 +1049,13 @@ impl From<b3VisualShapeData> for VisualShapeData {
             }
         }
     }
+}
+/// Stores the images from [`get_camera_image()`](`crate::PhysicsClient::get_camera_image()`)
+pub struct Images {
+    /// RGB image with additional alpha channel
+    pub rgba: RgbaImage,
+    /// Depth image. Every pixel represents a distance in meters
+    pub depth: ImageBuffer<Luma<f32>, Vec<f32>>,
+    /// Segmentation image. Every pixel represents a unique [`BodyId`](`crate::types::BodyId`)
+    pub segmentation: ImageBuffer<Luma<i32>, Vec<i32>>,
 }

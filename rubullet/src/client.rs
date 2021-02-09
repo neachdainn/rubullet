@@ -14,14 +14,14 @@ use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vec
 use self::gui_marker::GuiMarker;
 use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
-    ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape,
+    ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
     InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
     LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
 };
 use crate::{
     BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
 };
-use image::{ImageBuffer, RgbaImage};
+use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_ffi as ffi;
 use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
@@ -1659,10 +1659,11 @@ impl PhysicsClient {
             projection_matrix
         }
     }
-    /// returns an RGBA image.
+    /// returns an RGBA, depth and segmentation images.
     ///
     /// # Note
-    /// Depth and Segmentation images are currently not exposed
+    /// Depth and segmentation images are currently not really images as the image crate does not
+    /// properly support these types yet.
     ///
     /// # Arguments
     /// * `width` - eye position in Cartesian world coordinates
@@ -1674,13 +1675,14 @@ impl PhysicsClient {
     /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
+    /// * panda_camera_demo.rs for an example
     pub fn get_camera_image(
         &mut self,
         width: i32,
         height: i32,
         view_matrix: &[f32; 16],
         projection_matrix: &[f32; 16],
-    ) -> Result<RgbaImage, Error> {
+    ) -> Result<Images, Error> {
         unsafe {
             let command = ffi::b3InitRequestCameraImage(self.handle.as_ptr());
             ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
@@ -1700,9 +1702,34 @@ impl PhysicsClient {
                         image_data.m_rgb_color_data,
                         (width * height * 4) as usize,
                     );
-                    let img: RgbaImage =
+                    let depth_buffer = std::slice::from_raw_parts(
+                        image_data.m_depth_values,
+                        (width * height) as usize,
+                    );
+                    let segmentation_buffer = std::slice::from_raw_parts(
+                        image_data.m_segmentation_mask_values,
+                        (width * height) as usize,
+                    );
+                    let rgba: RgbaImage =
                         ImageBuffer::from_vec(width as u32, height as u32, buffer.into()).unwrap();
-                    return Ok(img);
+
+                    let depth = ImageBuffer::<Luma<f32>, Vec<f32>>::from_vec(
+                        width as u32,
+                        height as u32,
+                        depth_buffer.into(),
+                    )
+                    .unwrap();
+                    let segmentation = ImageBuffer::<Luma<i32>, Vec<i32>>::from_vec(
+                        width as u32,
+                        height as u32,
+                        segmentation_buffer.into(),
+                    )
+                    .unwrap();
+                    return Ok(Images {
+                        rgba,
+                        depth,
+                        segmentation,
+                    });
                 }
             }
             Err(Error::new("getCameraImage failed"))

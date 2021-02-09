@@ -19,13 +19,13 @@ fn main() -> Result<(), Terminator> {
     let time_step = Duration::from_secs_f64(1. / 60.);
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;
     loop {
-        let _image = physics_client.get_camera_image(
+        let _images = physics_client.get_camera_image(
             128,
             128,
             &panda.view_matrix,
             &panda.projection_matrix,
         )?;
-        _image.save("/tmp/test.png")?;
+        _images.rgba.save("/tmp/test.png")?;
         panda.step(&mut physics_client);
         physics_client.step_simulation()?;
 
