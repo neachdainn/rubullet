@@ -1120,7 +1120,24 @@ impl PhysicsClient {
             "Error in calculateInverseDynamics, please check arguments.",
         ))
     }
-
+    /// calculate_jacobian will compute the translational and rotational jacobians for a point on a
+    /// link, e.g. x_dot = J * q_dot. The returned jacobians are slightly different depending on
+    /// whether the root link is fixed or floating. If floating, the jacobians will include columns
+    /// corresponding to the root link degrees of freedom; if fixed, the jacobians will only have
+    /// columns associated with the joints. The function call takes the full description of the
+    /// kinematic state, this is because calculateInverseDynamics is actually called first and the
+    /// desired jacobians are extracted from this; therefore, it is reasonable to pass zero vectors
+    /// for joint velocities and accelerations if desired.
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index for the jacobian.
+    /// * `local_position` - the point on the specified link to compute the jacobian for, in link local coordinates around its center of mass.
+    /// * `object_positions` - joint positions (angles)
+    /// * `object_velocities` - joint velocities
+    /// * `object_accelerations` - desired joint accelerations
+    ///
+    /// See jacobian.rs for an example
     pub fn calculate_jacobian(
         &mut self,
         body: BodyId,
