@@ -27,7 +27,7 @@ fn main() -> Result<(), Terminator> {
         }
     }
     let terrain_shape = physics_client.create_collision_shape(
-        GeometricCollisionShape::Heigthfield {
+        GeometricCollisionShape::Heightfield {
             mesh_scale: [0.05, 0.05, 1.],
             texture_scaling: (num_heightfield_rows - 1) as f64 / 2.,
             data: heightfield_data,

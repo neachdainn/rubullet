@@ -160,7 +160,7 @@ impl PhysicsClient {
     /// server and client happen in the same thread and you trigger every command.
     /// In [`Gui mode`](`crate::mode::Mode::Gui`) and in Virtual Reality mode, and TCP/UDP mode,
     /// the physics server runs in a separate thread from the client (RuBullet),
-    /// and set_real_time_simulation allows the physicsserver thread
+    /// and set_real_time_simulation allows the physics server thread
     /// to add additional calls to  [`step_simulation`](`Self::step_simulation()`).
     ///
     /// # Arguments
@@ -176,7 +176,7 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
     }
-    /// Sets an additional search path for loading assests.
+    /// Sets an additional search path for loading assets.
     pub fn set_additional_search_path<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
@@ -1680,8 +1680,8 @@ impl PhysicsClient {
                     options.parent_link_index.unwrap_or(-1),
                 );
             }
-            if let Some(replacment) = options.replace_item_id {
-                ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacment.0);
+            if let Some(replacement) = options.replace_item_id {
+                ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement.0);
             }
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
@@ -1998,7 +1998,7 @@ impl PhysicsClient {
                     shape_index =
                         ffi::b3CreateCollisionShapeAddCylinder(command_handle, radius, height);
                 }
-                GeometricCollisionShape::HeigthfieldFile {
+                GeometricCollisionShape::HeightfieldFile {
                     filename,
                     mesh_scale,
                     texture_scaling,
@@ -2011,7 +2011,7 @@ impl PhysicsClient {
                         texture_scaling,
                     );
                 }
-                GeometricCollisionShape::Heigthfield {
+                GeometricCollisionShape::Heightfield {
                     mesh_scale,
                     texture_scaling: heightfield_texture_scaling,
                     data: mut heightfield_data,
@@ -2490,8 +2490,8 @@ impl PhysicsClient {
                 link_index,
                 options.shape.0,
             );
-            if let Some(texutre_id) = options.texture_id {
-                ffi::b3UpdateVisualShapeTexture(command_handle, texutre_id.0);
+            if let Some(texture_id) = options.texture_id {
+                ffi::b3UpdateVisualShapeTexture(command_handle, texture_id.0);
             }
             if let Some(specular) = options.specular_color {
                 ffi::b3UpdateVisualShapeSpecularColor(command_handle, specular.as_ptr());

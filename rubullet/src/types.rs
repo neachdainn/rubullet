@@ -601,7 +601,7 @@ pub enum DebugVisualizerFlag {
 pub struct LinkState {
     /// Cartesian pose of the center of mass
     pub world_pose: Isometry3<f64>,
-    /// local offset of the intertial frame (center of mass) express in the URDF link frame
+    /// local offset of the inertial frame (center of mass) express in the URDF link frame
     pub local_inertial_pose: Isometry3<f64>,
     /// world pose of the URDF link frame
     pub world_link_frame_pose: Isometry3<f64>,
@@ -731,7 +731,7 @@ pub enum GeometricCollisionShape {
         mesh_scale: [f64; 3],
     },
     /// Loads a Heightfield from a file
-    HeigthfieldFile {
+    HeightfieldFile {
         /// Path to the .obj file as String.
         filename: String,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
@@ -739,13 +739,13 @@ pub enum GeometricCollisionShape {
         /// Texture scaling. Use 1. for original scaling.
         texture_scaling: f64,
     },
-    /// Create your own Heightfiled. See heightfield.rs for an example.
-    Heigthfield {
+    /// Create your own Heightfield. See heightfield.rs for an example.
+    Heightfield {
         /// Scaling of the Mesh. Use [1.;3] for normal scaling.
         mesh_scale: [f64; 3],
         /// Texture scaling. Use 1. for normal scaling.
         texture_scaling: f64,
-        /// Heigthfield data. Should be of size num_rows * num_columns
+        /// Heightfield data. Should be of size num_rows * num_columns
         data: Vec<f32>,
         /// number of rows in data
         num_rows: i32,
