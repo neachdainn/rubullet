@@ -1219,9 +1219,36 @@ impl PhysicsClient {
         Err(Error::new("Error in calculateJacobian"))
     }
 
-    /// sets joint motor commands. This function differs a bit from the corresponding pybullet function.
-    /// Instead of providing optional arguments that depend on the Control Mode. The necessary Parameters
-    /// are directly encoded in the ControlMode Enum
+    /// sets joint motor commands. This function differs a bit from the corresponding PyBullet function.
+    /// Instead of providing optional arguments that depend on the Control Mode, the necessary parameters
+    /// are directly encoded in the ControlMode Enum.
+    ///
+    /// We can control a robot by setting a desired control mode for one or more joint motors.
+    /// During the stepSimulation the physics engine will simulate the motors to reach the given
+    /// target value that can be reached within the maximum motor forces and other constraints.
+    ///
+    /// # Important Note:
+    /// by default, each revolute joint and prismatic joint is motorized using a velocity motor.
+    /// You can disable those default motor by using a maximum force of 0.
+    /// This will let you perform torque control.
+    /// For Example:
+    /// ```rust
+    ///# use rubullet::{ControlMode, PhysicsClient, Mode};
+    ///# use easy_error::Terminator;
+    ///# pub fn main() -> Result<(),Terminator> {
+    ///#     let mut client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
+    ///#     let joint_index = 1;
+    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
+    ///# Ok(())
+    ///# }
+    /// ```
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_index` - link index in range [0..get_num_joints(bodyUniqueId)] (note that link index == joint index)
+    /// * `control_mode` - Specifies how to control the robot (Position, Torque, etc.)
+    /// * `maximum_force` - this is the maximum motor force used to reach the target value. It has no effect in Torque mode.
     /// # Example
     /// ```rust
     /// use rubullet::{ControlMode, PhysicsClient, Mode};
@@ -1315,7 +1342,14 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
-
+    /// The array version of [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`).
+    /// This reduces the calling overhead and should therefore be faster. See [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`)
+    /// for more details.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `joint_indices` - list of link indices in range [0..get_num_joints(bodyUniqueId)] (note that link index == joint index)
+    /// * `control_mode` - Specifies how to control the robot (Position, Torque, etc.)
+    /// * `maximum_force` - this is the maximum motor force used to reach the target value for each joint. It has no effect in Torque mode.
     pub fn set_joint_motor_control_array(
         &mut self,
         body: BodyId,

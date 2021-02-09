@@ -519,23 +519,47 @@ impl Default for UrdfOptions {
         }
     }
 }
-
+/// The Control Mode specifies how the robot should move (Position Control, Velocity Control, Torque Control)
+/// Each Control Mode has its own set of Parameters. The Position mode for example takes a desired joint
+/// position as input. It can be used in [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`)
+///
+/// | Mode                    | Implementation | Component                        | Constraint error to be minimized                                                                          |
+/// |-------------------------|----------------|----------------------------------|-----------------------------------------------------------------------------------------------------------|
+/// | Position,PositionWithPD | constraint     | velocity and position constraint | error = position_gain*(desired_position-actual_position)+velocity_gain*(desired_velocity-actual_velocity) |
+/// | Velocity                | constraint     | pure velocity constraint         | error = desired_velocity - actual_velocity                                                                |
+/// | Torque                  | External Force |                                  |                                                                                                           |
+/// | PD                      | ???            | ???                              | ???                                                                                                       |
 pub enum ControlMode {
+    /// Position Control with the desired joint position.
     Position(f64),
+    /// Same as Position, but you can set your own gains
     PositionWithPD {
+        /// desired target position
         target_position: f64,
+        /// desired target velocity
         target_velocity: f64,
+        /// position gain
         position_gain: f64,
+        /// velocity gain
         velocity_gain: f64,
+        /// limits the velocity of a joint
         maximum_velocity: Option<f64>,
     },
+    /// Velocity control with the desired joint velocity
     Velocity(f64),
+    /// Torque control with the desired joint torque.
     Torque(f64),
+    /// PD Control
     PD {
+        /// desired target position
         target_position: f64,
+        /// desired target velocity
         target_velocity: f64,
+        /// position gain
         position_gain: f64,
+        /// velocity gain
         velocity_gain: f64,
+        /// limits the velocity of a joint
         maximum_velocity: Option<f64>,
     },
 }
@@ -551,21 +575,35 @@ impl ControlMode {
         }
     }
 }
-
+/// Can be used in [`set_joint_motor_control_array()`](`crate::client::PhysicsClient::set_joint_motor_control_array()`).
+/// It is basically the same as [`ControlMode`](`ControlMode`) but with arrays. See [`ControlMode`](`ControlMode`) for details.
 pub enum ControlModeArray<'a> {
+    /// Position Control with the desired joint positions.
     Positions(&'a [f64]),
+    /// Same as Positions, but you can set your own gains
     PositionsWithPD {
+        /// desired target positions
         target_positions: &'a [f64],
+        /// desired target velocities
         target_velocities: &'a [f64],
+        /// position gains
         position_gains: &'a [f64],
+        /// velocity gains
         velocity_gains: &'a [f64],
     },
+    /// Velocity control with the desired joint velocities
     Velocities(&'a [f64]),
+    /// Torque control with the desired joint torques.
     Torques(&'a [f64]),
+    /// PD Control
     PD {
+        /// desired target positions
         target_positions: &'a [f64],
+        /// desired target velocities
         target_velocities: &'a [f64],
+        /// position gains
         position_gains: &'a [f64],
+        /// velocity gains
         velocity_gains: &'a [f64],
     },
 }
