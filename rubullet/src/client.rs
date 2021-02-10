@@ -58,6 +58,18 @@ pub struct PhysicsClient {
 }
 
 impl PhysicsClient {
+    /// Creates a PhysicsClient by connecting to a physics simulation.
+    ///
+    /// There are different Modes for creating a PhysicsClient:
+    ///
+    /// * [`Gui mode`](`crate::mode::Mode::Gui`) creates an OpenGL window where
+    /// the simulation will be visualized. There can only be one Gui instance at a time.
+    /// * [`Direct mode`](`crate::mode::Mode::Direct`) will run without any visualization.
+    /// In this mode you cannot access OpenGL features like debugging lines, text and Parameters.
+    /// You also cannot get mouse or keyboard events.
+    /// The can be many instances of PhysicsClients running in Direct mode
+    ///
+    /// Other modes are currently not implemented.
     pub fn connect(mode: Mode) -> Result<PhysicsClient, Error> {
         let (raw_handle, gui_marker) = match mode {
             Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None) },
@@ -314,6 +326,8 @@ impl PhysicsClient {
     }
 
     /// Reports the current transform of the base.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     pub fn get_base_transform(&mut self, body: BodyId) -> Result<Isometry3<f64>, Error> {
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
@@ -1736,7 +1750,14 @@ impl PhysicsClient {
             Err(Error::new("getCameraImage failed"))
         }
     }
-    // pub fn configure_debug_visualizer(&mut self,flag:DebugVisualizerFlag, enable:bool,light_position:Option<[f64;3]>, shadow_map_resolution:Option<i32>, shadow_map_world_size:Option<i32>) {
+    /// This method can configure some settings of the built-in OpenGL visualizer,
+    /// such as enabling or disabling wireframe, shadows and GUI rendering.
+    /// This is useful since some laptops or Desktop GUIs have
+    /// performance issues with our OpenGL 3 visualizer.
+    /// # Arguments
+    /// * `flag` - Feature to enable or disable
+    /// * `enable` - enables or disables the feature
+    // TODO implement the other options
     pub fn configure_debug_visualizer(&mut self, flag: DebugVisualizerFlag, enable: bool) {
         unsafe {
             let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle.as_ptr());
@@ -2837,6 +2858,8 @@ impl PhysicsClient {
         }
         Ok(())
     }
+    /// Returns a list of visual shape data of a body.
+    /// See [`change_visual_shape()`](`Self::change_visual_shape`) for an example.
     pub fn get_visual_shape_data(
         &mut self,
         body: BodyId,

@@ -686,7 +686,7 @@ impl ControlModeArray<'_> {
         }
     }
 }
-
+/// Flags for [`configure_debug_visualizer()`](`crate::PhysicsClient::configure_debug_visualizer`)
 #[allow(non_camel_case_types)]
 pub enum DebugVisualizerFlag {
     COV_ENABLE_GUI = 1,
