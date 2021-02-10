@@ -15,7 +15,7 @@ use self::gui_marker::GuiMarker;
 use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
-    InverseKinematicsParameters, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
+    InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
     LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
 };
 use crate::{
@@ -1748,12 +1748,46 @@ impl PhysicsClient {
         }
     }
 
+    /// You can add a 3d line specified by a 3d starting point (from) and end point (to),
+    /// a color [red,green,blue], a line width and a duration in seconds.
+    ///
+    /// # Arguments
+    /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates
+    /// * `line_to_xyz` - end point of the line in Cartesian world coordinates
+    /// * `options` - advanced options for the line. Use None for default settings.
+    ///
+    /// # Return
+    /// A unique item id of the line.
+    /// You can use [`remove_user_debug_item()`](`Self::remove_user_debug_item()`) to delete it.
+    ///
+    /// # Example
+    /// ```no_run
+    ///# use easy_error::Terminator;
+    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::types::AddDebugLineOptions;
+    ///# use rubullet::PhysicsClient;
+    ///# use std::time::Duration;
+    ///#
+    ///# pub fn main() -> Result<(), Terminator> {
+    ///     let mut client = PhysicsClient::connect(Gui)?;
+    ///     let red_line = client.add_user_debug_line(
+    ///         &[0.; 3],
+    ///         &[1.; 3],
+    ///         AddDebugLineOptions {
+    ///             line_color_rgb: &[1., 0., 0.],
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///#     std::thread::sleep(Duration::from_secs(10));
+    ///#     Ok(())
+    ///# }
+    /// ```
     pub fn add_user_debug_line<'a, Options: Into<Option<AddDebugLineOptions<'a>>>>(
         &mut self,
         line_from_xyz: &[f64],
         line_to_xyz: &[f64],
         options: Options,
-    ) -> Result<BodyId, Error> {
+    ) -> Result<ItemId, Error> {
         unsafe {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
@@ -1778,19 +1812,28 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
-                let debug_item = BodyId(ffi::b3GetDebugItemUniqueId(status_handle));
+                let debug_item = ItemId(ffi::b3GetDebugItemUniqueId(status_handle));
                 return Ok(debug_item);
             }
             Err(Error::new("Error in addUserDebugLine."))
         }
     }
+    /// Lets you add custom sliders and buttons to tune parameters.
     ///
-    /// Buttons are currently not working
+    /// # Arguments
+    /// * `param_name` - name of the parameter. Needs to be something that can be converted to a string
+    /// * `range_min` - minimum value of the slider. If minimum value > maximum value a button instead
+    /// of a slider will appear.
+    /// * `range_max` - maximum value of the slider
+    /// * `start_value` - starting value of the slider
+    ///
+    /// # Return
+    /// A unique item id of the button/slider, which can be used by [`read_user_debug_parameter()`](`Self::read_user_debug_parameter()`)
     /// # Example
     /// ```no_run
     /// use rubullet::PhysicsClient;
     /// use rubullet::mode::Mode::Gui;
-    ///   use easy_error::Terminator;
+    /// use easy_error::Terminator;
     /// pub fn main() -> Result<(),Terminator> {
     ///     let mut client = PhysicsClient::connect(Gui)?;
     ///     let slider = client.add_user_debug_parameter("my_slider",0.,1.,0.5)?;
@@ -1800,14 +1843,13 @@ impl PhysicsClient {
     ///     Ok(())
     /// }
     /// ```
-    // TODO Figure out why button are not working
     pub fn add_user_debug_parameter<Text: Into<String>>(
         &mut self,
         param_name: Text,
         range_min: f64,
         range_max: f64,
         start_value: f64,
-    ) -> Result<BodyId, Error> {
+    ) -> Result<ItemId, Error> {
         unsafe {
             let command_handle = ffi::b3InitUserDebugAddParameter(
                 self.handle.as_ptr(),
@@ -1821,16 +1863,20 @@ impl PhysicsClient {
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item_unique_id = ffi::b3GetDebugItemUniqueId(status_handle);
-                return Ok(BodyId(debug_item_unique_id));
+                return Ok(ItemId(debug_item_unique_id));
             }
             Err(Error::new("Error in addUserDebugParameter."))
         }
     }
-
-    pub fn read_user_debug_parameter(&mut self, item_unique_id: BodyId) -> Result<f64, Error> {
+    /// Reads the current value of a debug parameter. For a button the value will increase by 1 every
+    /// time the button is clicked.
+    ///
+    /// # Arguments
+    /// `item` - the unique item generated by [`add_user_debug_parameter()`)[`Self::add_user_debug_parameter()`]
+    /// See [`add_user_debug_parameter()`)[`Self::add_user_debug_parameter()`] for an example.
+    pub fn read_user_debug_parameter(&mut self, item: ItemId) -> Result<f64, Error> {
         unsafe {
-            let command_handle =
-                ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item_unique_id.0);
+            let command_handle = ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item.0);
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
@@ -1844,6 +1890,39 @@ impl PhysicsClient {
             Err(Error::new("Failed to read parameter."))
         }
     }
+    /// You can add some 3d text at a specific location using a color and size.
+    /// # Arguments
+    /// * `text` - text represented  by something which can be converted to a string
+    /// * `text_position` - 3d position of the text in Cartesian world coordinates [x,y,z]
+    /// * `options` - advanced options for the text. Use None for default settings.
+    ///
+    /// # Return
+    /// A unique item id of the text.
+    /// You can use [`remove_user_debug_item()`](`Self::remove_user_debug_item()`) to delete it.
+    ///
+    /// # Example
+    /// ```no_run
+    ///# use easy_error::Terminator;
+    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::types::AddDebugTextOptions;
+    ///# use rubullet::PhysicsClient;
+    ///# use std::time::Duration;
+    ///#
+    ///# pub fn main() -> Result<(), Terminator> {
+    ///#     let mut client = PhysicsClient::connect(Gui)?;
+    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
+    ///     let text_red = client.add_user_debug_text(
+    ///         "My text in red",
+    ///         &[0., 0., 2.],
+    ///         AddDebugTextOptions {
+    ///             text_color_rgb: &[1., 0., 0.],
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///#     std::thread::sleep(Duration::from_secs(10));
+    ///#     Ok(())
+    ///# }
+    /// ```
     pub fn add_user_debug_text<
         'a,
         Text: Into<String>,
@@ -1853,7 +1932,7 @@ impl PhysicsClient {
         text: Text,
         text_position: &[f64],
         options: Options,
-    ) -> Result<BodyId, Error> {
+    ) -> Result<ItemId, Error> {
         unsafe {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
@@ -1881,20 +1960,58 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
-                let debug_item_id = BodyId(ffi::b3GetDebugItemUniqueId(status_handle));
+                let debug_item_id = ItemId(ffi::b3GetDebugItemUniqueId(status_handle));
                 return Ok(debug_item_id);
             }
         }
         Err(Error::new("Error in add_user_debug_text"))
     }
-    pub fn remove_user_debug_item(&mut self, id: BodyId) {
+    /// Removes debug items which were created with [`add_user_debug_line`](`crate::PhysicsClient::add_user_debug_line()`),
+    /// [`add_user_debug_parameter`](`crate::PhysicsClient::add_user_debug_parameter()`) or
+    /// [`add_user_debug_text`](`crate::PhysicsClient::add_user_debug_text()`).
+    ///
+    /// # Arguments
+    /// * `item` - unique id of the debug item to be removed (line, text etc)
+    ///
+    /// # Example
+    /// ```no_run
+    ///# use easy_error::Terminator;
+    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::PhysicsClient;
+    ///# use std::time::Duration;
+    ///#
+    ///# pub fn main() -> Result<(), Terminator> {
+    ///#     let mut client = PhysicsClient::connect(Gui)?;
+    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
+    ///     client.remove_user_debug_item(text);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn remove_user_debug_item(&mut self, item: ItemId) {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugDrawRemove(self.handle.as_ptr(), id.0);
+            let command_handle = ffi::b3InitUserDebugDrawRemove(self.handle.as_ptr(), item.0);
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
             let _status_type = ffi::b3GetStatusType(status_handle);
         }
     }
+    /// will remove all debug items (text, lines etc).
+    /// # Example
+    /// ```no_run
+    ///# use easy_error::Terminator;
+    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::PhysicsClient;
+    ///# use std::time::Duration;
+    ///#
+    ///# pub fn main() -> Result<(), Terminator> {
+    ///#     let mut client = PhysicsClient::connect(Gui)?;
+    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
+    ///     let text_2 = client.add_user_debug_text("My text2", &[0., 0., 2.], None)?;
+    ///     client.remove_all_user_debug_items();
+    ///#     std::thread::sleep(Duration::from_secs(10));
+    ///#     Ok(())
+    ///# }
+    /// ```
     pub fn remove_all_user_debug_items(&mut self) {
         unsafe {
             let command_handle = ffi::b3InitUserDebugDrawRemoveAll(self.handle.as_ptr());

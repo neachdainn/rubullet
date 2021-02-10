@@ -24,6 +24,10 @@ pub struct CollisionId(pub c_int);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct TextureId(pub(crate) c_int);
 
+/// The unique ID for a User Debug Parameter Item
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct ItemId(pub(crate) c_int);
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 /// An enum to represent different types of joints
 pub enum JointType {
@@ -342,15 +346,28 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         self.params
     }
 }
-
+/// Represents options for [`add_user_debug_text`](`crate::PhysicsClient::add_user_debug_text()`)
 pub struct AddDebugTextOptions<'a> {
+    /// RGB color [Red, Green, Blue] each component in range [0..1]. Default is [1.,1.,1.]
     pub text_color_rgb: &'a [f64],
+    /// size of the text. Default is 1.
     pub text_size: f64,
+    /// Use 0 for permanent text, or positive time in seconds
+    /// (afterwards the line with be removed automatically). Default is 0.
     pub life_time: f64,
+    /// If not specified the text will always face the camera (Default behavior).
+    /// By specifying a text orientation (quaternion), the orientation will be fixed in world space
+    /// or local space (when parent is specified). Note that a different implementation/shader is
+    /// used for camera facing text, with different appearance: camera facing text uses bitmap
+    /// fonts, text with specified orientation uses TrueType fonts.
     pub text_orientation: Option<&'a [f64]>,
+    /// If specified the text will be drawn relative to the parents object coordinate system.
     pub parent_object_id: Option<BodyId>,
+    /// When using "parent_object_id" you can also define in which link the coordinate system should be.
+    /// By default it is the base frame (-1)
     pub parent_link_index: Option<i32>,
-    pub replace_item_id: Option<BodyId>,
+    /// replace an existing text item (to avoid flickering of remove/add)
+    pub replace_item_id: Option<ItemId>,
 }
 
 impl<'a> Default for AddDebugTextOptions<'a> {
@@ -366,13 +383,21 @@ impl<'a> Default for AddDebugTextOptions<'a> {
         }
     }
 }
-
+/// Represents options for [`add_user_debug_line`](`crate::PhysicsClient::add_user_debug_line()`)
 pub struct AddDebugLineOptions<'a> {
+    /// RGB color [Red, Green, Blue] each component in range [0..1]. Default is [1.,1.,1.]
     pub line_color_rgb: &'a [f64],
+    /// line width (limited by OpenGL implementation). Default is 1.
     pub line_width: f64,
+    /// Use 0 for a permanent line, or positive time in seconds
+    /// (afterwards the line with be removed automatically). Default is 0.
     pub life_time: f64,
+    /// If specified the line will be drawn relative to the parents object coordinate system.
     pub parent_object_id: Option<BodyId>,
+    /// When using "parent_object_id" you can also define in which link the coordinate system should be.
+    /// By default it is the base frame (-1)
     pub parent_link_index: Option<i32>,
+    /// replace an existing line (to improve performance and to avoid flickering of remove/add)
     pub replace_item_id: Option<BodyId>,
 }
 

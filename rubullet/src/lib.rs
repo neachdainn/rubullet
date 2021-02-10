@@ -8,9 +8,9 @@ pub use crate::{
     types::{
         BodyId, BodyInfo, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
         DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
-        InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, JointInfo,
-        JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId, VisualShapeData,
-        VisualShapeOptions,
+        InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, ItemId,
+        JointInfo, JointState, JointType, MultiBodyOptions, TextureId, UrdfOptions, VisualId,
+        VisualShapeData, VisualShapeOptions,
     },
 };
 // A utility for creating C-string literals.
