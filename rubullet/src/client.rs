@@ -36,6 +36,7 @@ use rubullet_ffi::EnumSharedMemoryServerStatus::{
 use rubullet_ffi::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
     b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES,
+    MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -230,8 +231,8 @@ impl PhysicsClient {
         Ok(())
     }
 
-    /// Sends a command to the physics server to load a physics model from a Universal Robot
-    /// Description File (URDF).
+    /// Sends a command to the physics server to load a physics model from a Unified Robot
+    /// Description Format (URDF) model.
     pub fn load_urdf<P: AsRef<Path>>(
         &mut self,
         file: P,
@@ -298,6 +299,80 @@ impl PhysicsClient {
             }
 
             Ok(BodyId(ffi::b3GetStatusBodyIndex(status_handle)))
+        }
+    }
+
+    /// Sends a command to the physics server to load a physics model from
+    /// a Simulation Description Format (SDF) model.
+    /// # Arguments
+    /// * `file` - a relative or absolute path to the SDF file on the file system of the physics server.
+    /// * `global_scaling` -  will apply a scale factor to the SDF model.
+    /// * `use_maximal_coordinates` - By default, the joints in the SDF file are created using the
+    /// reduced coordinate method: the joints are simulated using the
+    /// Featherstone Articulated Body Algorithm (ABA, btMultiBody in Bullet 2.x).
+    /// The use_maximal_coordinates option will create a 6 degree of freedom rigid body for each link,
+    /// and constraints between those rigid bodies are used to model joints.
+    ///
+    /// # Return
+    /// Returns a list of unique body id's
+    ///
+    /// # Example
+    /// ```rust
+    /// use easy_error::Terminator;
+    /// use rubullet::*;
+    /// fn main() -> Result<(), Terminator> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    ///     let stadium = physics_client.load_sdf("two_cubes.sdf", None, None)?;
+    ///     assert_eq!(3, stadium.len()); // 2 cubes + 1 plane
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn load_sdf<P: AsRef<Path>>(
+        &mut self,
+        file: P,
+        global_scaling: Option<f64>,
+        use_maximal_coordinates: Option<bool>,
+    ) -> Result<Vec<BodyId>, Error> {
+        let use_maximal_coordinates = use_maximal_coordinates.unwrap_or(false);
+        if !self.can_submit_command() {
+            return Err(Error::new("Not connected to physics server"));
+        }
+
+        let file = CString::new(file.as_ref().as_os_str().as_bytes())
+            .map_err(|_| Error::new("Invalid path"))?;
+
+        unsafe {
+            let command = ffi::b3LoadSdfCommandInit(self.handle.as_ptr(), file.as_ptr());
+            if use_maximal_coordinates {
+                ffi::b3LoadSdfCommandSetUseMultiBody(command, 0);
+            }
+            if let Some(scaling) = global_scaling {
+                ffi::b3LoadSdfCommandSetUseGlobalScaling(command, scaling);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != ffi::EnumSharedMemoryServerStatus::CMD_SDF_LOADING_COMPLETED as c_int
+            {
+                return Err(Error::new("Cannot load SDF file"));
+            }
+            let mut body_indices_out = [0; MAX_SDF_BODIES as usize];
+            let num_bodies = ffi::b3GetStatusBodyIndices(
+                status_handle,
+                body_indices_out.as_mut_ptr(),
+                MAX_SDF_BODIES as i32,
+            );
+            if num_bodies as u32 > MAX_SDF_BODIES {
+                return Err(Error::new("SDF exceeds body capacity of 512"));
+            }
+            let mut bodies = Vec::<BodyId>::with_capacity(num_bodies as usize);
+            if num_bodies > 0 && num_bodies <= MAX_SDF_BODIES as i32 {
+                for i in 0..num_bodies {
+                    bodies.push(BodyId(body_indices_out[i as usize]));
+                }
+            }
+            Ok(bodies)
         }
     }
 

@@ -20,7 +20,7 @@ pub struct b3SharedMemoryStatusHandle__ {
     _unused: c_int,
 }
 pub type b3SharedMemoryStatusHandle = *mut b3SharedMemoryStatusHandle__;
-
+pub const MAX_SDF_BODIES: u32 = 512;
 extern "C" {
     pub fn b3ConnectPhysicsDirect() -> b3PhysicsClientHandle;
     pub fn b3CreateInProcessPhysicsServerAndConnect(
@@ -58,6 +58,12 @@ extern "C" {
         actualStateQ: *const *mut f64,
         actualStateQdot: *const *mut f64,
         jointReactionForces: *const *mut f64,
+    ) -> c_int;
+
+    pub fn b3GetStatusBodyIndices(
+        statusHandle: b3SharedMemoryStatusHandle,
+        bodyIndicesOut: *mut c_int,
+        bodyIndicesCapacity: c_int,
     ) -> c_int;
 
     pub fn b3GetStatusBodyIndex(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
@@ -884,6 +890,21 @@ extern "C" {
         commandHandle: b3SharedMemoryCommandHandle,
         specularColor: *const f64,
     );
+
+    pub fn b3LoadSdfCommandInit(
+        physClient: b3PhysicsClientHandle,
+        sdfFileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3LoadSdfCommandSetUseMultiBody(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useMultiBody: c_int,
+    ) -> c_int;
+
+    pub fn b3LoadSdfCommandSetUseGlobalScaling(
+        commandHandle: b3SharedMemoryCommandHandle,
+        globalScaling: f64,
+    ) -> c_int;
 }
 
 #[repr(C)]
