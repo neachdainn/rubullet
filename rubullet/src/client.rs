@@ -2020,7 +2020,13 @@ impl PhysicsClient {
             let _status_type = ffi::b3GetStatusType(status_handle);
         }
     }
-
+    /// The built-in OpenGL visualizers have a wireframe debug rendering feature: press 'w' to toggle.
+    /// The wireframe has some default colors.
+    /// You can override the color of a specific object and link using this method.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index
+    /// * `object_debug_color` - debug color in [Red,Green,Blue]. If not provided, the custom color will be removed.
     pub fn set_debug_object_color(
         &mut self,
         body: BodyId,
