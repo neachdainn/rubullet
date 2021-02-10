@@ -322,7 +322,7 @@ impl PhysicsClient {
     /// use rubullet::*;
     /// fn main() -> Result<(), Terminator> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
-    ///     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///     let stadium = physics_client.load_sdf("two_cubes.sdf", None, None)?;
     ///     assert_eq!(3, stadium.len()); // 2 cubes + 1 plane
     ///     Ok(())
@@ -390,7 +390,7 @@ impl PhysicsClient {
     /// use rubullet::*;
     /// fn main() -> Result<(), Terminator> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
-    ///     physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///     let stadium = physics_client.load_mjcf("mjcf/hello_mjcf.xml", None)?;
     ///     assert_eq!(2, stadium.len()); // 1 cube + 1 plane
     ///     Ok(())
@@ -602,7 +602,7 @@ impl PhysicsClient {
     ///
     ///fn main() -> Result<(), Terminator> {
     ///    let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
-    ///    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    ///    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///    let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
     ///    let cube_start_position = Isometry3::translation(0.0, 0.0, 1.0);
     ///    let box_id = physics_client.load_urdf(
@@ -1411,7 +1411,7 @@ impl PhysicsClient {
     ///# use easy_error::Terminator;
     ///# pub fn main() -> Result<(),Terminator> {
     ///#     let mut client = PhysicsClient::connect(Mode::Direct)?;
-    ///#     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    ///#     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
     ///#     let joint_index = 1;
     ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
@@ -1429,7 +1429,7 @@ impl PhysicsClient {
     /// use easy_error::Terminator;
     /// pub fn main() -> Result<(),Terminator> {
     ///     let mut client = PhysicsClient::connect(Mode::Direct)?;
-    ///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
+    ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
     ///     let joint_index = 1;
     ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);

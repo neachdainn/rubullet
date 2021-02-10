@@ -47,7 +47,7 @@ path = "examples/inverse_dynamics.rs"
 [dependencies]
 nalgebra = "0.23"
 image = "0.23.12"
-rubullet-ffi = { path = "../rubullet-ffi" }
+rubullet-sys = { path = "../rubullet-sys" }
 
 [dev-dependencies]
 easy-error = "0.3.1"

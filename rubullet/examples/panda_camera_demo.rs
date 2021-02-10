@@ -9,9 +9,9 @@ use rubullet::*;
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
-    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.set_additional_search_path(
-        "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+        "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
     )?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
@@ -58,9 +58,9 @@ impl PandaSim {
         };
 
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
-        client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+        client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
         client.set_additional_search_path(
-            "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+            "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
         )?;
         let transform = Isometry3::new(
             Vector3::new(0., 0., -0.6) + offset.clone(),

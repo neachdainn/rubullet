@@ -10,7 +10,7 @@ use rubullet::*;
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
-    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, false);
     let height_pertubation_range = 0.05;
     let mut rng = thread_rng();

@@ -68,9 +68,9 @@ impl TryFrom<i32> for JointType {
 /// fn main() -> Result<(),Terminator> {
 ///
 ///     let mut client = PhysicsClient::connect(Direct)?;
-///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 ///     client.set_additional_search_path(
-///         "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+///         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 ///         )?;
 ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default())?;
 ///     let joint_info = client.get_joint_info(panda_id,4);
@@ -246,9 +246,9 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 /// # use nalgebra::Isometry3;
 /// # use rubullet::mode::Mode::Direct;
 /// #    let mut client = PhysicsClient::connect(Direct).unwrap();
-/// #    client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data").unwrap();
+/// #    client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data").unwrap();
 /// #    client.set_additional_search_path(
-/// #        "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+/// #        "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 /// #        ).unwrap();
 /// #    let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default()).unwrap();
 /// const INITIAL_JOINT_POSITIONS: [f64; 9] =
@@ -723,9 +723,9 @@ pub enum DebugVisualizerFlag {
 /// use easy_error::Terminator;
 /// fn main() -> Result<(),Terminator> {
 ///     let mut client = PhysicsClient::connect(Direct)?;
-///     client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 ///     client.set_additional_search_path(
-///         "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+///         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 ///         )?;
 ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default())?;
 ///     let link_state = client.get_link_state(panda_id, 11, true, true)?;

@@ -32,7 +32,7 @@ fn test_connect() {
 fn test_load_urdf() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     let _plane_id = physics_client
         .load_urdf("plane.urdf", Default::default())
@@ -42,7 +42,7 @@ fn test_load_urdf() {
 fn test_add_and_remove_bodies() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     assert_eq!(physics_client.get_num_bodies(), 0);
     let _plane_id = physics_client
@@ -62,7 +62,7 @@ fn test_add_and_remove_bodies() {
 fn test_get_and_reset_base_transformation() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     let r2d2 = physics_client
         .load_urdf("r2d2.urdf", Default::default())
@@ -105,7 +105,7 @@ fn test_get_and_reset_base_transformation() {
 fn test_get_body_info() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     let r2d2 = physics_client
         .load_urdf("r2d2.urdf", Default::default())
@@ -119,7 +119,7 @@ fn test_get_body_info() {
 fn test_get_joint_info() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     let r2d2 = physics_client
         .load_urdf("r2d2.urdf", Default::default())
@@ -262,7 +262,7 @@ pub fn get_motor_joint_states(
 fn test_jacobian() {
     let delta_t = Duration::from_secs_f64(0.001);
     let mut p = PhysicsClient::connect(Direct).unwrap();
-    p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+    p.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     p.set_time_step(delta_t);
 
@@ -329,7 +329,7 @@ fn test_jacobian() {
 fn test_get_link_state() {
     let delta_t = Duration::from_secs_f64(0.001);
     let mut p = PhysicsClient::connect(Direct).unwrap();
-    p.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+    p.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
 
     p.set_time_step(delta_t);
@@ -445,7 +445,7 @@ pub fn inverse_dynamics_test() {
     let delta_t = Duration::from_secs_f64(0.1);
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();
     physics_client
-        .set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     physics_client.set_time_step(delta_t);
     let id_revolute_joints = [0, 3];
@@ -548,9 +548,9 @@ impl PandaSim {
     const PANDA_NUM_DOFS: usize = 7;
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
-        client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+        client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
         client.set_additional_search_path(
-            "../rubullet-ffi/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
+            "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
         )?;
         let cube_start_position = Isometry3::new(
             Vector3::new(0., 0., 0.),

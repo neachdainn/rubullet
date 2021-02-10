@@ -11,7 +11,7 @@ use rubullet::*;
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
-    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 120.));
     let _plane_id = physics_client.load_urdf("plane100.urdf", Default::default())?;
 

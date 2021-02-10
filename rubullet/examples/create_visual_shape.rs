@@ -8,7 +8,7 @@ use rubullet::*;
 fn main() -> Result<(), Terminator> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
-    physics_client.set_additional_search_path("../rubullet-ffi/bullet3/libbullet3/data")?;
+    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 120.));
     // physics_client.configure_debug_visualizer(DebugVisualizerFlag::)
