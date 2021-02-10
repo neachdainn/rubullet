@@ -1,3 +1,3 @@
-[submodule "rubullet-sys/bullet3/libbullet3"]
-	path = rubullet-sys/bullet3/libbullet3
+[submodule "rubullet-ffi/bullet3/libbullet3"]
+	path = rubullet-ffi/bullet3/libbullet3
 	url = https://github.com/bulletphysics/bullet3.git
