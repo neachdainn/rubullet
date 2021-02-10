@@ -413,10 +413,13 @@ impl<'a> Default for AddDebugLineOptions<'a> {
         }
     }
 }
-
+/// Specifies a jacobian.
+/// The jacobian is split into a linear part and an angular part.
 #[derive(Debug)]
 pub struct Jacobian {
+    /// The first 3 rows of the jacobian
     pub linear_jacobian: DMatrix<f64>,
+    /// The last 3 rows of the jacobian
     pub angular_jacobian: DMatrix<f64>,
 }
 /// Frame for [`apply_external_torque()`](`crate::PhysicsClient::apply_external_torque()`) and
