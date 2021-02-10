@@ -1,6 +1,6 @@
 [package]
 name = "rubullet"
-version = "0.1.0"
+version = "0.1.0-alpha"
 authors = ["Nathan Kent <nkent2@cs.rochester.edu>", "Marco Boneberger <m.boneberger@tu-bs.de>"]
 edition = "2018"
 license = "MIT"
