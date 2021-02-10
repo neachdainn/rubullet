@@ -1,0 +1,20 @@
+[package]
+name = "rubullet-ffi"
+version = "0.1.0"
+authors = ["Nathan Kent <nkent2@cs.rochester.edu>", "Marco Boneberger <m.boneberger@tu-bs.de>"]
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/neachdainn/rubullet"
+description = "Compiles bullet3 and exposes rust bindings to the C API"
+categories =["science::robotics","simulation"]
+keywords =["pybullet","bullet","bullet3","simulation","robotics"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "rubullet_ffi"
+src = "src/lib.rs"
+
+
+[build-dependencies]
+cmake = "0.1.42"
+
