@@ -255,6 +255,18 @@ extern "C" {
 
     pub fn b3ComputeDofCount(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
 
+    pub fn b3LoadMJCFCommandInit(
+        physClient: b3PhysicsClientHandle,
+        fileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3LoadMJCFCommandInit2(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3LoadMJCFCommandSetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
+
     pub fn b3CalculateInverseDynamicsCommandInit2(
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,
@@ -908,6 +920,7 @@ extern "C" {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub enum eURDF_Flags {
     URDF_USE_INERTIA_FROM_FILE = 2,
     URDF_USE_SELF_COLLISION = 8,
