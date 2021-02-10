@@ -424,48 +424,69 @@ pub enum ExternalForceFrame {
     LinkFrame = 1,
     WorldFrame = 2,
 }
-
+/// Represents a key press Event
 #[derive(Debug, Copy, Clone, Default)]
 pub struct KeyboardEvent {
+    /// specifies which key the event is about.
     pub key: char,
     pub(crate) key_state: i32,
 }
 
 impl KeyboardEvent {
+    /// is true when the key goes from an "up" to a "down" state.
     pub fn was_triggered(&self) -> bool {
         self.key_state & 2 == 2
     }
+    /// is true when the key is currently pressed.
     pub fn is_down(&self) -> bool {
         self.key_state & 1 == 1
     }
+    /// is true when the key goes from a "down" to an "up" state.
     pub fn is_released(&self) -> bool {
         self.key_state & 4 == 4
     }
 }
-
+/// Mouse Events can either be a "Move" or a "Button" event. A "Move" event is when the mouse is moved
+/// in the OpenGL window and a "Button" even is when a mouse button is clicked.
 #[derive(Debug, Copy, Clone)]
 pub enum MouseEvent {
+    /// Contains the mouse position
     Move {
+        /// x-coordinate of the mouse pointer
         mouse_pos_x: f32,
+        /// y-coordinate of the mouse pointer
         mouse_pos_y: f32,
     },
+    /// Specifies Mouse Position and a Button event
     Button {
+        /// x-coordinate of the mouse pointer
         mouse_pos_x: f32,
+        /// y-coordinate of the mouse pointer
         mouse_pos_y: f32,
+        /// button index for left/middle/right mouse button
         button_index: i32,
-        button_state_flag: i32,
+        /// state of the mouse button
+        button_state: MouseButtonState,
     },
 }
 
-impl MouseEvent {
-    pub fn was_triggered(flag: i32) -> bool {
-        flag & 2 == 2
+/// Represents the different possible states of a mouse button
+#[derive(Debug, Copy, Clone)]
+pub struct MouseButtonState {
+    pub(crate) flag: i32,
+}
+impl MouseButtonState {
+    /// is true when the button goes from an "unpressed" to a "pressed" state.
+    pub fn was_triggered(&self) -> bool {
+        self.flag & 2 == 2
     }
-    pub fn is_down(flag: i32) -> bool {
-        flag & 1 == 1
+    /// is true when the button is in a "pressed" state.
+    pub fn is_pressed(&self) -> bool {
+        self.flag & 1 == 1
     }
-    pub fn is_released(flag: i32) -> bool {
-        flag & 4 == 4
+    /// is true when the button goes from a "pressed" to an "unpressed" state.
+    pub fn is_released(&self) -> bool {
+        self.flag & 4 == 4
     }
 }
 

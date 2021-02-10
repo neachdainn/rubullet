@@ -16,7 +16,8 @@ use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
     InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, MouseEvent, MultiBodyOptions, TextureId, VisualId, VisualShapeOptions,
+    LinkState, MouseButtonState, MouseEvent, MultiBodyOptions, TextureId, VisualId,
+    VisualShapeOptions,
 };
 use crate::{
     BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
@@ -2044,7 +2045,30 @@ impl PhysicsClient {
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
-
+    /// You can receive all keyboard events that happened since the last time you called
+    /// [`get_keyboard_events()`](`Self::get_keyboard_events()`)
+    /// This method will return a List of all KeyboardEvents that happened since then.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use std::time::Duration;
+    /// use easy_error::Terminator;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<(), Terminator> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///     loop {
+    ///         let events = physics_client.get_keyboard_events();
+    ///         for event in events.iter() {
+    ///             if event.key == 'i' && event.was_triggered() {
+    ///                 println!("i-key was pressed");
+    ///             }
+    ///         }
+    ///         std::thread::sleep(Duration::from_secs_f64(0.01));
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn get_keyboard_events(&mut self) -> Vec<KeyboardEvent> {
         unsafe {
             let mut keyboard_events = b3KeyboardEventsData::default();
@@ -2066,6 +2090,54 @@ impl PhysicsClient {
             events
         }
     }
+
+    /// Similar to [`get_keyboard_events()`](`Self::get_keyboard_events()`)
+    /// you can get the mouse events that happened since the last call to [`get_mouse_events()`](`Self::get_mouse_events()`).
+    /// All the mouse move events are merged into a single mouse move event with the most up-to-date position.
+    /// The mouse move event is only returned when the mouse has been moved. The mouse button event
+    /// always includes the current mouse position.
+    /// # Example
+    /// ```no_run
+    /// use easy_error::Terminator;
+    /// use rubullet::*;
+    /// use std::time::Duration;
+    ///
+    /// fn main() -> Result<(), Terminator> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///     loop {
+    ///         let events = physics_client.get_mouse_events();
+    ///         for event in events.iter() {
+    ///             match event {
+    ///                 MouseEvent::Move {
+    ///                     mouse_pos_x,
+    ///                     mouse_pos_y,
+    ///                 } => {
+    ///                     println!(
+    ///                         "The mouse has moved to x: {}, y: {}",
+    ///                         mouse_pos_x, mouse_pos_y
+    ///                     );
+    ///                 }
+    ///                 MouseEvent::Button {
+    ///                     mouse_pos_x,
+    ///                     mouse_pos_y,
+    ///                     button_index,
+    ///                     button_state,
+    ///                 } => {
+    ///                     println!(
+    ///                         "The mouse position is x: {}, y: {}",
+    ///                         mouse_pos_x, mouse_pos_y
+    ///                     );
+    ///                     if button_state.was_triggered() {
+    ///                         println!("Mouse Button {} has been triggered", button_index);
+    ///                     }
+    ///                 }
+    ///             }
+    ///         }
+    ///         std::thread::sleep(Duration::from_secs_f64(0.01));
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn get_mouse_events(&mut self) -> Vec<MouseEvent> {
         unsafe {
             let mut mouse_events = b3MouseEventsData::default();
@@ -2089,7 +2161,9 @@ impl PhysicsClient {
                         mouse_pos_x: event.m_mousePosX,
                         mouse_pos_y: event.m_mousePosY,
                         button_index: event.m_buttonIndex,
-                        button_state_flag: event.m_buttonState,
+                        button_state: MouseButtonState {
+                            flag: event.m_buttonState,
+                        },
                     });
                 }
             }
