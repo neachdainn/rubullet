@@ -419,9 +419,12 @@ pub struct Jacobian {
     pub linear_jacobian: DMatrix<f64>,
     pub angular_jacobian: DMatrix<f64>,
 }
-
+/// Frame for [`apply_external_torque()`](`crate::PhysicsClient::apply_external_torque()`) and
+/// [`apply_external_force()`](`crate::PhysicsClient::apply_external_force()`)
 pub enum ExternalForceFrame {
+    /// Local Link Coordinates
     LinkFrame = 1,
+    /// Cartesian World Coordinates
     WorldFrame = 2,
 }
 /// Represents a key press Event

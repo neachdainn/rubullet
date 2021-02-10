@@ -2170,7 +2170,22 @@ impl PhysicsClient {
             events
         }
     }
-
+    /// Applies a force to a body.
+    ///
+    /// Note that this method will only work when explicitly stepping the simulation using
+    /// [`step_simulation()`](`Self::step_simulation()`), in other words:
+    /// [`set_real_time_simulation(false)`](`Self::set_real_time_simulation()`)
+    /// After each simulation step, the external forces are cleared to zero.
+    /// If you are using [`set_real_time_simulation(true)`](`Self::set_real_time_simulation()`),
+    /// This method will have undefined behavior (either 0, 1 or multiple force applications).
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or -1 for the base.
+    /// * `force_object` - force vector to be applied [x,y,z]. See flags for coordinate system
+    /// * `position_object` - position on the link where the force is applied.
+    /// * `flags` - Specify the coordinate system of force/position:
+    /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
     pub fn apply_external_force(
         &mut self,
         body: BodyId,
@@ -2200,6 +2215,19 @@ impl PhysicsClient {
         }
         Ok(())
     }
+    /// Applies a torque to a body.
+    ///
+    /// Note that this method will only work when explicitly stepping the simulation using
+    /// [`step_simulation()`](`Self::step_simulation()`), in other words: [`set_real_time_simulation(false)`](`Self::set_real_time_simulation()`)
+    /// After each simulation step, the external torques are cleared to zero.
+    /// If you are using [`set_real_time_simulation(true)`](`Self::set_real_time_simulation()`),
+    /// This method will have undefined behavior (either 0, 1 or multiple torque applications).
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or -1 for the base.
+    /// * `torque_object` - torque vector to be applied [x,y,z]. See flags for coordinate system
+    /// * `flags` - Specify the coordinate system of torque:
+    /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
     pub fn apply_external_torque(
         &mut self,
         body: BodyId,
