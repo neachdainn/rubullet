@@ -826,7 +826,8 @@ impl Default for VisualShapeOptions {
         }
     }
 }
-
+/// Collision shape which can be put
+/// the [create_collision_shape](`crate::PhysicsClient::create_collision_shape`) method
 pub enum GeometricCollisionShape {
     /// A Sphere determined by the radius in meter
     Sphere {
