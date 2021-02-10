@@ -57,7 +57,8 @@ impl TryFrom<i32> for JointType {
     }
 }
 #[derive(Debug)]
-/// Contains basic information about a joint like its type and name.
+/// Contains basic information about a joint like its type and name. It can be obtained via
+/// [`get_joint_info()`](`crate::PhysicsClient::get_joint_info()`)
 /// # Example
 /// ```rust
 /// use rubullet::{PhysicsClient, UrdfOptions};
@@ -495,13 +496,26 @@ impl MouseButtonState {
         self.flag & 4 == 4
     }
 }
-
+/// Represents the current state of a joint. It can be retrieved via [`get_joint_state()`](`crate::PhysicsClient::get_joint_state()`)
+/// # Note
+/// joint_force_torque will be [0.;6] if the sensor is not enabled via
+/// [`enable_joint_torque_sensor()`](`crate::PhysicsClient::enable_joint_torque_sensor()`)
+/// # See also
+/// * [`JointInfo`](`JointInfo`) - For basic information about a joint
 #[derive(Debug, Default, Copy, Clone)]
 pub struct JointState {
+    /// The position value of this joint.
     pub joint_position: f64,
+    /// The velocity value of this joint.
     pub joint_velocity: f64,
+    /// These are the joint reaction forces, if a torque sensor is enabled for this joint it is [Fx, Fy, Fz, Mx, My, Mz].
+    /// Without torque sensor, it is [0,0,0,0,0,0].
     /// note to roboticists: this is NOT the motor torque/force, but the spatial reaction force vector at joint.
     pub joint_force_torque: [f64; 6],
+    /// This is the motor torque applied during the last [`step_simulation()`](`crate::PhysicsClient::step_simulation()`).
+    /// Note that this only applies in velocity and position control.
+    /// If you use torque control then the applied joint motor torque is exactly what you provide,
+    /// so there is no need to report it separately.
     pub joint_motor_torque: f64,
 }
 impl From<b3JointSensorState> for JointState {

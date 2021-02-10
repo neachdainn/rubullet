@@ -2252,6 +2252,15 @@ impl PhysicsClient {
         }
         Ok(())
     }
+    /// You can enable or disable a joint force/torque sensor in each joint.
+    /// Once enabled, if you perform a [`step_simulation()`](`Self::step_simulation()`),
+    /// the [`get_joint_state()`](`Self::get_joint_state()`) will report
+    /// the joint reaction forces in the fixed degrees of freedom:
+    /// a fixed joint will measure all 6DOF joint forces/torques.
+    /// A revolute/hinge joint force/torque sensor will measure 5DOF reaction forces
+    /// along all axis except the hinge axis. The applied force by a joint motor is available in the
+    /// applied_joint_motor_torque field in [`JointState`](`crate::types::JointState`)
+    /// if you call [`get_joint_state()`](`Self::get_joint_state()`).
     pub fn enable_joint_torque_sensor(
         &mut self,
         body: BodyId,
