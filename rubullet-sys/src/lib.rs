@@ -54,10 +54,10 @@ extern "C" {
         bodyUniqueId: *mut c_int,
         numDegreeOfFreedomQ: *mut c_int,
         numDegreeOfFreedomU: *mut c_int,
-        rootLocalInertialFrame: *const *mut f64,
-        actualStateQ: *const *mut f64,
-        actualStateQdot: *const *mut f64,
-        jointReactionForces: *const *mut f64,
+        rootLocalInertialFrame: *mut *const f64,
+        actualStateQ: *mut *const f64,
+        actualStateQdot: *mut *const f64,
+        jointReactionForces: *mut *const f64,
     ) -> c_int;
 
     pub fn b3GetStatusBodyIndices(

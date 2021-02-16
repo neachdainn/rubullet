@@ -488,14 +488,14 @@ impl PhysicsClient {
             }
 
             // To be totally honest, I'm not sure this part is correct.
-            let actual_state_q: *mut f64 = ptr::null_mut();
+            let mut actual_state_q: *const f64 = ptr::null();
             ffi::b3GetStatusActualState(
                 status_handle,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null_mut(),
-                &actual_state_q as _,
+                &mut actual_state_q,
                 ptr::null_mut(),
                 ptr::null_mut(),
             );
@@ -564,7 +564,7 @@ impl PhysicsClient {
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
-            let actual_state_qdot: *mut f64 = ptr::null_mut();
+            let mut actual_state_qdot: *const f64 = ptr::null();
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("get_base_velocity_failed."));
             }
@@ -575,7 +575,7 @@ impl PhysicsClient {
                 ptr::null_mut(),
                 ptr::null_mut(),
                 ptr::null_mut(),
-                &actual_state_qdot,
+                &mut actual_state_qdot,
                 ptr::null_mut(),
             );
             let base_velocity_slice = std::slice::from_raw_parts(actual_state_qdot, 6);
