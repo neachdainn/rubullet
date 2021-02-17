@@ -68,7 +68,6 @@ impl TryFrom<i32> for JointType {
 /// fn main() -> Result<()> {
 ///
 ///     let mut client = PhysicsClient::connect(Direct)?;
-///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 ///     client.set_additional_search_path(
 ///         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 ///         )?;
@@ -246,7 +245,6 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 /// # use nalgebra::Isometry3;
 /// # use rubullet::mode::Mode::Direct;
 /// #    let mut client = PhysicsClient::connect(Direct).unwrap();
-/// #    client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data").unwrap();
 /// #    client.set_additional_search_path(
 /// #        "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 /// #        ).unwrap();
@@ -723,7 +721,6 @@ pub enum DebugVisualizerFlag {
 /// use anyhow::Result;
 /// fn main() -> Result<()> {
 ///     let mut client = PhysicsClient::connect(Direct)?;
-///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 ///     client.set_additional_search_path(
 ///         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
 ///         )?;

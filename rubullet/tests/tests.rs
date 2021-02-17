@@ -548,7 +548,6 @@ impl PandaSim {
     const PANDA_NUM_DOFS: usize = 7;
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Error> {
-        client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
         client.set_additional_search_path(
             "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
         )?;

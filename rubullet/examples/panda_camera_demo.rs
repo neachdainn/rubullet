@@ -8,7 +8,6 @@ use rubullet::*;
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
-    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.set_additional_search_path(
         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
     )?;
@@ -57,10 +56,6 @@ impl PandaSim {
         };
 
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Error> {
-        client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
-        client.set_additional_search_path(
-            "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
-        )?;
         let transform = Isometry3::new(
             Vector3::new(0., 0., -0.6) + offset.clone(),
             Rotation3::from(UnitQuaternion::from_quaternion(Quaternion::new(
