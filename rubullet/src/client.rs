@@ -1026,11 +1026,8 @@ impl PhysicsClient {
                             &mut dof_count,
                             mass_vec.as_mut_slice().as_mut_ptr(),
                         );
-                        let mass_mat = DMatrix::<f64>::from_row_slice(
-                            dof_count as usize,
-                            dof_count as usize,
-                            mass_vec.as_slice(),
-                        );
+                        let mass_mat =
+                            DMatrix::from_vec(dof_count as usize, dof_count as usize, mass_vec);
                         return Ok(mass_mat);
                     }
                 } else {

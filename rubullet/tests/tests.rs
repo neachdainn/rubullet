@@ -312,6 +312,7 @@ fn test_jacobian() {
         .iter()
         .zip(target_linear_jacobian.iter())
     {
+        println!("{} {}", i, j);
         assert!((i - j).abs() < 1e-6);
     }
     let target_angluar_jacobian = [0., 0., 1.0, 0.0, 0., 1.];
