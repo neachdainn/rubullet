@@ -1,8 +1,9 @@
-use easy_error::Terminator;
 use nalgebra::{DMatrix, Isometry3, Vector3};
 use rubullet::mode::Mode::Direct;
 use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
+
+use anyhow::Result;
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
     let num_joints = client.get_num_joints(robot);
@@ -99,7 +100,7 @@ pub fn multiply_jacobian(
     result
 }
 
-fn main() -> Result<(), Terminator> {
+fn main() -> Result<()> {
     let delta_t = Duration::from_secs_f64(0.001);
     let mut p = PhysicsClient::connect(Direct).unwrap();
     p.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;

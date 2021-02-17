@@ -1,12 +1,12 @@
-use easy_error::Terminator;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
 
+use anyhow::Result;
 use rubullet::mode::Mode::Direct;
 use rubullet::types::ControlModeArray::Torques;
 use rubullet::types::{JointInfo, JointState};
 use rubullet::{
-    BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, InverseKinematicsParametersBuilder,
-    JointType, PhysicsClient, UrdfOptions,
+    BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
+    InverseKinematicsParametersBuilder, JointType, PhysicsClient, UrdfOptions,
 };
 use std::f64::consts::PI;
 use std::time::Duration;
@@ -524,7 +524,7 @@ pub fn inverse_dynamics_test() {
 }
 
 #[test]
-fn test_mass_matrix_and_inverse_kinematics() -> Result<(), Terminator> {
+fn test_mass_matrix_and_inverse_kinematics() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Direct)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
@@ -547,7 +547,7 @@ impl PandaSim {
         [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
     const PANDA_NUM_DOFS: usize = 7;
     const PANDA_END_EFFECTOR_INDEX: i32 = 11;
-    pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
+    pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Error> {
         client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
         client.set_additional_search_path(
             "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",

@@ -1,14 +1,14 @@
 //! An introduction to the usage of RuBullet.
 use std::time::Duration;
 
-use easy_error::Terminator;
+use anyhow::Result;
 use nalgebra::{Isometry3, Vector3};
 use rubullet::types::DebugVisualizerFlag::{
     COV_ENABLE_GUI, COV_ENABLE_RENDERING, COV_ENABLE_TINY_RENDERER,
 };
 use rubullet::*;
 
-fn main() -> Result<(), Terminator> {
+fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;

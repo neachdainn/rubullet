@@ -64,8 +64,8 @@ impl TryFrom<i32> for JointType {
 /// use rubullet::{PhysicsClient, UrdfOptions};
 /// use nalgebra::Isometry3;
 /// use rubullet::mode::Mode::Direct;
-/// use easy_error::Terminator;
-/// fn main() -> Result<(),Terminator> {
+/// use anyhow::Result;
+/// fn main() -> Result<()> {
 ///
 ///     let mut client = PhysicsClient::connect(Direct)?;
 ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
@@ -720,8 +720,8 @@ pub enum DebugVisualizerFlag {
 /// use rubullet::{PhysicsClient, UrdfOptions};
 /// use nalgebra::Isometry3;
 /// use rubullet::mode::Mode::Direct;
-/// use easy_error::Terminator;
-/// fn main() -> Result<(),Terminator> {
+/// use anyhow::Result;
+/// fn main() -> Result<()> {
 ///     let mut client = PhysicsClient::connect(Direct)?;
 ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 ///     client.set_additional_search_path(

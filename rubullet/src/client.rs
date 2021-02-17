@@ -318,9 +318,9 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```rust
-    /// use easy_error::Terminator;
+    /// use anyhow::Result;
     /// use rubullet::*;
-    /// fn main() -> Result<(), Terminator> {
+    /// fn main() -> Result<()> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
     ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///     let stadium = physics_client.load_sdf("two_cubes.sdf", None, None)?;
@@ -386,9 +386,9 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```rust
-    /// use easy_error::Terminator;
+    /// use anyhow::Result;
     /// use rubullet::*;
-    /// fn main() -> Result<(), Terminator> {
+    /// fn main() -> Result<()> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
     ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///     let stadium = physics_client.load_mjcf("mjcf/hello_mjcf.xml", None)?;
@@ -596,11 +596,11 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```rust
-    ///use easy_error::Terminator;
+    ///use anyhow::Result;
     ///use nalgebra::{Isometry3, Vector3};
     ///use rubullet::*;
     ///
-    ///fn main() -> Result<(), Terminator> {
+    ///fn main() -> Result<()> {
     ///    let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
     ///    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///    let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
@@ -1408,8 +1408,8 @@ impl PhysicsClient {
     /// For Example:
     /// ```rust
     ///# use rubullet::{ControlMode, PhysicsClient, Mode};
-    ///# use easy_error::Terminator;
-    ///# pub fn main() -> Result<(),Terminator> {
+    ///# use anyhow::Result;
+    ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///#     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
@@ -1426,8 +1426,8 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::{ControlMode, PhysicsClient, Mode};
-    /// use easy_error::Terminator;
-    /// pub fn main() -> Result<(),Terminator> {
+    /// use anyhow::Result;
+    /// pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
@@ -1926,13 +1926,13 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```no_run
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use rubullet::mode::Mode::Gui;
     ///# use rubullet::types::AddDebugLineOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
-    ///# pub fn main() -> Result<(), Terminator> {
+    ///# pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Gui)?;
     ///     let red_line = client.add_user_debug_line(
     ///         &[0.; 3],
@@ -1997,8 +1997,8 @@ impl PhysicsClient {
     /// ```no_run
     /// use rubullet::PhysicsClient;
     /// use rubullet::mode::Mode::Gui;
-    /// use easy_error::Terminator;
-    /// pub fn main() -> Result<(),Terminator> {
+    /// use anyhow::Result;
+    /// pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Gui)?;
     ///     let slider = client.add_user_debug_parameter("my_slider",0.,1.,0.5)?;
     ///     let button = client.add_user_debug_parameter("my_button",1.,0.,1.)?;
@@ -2066,13 +2066,13 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```no_run
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use rubullet::mode::Mode::Gui;
     ///# use rubullet::types::AddDebugTextOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
-    ///# pub fn main() -> Result<(), Terminator> {
+    ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Gui)?;
     ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
     ///     let text_red = client.add_user_debug_text(
@@ -2139,12 +2139,12 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```no_run
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use rubullet::mode::Mode::Gui;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
-    ///# pub fn main() -> Result<(), Terminator> {
+    ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Gui)?;
     ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
     ///     client.remove_user_debug_item(text);
@@ -2162,12 +2162,12 @@ impl PhysicsClient {
     /// will remove all debug items (text, lines etc).
     /// # Example
     /// ```no_run
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use rubullet::mode::Mode::Gui;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
-    ///# pub fn main() -> Result<(), Terminator> {
+    ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Gui)?;
     ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
     ///     let text_2 = client.add_user_debug_text("My text2", &[0., 0., 2.], None)?;
@@ -2215,10 +2215,10 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     /// use std::time::Duration;
-    /// use easy_error::Terminator;
+    /// use anyhow::Result;
     /// use rubullet::*;
     ///
-    /// fn main() -> Result<(), Terminator> {
+    /// fn main() -> Result<()> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     ///     loop {
     ///         let events = physics_client.get_keyboard_events();
@@ -2261,11 +2261,11 @@ impl PhysicsClient {
     /// always includes the current mouse position.
     /// # Example
     /// ```no_run
-    /// use easy_error::Terminator;
+    /// use anyhow::Result;
     /// use rubullet::*;
     /// use std::time::Duration;
     ///
-    /// fn main() -> Result<(), Terminator> {
+    /// fn main() -> Result<()> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     ///     loop {
     ///         let events = physics_client.get_mouse_events();
@@ -2786,12 +2786,12 @@ impl PhysicsClient {
     ///
     /// # Example
     /// ```rust
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
     ///# use rubullet::mode::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
-    ///# fn main() -> Result<(), Terminator> {
+    ///# fn main() -> Result<()> {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
@@ -2925,12 +2925,12 @@ impl PhysicsClient {
     /// # Example
     /// In this example we change the color of a shape
     /// ```rust
-    ///# use easy_error::Terminator;
+    ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
     ///# use rubullet::mode::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
-    ///# fn main() -> Result<(), Terminator> {
+    ///# fn main() -> Result<()> {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };

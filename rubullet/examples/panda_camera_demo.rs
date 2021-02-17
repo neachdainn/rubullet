@@ -1,12 +1,11 @@
 use std::f64::consts::PI;
 use std::time::Duration;
 
-use easy_error::Terminator;
+use anyhow::Result;
 use nalgebra::{Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
-
 use rubullet::*;
 
-fn main() -> Result<(), Terminator> {
+fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
@@ -57,7 +56,7 @@ impl PandaSim {
             rest_poses: &PandaSim::INITIAL_JOINT_POSITIONS,
         };
 
-    pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Terminator> {
+    pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Error> {
         client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
         client.set_additional_search_path(
             "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",

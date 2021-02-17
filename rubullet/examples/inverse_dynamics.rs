@@ -1,12 +1,12 @@
 use std::f64::consts::PI;
 use std::time::Duration;
 
-use easy_error::Terminator;
+use anyhow::Result;
 
 use rubullet::types::ControlModeArray::Torques;
 use rubullet::*;
 
-fn main() -> Result<(), Terminator> {
+fn main() -> Result<()> {
     let delta_t = Duration::from_secs_f64(0.0001);
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
