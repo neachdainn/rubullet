@@ -7,7 +7,7 @@ license = "MIT"
 repository = "https://github.com/neachdainn/rubullet"
 description = "Compiles bullet3 and exposes rust bindings to the C API"
 categories =["science::robotics","simulation"]
-keywords =["pybullet","bullet","bullet3","simulation","robotics"]
+keywords =["pybullet","bullet","bullet3","physics","robotics"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
