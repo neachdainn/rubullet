@@ -23,8 +23,8 @@ use crate::{
     BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
-use rubullet_ffi as ffi;
-use rubullet_ffi::EnumSharedMemoryServerStatus::{
+use rubullet_sys as ffi;
+use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
@@ -33,7 +33,7 @@ use rubullet_ffi::EnumSharedMemoryServerStatus::{
     CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
     CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
-use rubullet_ffi::{
+use rubullet_sys::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
     b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, eURDF_Flags, B3_MAX_NUM_INDICES,
     B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,

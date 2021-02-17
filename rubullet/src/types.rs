@@ -3,7 +3,7 @@
 use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
-use rubullet_ffi::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
+use rubullet_sys::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::os::raw::c_int;

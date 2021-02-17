@@ -11,7 +11,7 @@ keywords =["pybullet","bullet","bullet3","physics","robotics"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "rubullet_ffi"
+name = "rubullet_sys"
 src = "src/lib.rs"
 
 
