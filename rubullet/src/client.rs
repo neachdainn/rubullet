@@ -685,7 +685,8 @@ impl PhysicsClient {
     /// to make it easier to compute the graphics/visualization frame.
     ///
     /// # Warning
-    /// * the returned link velocity will only be valid if `compute_link_velocity` is set to true
+    /// * the returned link velocity will only be available if `compute_link_velocity` is set to true.
+    /// Otherwise, it will be None.
     ///
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
