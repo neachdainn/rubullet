@@ -2,10 +2,14 @@
 
 use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
-use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{
+    DVector, Isometry3, Matrix3xX, Matrix6xX, Quaternion, Translation3, UnitQuaternion, Vector3,
+    Vector6, U3,
+};
 use rubullet_sys::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
 use std::convert::TryFrom;
 use std::ffi::CStr;
+
 use std::os::raw::c_int;
 
 /// The unique ID for a body within a physics server.
@@ -412,14 +416,42 @@ impl<'a> Default for AddDebugLineOptions<'a> {
         }
     }
 }
-/// Specifies a jacobian.
+
+/// Specifies a jacobian with 6 rows.
 /// The jacobian is split into a linear part and an angular part.
-#[derive(Debug)]
+/// # Example
+/// Jacobian can be multiplied with joint velocities to get a velocity in cartesian coordinates:
+/// ```rust
+/// # use rubullet::types::{Velocity, Jacobian};
+/// # use nalgebra::{Matrix6xX, DVector};
+/// let jacobian = Jacobian{jacobian:Matrix6xX::from_vec(vec![0.;12])};
+/// let velocity: Velocity = jacobian * DVector::from_vec(vec![1.;2]);
+/// ```
+///
+/// # See also
+/// * [`PhysicsClient::calculate_jacobian()`](`crate::PhysicsClient::calculate_jacobian()`)
+#[derive(Debug, Clone)]
 pub struct Jacobian {
-    /// The first 3 rows of the jacobian
-    pub linear_jacobian: DMatrix<f64>,
-    /// The last 3 rows of the jacobian
-    pub angular_jacobian: DMatrix<f64>,
+    pub jacobian: Matrix6xX<f64>,
+}
+
+impl<T: Into<DVector<f64>>> std::ops::Mul<T> for Jacobian {
+    type Output = Velocity;
+
+    fn mul(self, q_dot: T) -> Self::Output {
+        let vel = self.jacobian * q_dot.into();
+        Velocity(vel)
+    }
+}
+impl Jacobian {
+    /// Linear part of the the jacobian (first 3 rows)
+    pub fn get_linear_jacobian(&self) -> Matrix3xX<f64> {
+        Matrix3xX::from(self.jacobian.fixed_rows::<U3>(0))
+    }
+    /// Angular part of the the jacobian (last 3 rows)
+    pub fn get_angular_jacobian(&self) -> Matrix3xX<f64> {
+        Matrix3xX::from(self.jacobian.fixed_rows::<U3>(3))
+    }
 }
 /// Frame for [`apply_external_torque()`](`crate::PhysicsClient::apply_external_torque()`) and
 /// [`apply_external_force()`](`crate::PhysicsClient::apply_external_force()`)
@@ -1122,4 +1154,40 @@ pub struct Images {
     pub depth: ImageBuffer<Luma<f32>, Vec<f32>>,
     /// Segmentation image. Every pixel represents a unique [`BodyId`](`crate::types::BodyId`)
     pub segmentation: ImageBuffer<Luma<i32>, Vec<i32>>,
+}
+
+/// Contains the cartesian velocity stored as Vector with 6 elements (x,y,z,wx,wy,wz).
+/// # Example
+/// ```rust
+/// use rubullet::types::Velocity;
+/// use nalgebra::Vector6;
+/// let vel: Velocity = [0.; 6].into(); // creation from array
+/// let vel: Velocity = Vector6::zeros().into(); // creation from vector
+/// ```
+#[derive(Debug)]
+pub struct Velocity(Vector6<f64>);
+
+impl Velocity {
+    /// returns the linear velocity (x,y,z)
+    pub fn get_linear_velocity(&self) -> Vector3<f64> {
+        self.0.fixed_rows::<U3>(0).into()
+    }
+    /// returns the angular velocity (wx,wy,wz)
+    pub fn get_angular_velocity(&self) -> Vector3<f64> {
+        self.0.fixed_rows::<U3>(3).into()
+    }
+    /// converts the velocity to a Vector6 (x,y,z,wx,wy,wz)
+    pub fn to_vector(&self) -> Vector6<f64> {
+        self.0
+    }
+}
+impl From<[f64; 6]> for Velocity {
+    fn from(input: [f64; 6]) -> Self {
+        Velocity(input.into())
+    }
+}
+impl From<Vector6<f64>> for Velocity {
+    fn from(input: Vector6<f64>) -> Self {
+        Velocity(input)
+    }
 }

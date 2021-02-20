@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, Isometry3, Vector3};
+use nalgebra::{DMatrix, Isometry3, Matrix3xX, Vector3};
 use rubullet::mode::Mode::Direct;
 use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
@@ -84,7 +84,7 @@ pub fn get_motor_joint_states(
 pub fn multiply_jacobian(
     client: &mut PhysicsClient,
     robot: BodyId,
-    jacobian: &DMatrix<f64>,
+    jacobian: &Matrix3xX<f64>,
     vector: &[f64],
 ) -> Vector3<f64> {
     let mut result = Vector3::new(0., 0., 0.);
@@ -148,14 +148,24 @@ fn main() -> Result<()> {
     println!("Link linear velocity of CoM from linearJacobian * q_dot:");
     println!(
         "{:?}",
-        multiply_jacobian(&mut p, kuka_id, &jacobian.linear_jacobian, vel.as_slice())
+        multiply_jacobian(
+            &mut p,
+            kuka_id,
+            &jacobian.get_linear_jacobian(),
+            vel.as_slice()
+        )
     );
     println!("Link angular velocity of CoM from getLinkState:");
     println!("{:?}", result.world_angular_velocity);
     println!("Link angular velocity of CoM from angularJacobian * q_dot:");
     println!(
         "{:?}",
-        multiply_jacobian(&mut p, kuka_id, &jacobian.angular_jacobian, vel.as_slice())
+        multiply_jacobian(
+            &mut p,
+            kuka_id,
+            &jacobian.get_angular_jacobian(),
+            vel.as_slice()
+        )
     );
 
     Ok(())

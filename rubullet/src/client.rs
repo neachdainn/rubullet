@@ -9,14 +9,14 @@ use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 // until then...
 use std::os::unix::ffi::OsStrExt;
 
-use nalgebra::{DMatrix, Isometry3, Quaternion, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{DMatrix, Isometry3, Matrix6xX, Quaternion, Translation3, UnitQuaternion, Vector3};
 
 use self::gui_marker::GuiMarker;
 use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
     InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, MouseButtonState, MouseEvent, MultiBodyOptions, TextureId, VisualId,
+    LinkState, MouseButtonState, MouseEvent, MultiBodyOptions, TextureId, Velocity, VisualId,
     VisualShapeOptions,
 };
 use crate::{
@@ -553,11 +553,11 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// # Return
-    ///  Returns a result which is either a velocity array of size 6 (linear velocity, angular velocity)
+    ///  Returns a result which is either a Velocity (linear velocity, angular velocity)
     ///  or an Error
     /// # See also
     /// [reset_base_velocity](`Self::reset_base_velocity()`) to reset a base velocity and for examples
-    pub fn get_base_velocity(&mut self, body: BodyId) -> Result<[f64; 6], Error> {
+    pub fn get_base_velocity(&mut self, body: BodyId) -> Result<Velocity, Error> {
         let mut base_velocity = [0.; 6];
         unsafe {
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
@@ -581,7 +581,7 @@ impl PhysicsClient {
             let base_velocity_slice = std::slice::from_raw_parts(actual_state_qdot, 6);
             base_velocity[..6].clone_from_slice(&base_velocity_slice[..6]);
         }
-        Ok(base_velocity)
+        Ok(base_velocity.into())
     }
     /// Reset the linear and/or angular velocity of the base of a body
     /// # Arguments
@@ -614,30 +614,30 @@ impl PhysicsClient {
     ///    )?;
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, &[1., 2., 3.], &[4., 5., 6.])?;
+    ///        .reset_base_velocity(box_id, [1., 2., 3.], [4., 5., 6.])?;
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
-    ///    assert_eq!(velocity, [1., 2., 3., 4., 5., 6.]);
+    ///    assert_eq!(velocity.to_vector().as_slice(), &[1., 2., 3., 4., 5., 6.]);
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, &[0., 0., 0.], None)?;
+    ///        .reset_base_velocity(box_id, Vector3::zeros(), None)?;
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
-    ///    assert_eq!(velocity, [0., 0., 0., 4., 5., 6.]);
+    ///    assert_eq!(velocity.to_vector().as_slice(), &[0., 0., 0., 4., 5., 6.]);
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, None, &[0., 0., 0.])?;
+    ///        .reset_base_velocity(box_id, None, [0., 0., 0.])?;
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
-    ///    assert_eq!(velocity, [0.; 6]);
+    ///    assert_eq!(velocity.to_vector().as_slice(), & [0.; 6]);
     ///
     ///    assert!(physics_client
-    ///        .reset_base_velocity(box_id, None, None)
+    ///        .reset_base_velocity::<Vector3<f64>,_,_>(box_id, None, None)
     ///        .is_err());
     ///    Ok(())
     ///}
     /// ```
     pub fn reset_base_velocity<
-        'a,
-        Linear: Into<Option<&'a [f64; 3]>>,
-        Angular: Into<Option<&'a [f64; 3]>>,
+        IntoVector3: Into<Vector3<f64>>,
+        Linear: Into<Option<IntoVector3>>,
+        Angular: Into<Option<IntoVector3>>,
     >(
         &mut self,
         body: BodyId,
@@ -655,6 +655,8 @@ impl PhysicsClient {
                     ));
                 }
                 (Some(linear), Some(angular)) => {
+                    let linear: [f64; 3] = linear.into().into();
+                    let angular: [f64; 3] = angular.into().into();
                     ffi::b3CreatePoseCommandSetBaseLinearVelocity(command_handle, linear.as_ptr());
                     ffi::b3CreatePoseCommandSetBaseAngularVelocity(
                         command_handle,
@@ -662,9 +664,11 @@ impl PhysicsClient {
                     );
                 }
                 (Some(linear), None) => {
+                    let linear: [f64; 3] = linear.into().into();
                     ffi::b3CreatePoseCommandSetBaseLinearVelocity(command_handle, linear.as_ptr());
                 }
                 (None, Some(angular)) => {
+                    let angular: [f64; 3] = angular.into().into();
                     ffi::b3CreatePoseCommandSetBaseAngularVelocity(
                         command_handle,
                         angular.as_ptr(),
@@ -1369,19 +1373,11 @@ impl PhysicsClient {
                             linear_jacobian.as_mut_slice().as_mut_ptr(),
                             angular_jacobian.as_mut_slice().as_mut_ptr(),
                         );
-                        let linear_jacobian_mat = DMatrix::from_row_slice(
-                            3,
-                            dof_count as usize,
-                            linear_jacobian.as_mut_slice(),
-                        );
-                        let angular_jacobian_mat = DMatrix::from_row_slice(
-                            3,
-                            dof_count as usize,
-                            angular_jacobian.as_mut_slice(),
-                        );
+                        let mut jacobian = linear_jacobian;
+                        jacobian.append(&mut angular_jacobian);
+                        let jacobian_mat = Matrix6xX::from_row_slice(&jacobian);
                         return Ok(Jacobian {
-                            linear_jacobian: linear_jacobian_mat,
-                            angular_jacobian: angular_jacobian_mat,
+                            jacobian: jacobian_mat,
                         });
                     }
                 }

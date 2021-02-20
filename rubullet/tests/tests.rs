@@ -1,4 +1,4 @@
-use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{DVector, Isometry3, Matrix3xX, Translation3, UnitQuaternion, Vector3};
 
 use anyhow::Result;
 use rubullet::mode::Mode::Direct;
@@ -257,6 +257,24 @@ pub fn get_motor_joint_states(
         .collect::<Vec<f64>>();
     (pos, vel, torque)
 }
+pub fn multiply_jacobian(
+    client: &mut PhysicsClient,
+    robot: BodyId,
+    jacobian: &Matrix3xX<f64>,
+    vector: &[f64],
+) -> Vector3<f64> {
+    let mut result = Vector3::new(0., 0., 0.);
+    let mut i = 0;
+    for c in 0..vector.len() {
+        if client.get_joint_info(robot, c as i32).q_index > -1 {
+            for r in 0..3 {
+                result[r] += jacobian[(r, i)] * vector[c];
+            }
+            i += 1;
+        }
+    }
+    result
+}
 
 #[test]
 fn test_jacobian() {
@@ -298,6 +316,32 @@ fn test_jacobian() {
             zero_vec.as_slice(),
         )
         .unwrap();
+    let q_dot: DVector<f64> = DVector::from_vec(_mvel);
+    // println!("aaa{:?}", vel);
+    let cartesian_velocity = jacobian.clone() * q_dot;
+    println!("{:?}", cartesian_velocity);
+    let linear_vel = multiply_jacobian(
+        &mut p,
+        kuka_id,
+        &jacobian.get_linear_jacobian(),
+        vel.as_slice(),
+    );
+    let angular_vel = multiply_jacobian(
+        &mut p,
+        kuka_id,
+        &jacobian.get_angular_jacobian(),
+        vel.as_slice(),
+    );
+    slice_compare(
+        cartesian_velocity.get_linear_velocity().as_slice(),
+        linear_vel.as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cartesian_velocity.get_angular_velocity().as_slice(),
+        angular_vel.as_slice(),
+        1e-10,
+    );
     let target_linear_jacobian = [
         -0.1618321740829912,
         1.9909341219607504,
@@ -307,7 +351,7 @@ fn test_jacobian() {
         0.0,
     ];
     for (i, j) in jacobian
-        .linear_jacobian
+        .get_linear_jacobian()
         .as_slice()
         .iter()
         .zip(target_linear_jacobian.iter())
@@ -317,11 +361,12 @@ fn test_jacobian() {
     }
     let target_angluar_jacobian = [0., 0., 1.0, 0.0, 0., 1.];
     for (i, j) in jacobian
-        .angular_jacobian
+        .get_angular_jacobian()
         .as_slice()
         .iter()
         .zip(target_angluar_jacobian.iter())
     {
+        println!("{} {}", i, j);
         assert!((i - j).abs() < 1e-6);
     }
 }
