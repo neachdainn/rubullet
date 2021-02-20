@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, Isometry3, Matrix3xX, Vector3};
+use nalgebra::{Isometry3, Matrix3xX, Vector3};
 use rubullet::mode::Mode::Direct;
 use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
@@ -144,7 +144,7 @@ fn main() -> Result<()> {
         zero_vec.as_slice(),
     )?;
     println!("Link linear velocity of CoM from getLinkState:");
-    println!("{:?}", result.world_linear_velocity);
+    println!("{:?}", result.get_linear_world_velocity());
     println!("Link linear velocity of CoM from linearJacobian * q_dot:");
     println!(
         "{:?}",
@@ -156,7 +156,7 @@ fn main() -> Result<()> {
         )
     );
     println!("Link angular velocity of CoM from getLinkState:");
-    println!("{:?}", result.world_angular_velocity);
+    println!("{:?}", result.get_angular_world_velocity());
     println!("Link angular velocity of CoM from angularJacobian * q_dot:");
     println!(
         "{:?}",

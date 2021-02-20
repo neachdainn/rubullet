@@ -783,26 +783,65 @@ pub struct LinkState {
     pub local_inertial_pose: Isometry3<f64>,
     /// world pose of the URDF link frame
     pub world_link_frame_pose: Isometry3<f64>,
-    ///Cartesian world linear  velocity. Only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
-    pub world_linear_velocity: [f64; 3],
-    ///Cartesian world angular velocity. Only valid when ACTUAL_STATE_COMPUTE_LINKVELOCITY is set (b3RequestActualStateCommandComputeLinkVelocity)
-    pub world_angular_velocity: [f64; 3],
+    /// Cartesian world linear velocity.
+    pub world_velocity: Option<Velocity>,
 }
-impl From<b3LinkState> for LinkState {
-    fn from(b3: b3LinkState) -> Self {
-        let b3LinkState {
-            m_world_position,
-            m_world_orientation,
-            m_local_inertial_position,
-            m_local_inertial_orientation,
-            m_world_link_frame_position,
-            m_world_link_frame_orientation,
-            m_world_linear_velocity,
-            m_world_angular_velocity,
-            m_world_aabb_min: _,
-            m_world_aabb_max: _,
-        } = b3;
-        LinkState {
+impl LinkState {
+    /// conveniently returns the linear world velocity or an error if the velocity was not calculated
+    /// for the LinkState. Be sure to set `compute_link_velocity` to true in
+    /// [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
+    pub fn get_linear_world_velocity(&self) -> Result<Vector3<f64>, Error> {
+        match &self.world_velocity {
+            None => {Err(Error::new("LinkState contains no velocity. You have to set compute_link_velocity to true in get_link_state() to get the velocity"))}
+            Some(velocity) => {Ok(velocity.get_linear_velocity())}
+        }
+    }
+    /// conveniently returns the angular world velocity or an error if the velocity was not calculated
+    /// for the LinkState. Be sure to set `compute_link_velocity` to true in
+    /// [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
+    pub fn get_angular_world_velocity(&self) -> Result<Vector3<f64>, Error> {
+        match &self.world_velocity {
+            None => {Err(Error::new("LinkState contains no velocity. You have to set compute_link_velocity to true in get_link_state() to get the velocity"))}
+            Some(velocity) => {Ok(velocity.get_angular_velocity())}
+        }
+    }
+    /// conveniently returns the world velocity or an error if the velocity was not calculated
+    /// for the LinkState. Be sure to set `compute_link_velocity` to true in
+    /// [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
+    pub fn get_world_velocity(&self) -> Result<&Velocity, Error> {
+        match &self.world_velocity {
+            None => {Err(Error::new("LinkState contains no velocity. You have to set compute_link_velocity to true in get_link_state() to get the velocity"))}
+            Some(velocity) => {Ok(velocity)}
+        }
+    }
+    /// conveniently returns the world velocity vector (x,y,z,wx,w,wz) or an error if the velocity was not calculated
+    /// for the LinkState. Be sure to set `compute_link_velocity` to true in
+    /// [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
+    pub fn get_world_velocity_vector(&self) -> Result<Vector6<f64>, Error> {
+        match &self.world_velocity {
+            None => {Err(Error::new("LinkState contains no velocity. You have to set compute_link_velocity to true in get_link_state() to get the velocity"))}
+            Some(velocity) => {Ok(velocity.to_vector())}
+        }
+    }
+}
+impl From<(b3LinkState, bool)> for LinkState {
+    fn from(b3: (b3LinkState, bool)) -> Self {
+        let (
+            b3LinkState {
+                m_world_position,
+                m_world_orientation,
+                m_local_inertial_position,
+                m_local_inertial_orientation,
+                m_world_link_frame_position,
+                m_world_link_frame_orientation,
+                m_world_linear_velocity,
+                m_world_angular_velocity,
+                m_world_aabb_min: _,
+                m_world_aabb_max: _,
+            },
+            velocity_valid,
+        ) = b3;
+        let mut state = LinkState {
             world_pose: position_orientation_to_isometry(m_world_position, m_world_orientation),
             local_inertial_pose: position_orientation_to_isometry(
                 m_local_inertial_position,
@@ -812,9 +851,20 @@ impl From<b3LinkState> for LinkState {
                 m_world_link_frame_position,
                 m_world_link_frame_orientation,
             ),
-            world_linear_velocity: m_world_linear_velocity,
-            world_angular_velocity: m_world_angular_velocity,
+            world_velocity: None,
+        };
+        if velocity_valid {
+            let velocity: [f64; 6] = [
+                m_world_linear_velocity[0],
+                m_world_linear_velocity[1],
+                m_world_linear_velocity[2],
+                m_world_angular_velocity[0],
+                m_world_angular_velocity[1],
+                m_world_angular_velocity[2],
+            ];
+            state.world_velocity = Some(velocity.into());
         }
+        state
     }
 }
 

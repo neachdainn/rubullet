@@ -437,12 +437,12 @@ fn test_get_link_state() {
         1e-6,
     );
     slice_compare(
-        &result.world_linear_velocity,
+        &result.get_linear_world_velocity().unwrap().as_slice(),
         &m_world_linear_velocity,
         1e-5,
     );
     slice_compare(
-        &result.world_angular_velocity,
+        &result.get_angular_world_velocity().unwrap().as_slice(),
         &m_world_angular_velocity,
         1e-6,
     );

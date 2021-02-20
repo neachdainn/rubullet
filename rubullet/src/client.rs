@@ -731,7 +731,7 @@ impl PhysicsClient {
                 &mut link_state,
             ) != 0
             {
-                return Ok(link_state.into());
+                return Ok((link_state, compute_link_velocity).into());
             }
         }
         Err(Error::new("getLinkState failed."))
@@ -790,7 +790,7 @@ impl PhysicsClient {
                     &mut link_state,
                 ) != 0
                 {
-                    link_states.push(link_state.into());
+                    link_states.push((link_state, compute_link_velocity).into());
                 } else {
                     return Err(Error::new("getLinkStates failed."));
                 }
