@@ -13,7 +13,7 @@ fn main() -> Result<()> {
 
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 120.));
-    let _plane_id = physics_client.load_urdf("plane100.urdf", Default::default())?;
+    let _plane_id = physics_client.load_urdf("plane100.urdf", None)?;
 
     physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, false);
     physics_client.configure_debug_visualizer(COV_ENABLE_GUI, false);

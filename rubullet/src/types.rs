@@ -1,6 +1,6 @@
 //! Custom data types for RuBullet
-
 use crate::Error;
+use bitflags;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
     DVector, Isometry3, Matrix3xX, Matrix6xX, Quaternion, Translation3, UnitQuaternion, Vector3,
@@ -572,33 +572,17 @@ pub struct UrdfOptions {
 
     /// Forces the base of the loaded object to be static.
     pub use_fixed_base: bool,
+    /// Experimental. By default, the joints in the URDF file are created using the reduced
+    /// coordinate method: the joints are simulated using the
+    /// Featherstone Articulated Body Algorithm (ABA, btMultiBody in Bullet 2.x).
+    /// The use_maximal_coordinates option will create a 6 degree of freedom rigid body for each link,
+    /// and constraints between those rigid bodies are used to model joints.
+    pub use_maximal_coordinates: Option<bool>,
 
-    /// Use the inertia tensor provided in the URDF.
-    ///
-    /// By default, Bullet will recompute the inertial tensor based on the mass and volume of the
-    /// collision shape. Use this is you can provide a more accurate inertia tensor.
-    pub use_inertia_from_file: bool,
-
-    /// Enables or disables self-collision.
-    pub use_self_collision: bool,
-
-    /// Allow the disabling of simulation after a body hasn't moved for a while.
-    ///
-    /// Interaction with active bodies will re-enable simulation.
-    pub enable_sleeping: bool,
-
-    /// Try to maintain the link order from the URDF file.
-    pub maintain_link_order: bool,
-
-    /// Caches as reuses graphics shapes. This will decrease loading times for similar objects
-    pub enable_cached_graphics_shapes: bool,
-
+    /// Flags for loading the model.
+    pub flags: LoadModelFlags,
     /// Applies a scale factor to the model.
     pub global_scaling: f64,
-
-    // Future proofs the struct. Unfortunately, `#[non_exhaustive]` doesn't apply to structs.
-    #[doc(hidden)]
-    pub _unused: (),
 }
 
 impl Default for UrdfOptions {
@@ -606,13 +590,29 @@ impl Default for UrdfOptions {
         UrdfOptions {
             base_transform: Isometry3::identity(),
             use_fixed_base: false,
-            use_inertia_from_file: false,
-            use_self_collision: false,
-            enable_sleeping: false,
-            maintain_link_order: false,
+            use_maximal_coordinates: None,
             global_scaling: -1.0,
-            enable_cached_graphics_shapes: false,
-            _unused: (),
+            flags: LoadModelFlags::NONE,
+        }
+    }
+}
+/// Options for loading models from an SDF file into the physics server.
+pub struct SDFOptions {
+    /// Experimental. By default, the joints in the URDF file are created using the reduced
+    /// coordinate method: the joints are simulated using the
+    /// Featherstone Articulated Body Algorithm (ABA, btMultiBody in Bullet 2.x).
+    /// The use_maximal_coordinates option will create a 6 degree of freedom rigid body for each link,
+    /// and constraints between those rigid bodies are used to model joints.
+    pub use_maximal_coordinates: bool,
+    /// Applies a scale factor to the model.
+    pub global_scaling: f64,
+}
+
+impl Default for SDFOptions {
+    fn default() -> Self {
+        SDFOptions {
+            use_maximal_coordinates: false,
+            global_scaling: 1.0,
         }
     }
 }
@@ -1239,5 +1239,71 @@ impl From<[f64; 6]> for Velocity {
 impl From<Vector6<f64>> for Velocity {
     fn from(input: Vector6<f64>) -> Self {
         Velocity(input)
+    }
+}
+bitflags::bitflags! {
+    /// Use flag for loading the model. Flags can be combined with the `|`-operator.
+    /// Example:
+    /// ```rust
+    ///# use rubullet::LoadModelFlags;
+    /// let flags = LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES | LoadModelFlags::URDF_PRINT_URDF_INFO;
+    /// assert!(flags.contains(LoadModelFlags::URDF_PRINT_URDF_INFO));
+    /// ```
+    pub struct LoadModelFlags : i32 {
+        /// use no flags (Default)
+         const NONE = 0;
+        /// Use the inertia tensor provided in the URDF.
+        ///
+        /// By default, Bullet will recompute the inertial tensor based on the mass and volume of the
+        /// collision shape. Use this is you can provide a more accurate inertia tensor.
+        const URDF_USE_INERTIA_FROM_FILE = 2;
+        /// Enables self-collision.
+        const URDF_USE_SELF_COLLISION = 8;
+        const URDF_USE_SELF_COLLISION_EXCLUDE_PARENT = 16;
+        /// will discard self-collisions between a child link and any of its ancestors
+        /// (parents, parents of parents, up to the base).
+        /// Needs to be used together with [`URDF_USE_SELF_COLLISION`](`Self::URDF_USE_SELF_COLLISION`).
+        const URDF_USE_SELF_COLLISION_EXCLUDE_ALL_PARENTS = 32;
+        const URDF_RESERVED = 64;
+        /// will use a smooth implicit cylinder. By default, Bullet will tesselate the cylinder
+        /// into a convex hull.
+        const URDF_USE_IMPLICIT_CYLINDER = 128;
+        const URDF_GLOBAL_VELOCITIES_MB = 256;
+        const MJCF_COLORS_FROM_FILE = 512;
+        /// Caches as reuses graphics shapes. This will decrease loading times for similar objects
+        const URDF_ENABLE_CACHED_GRAPHICS_SHAPES = 1024;
+        /// Allow the disabling of simulation after a body hasn't moved for a while.
+        ///
+        /// Interaction with active bodies will re-enable simulation.
+        const URDF_ENABLE_SLEEPING = 2048;
+        /// will create triangle meshes for convex shapes. This will improve visualization and also
+        /// allow usage of the separating axis test (SAT) instead of GJK/EPA.
+        /// Requires to enable_SAT using set_physics_engine_parameter. TODO
+        const URDF_INITIALIZE_SAT_FEATURES = 4096;
+        /// will enable collision between child and parent, it is disabled by default.
+        /// Needs to be used together with [`URDF_USE_SELF_COLLISION`](`Self::URDF_USE_SELF_COLLISION`) flag.
+        const URDF_USE_SELF_COLLISION_INCLUDE_PARENT = 8192;
+        const URDF_PARSE_SENSORS = 16384;
+        /// will use the RGB color from the Wavefront OBJ file, instead of from the URDF file.
+        const URDF_USE_MATERIAL_COLORS_FROM_MTL = 32768;
+        const URDF_USE_MATERIAL_TRANSPARANCY_FROM_MTL = 65536;
+        /// Try to maintain the link order from the URDF file.
+        const URDF_MAINTAIN_LINK_ORDER = 131072;
+        const URDF_ENABLE_WAKEUP = 262144;
+        /// this will remove fixed links from the URDF file and merge the resulting links.
+        /// This is good for performance, since various algorithms
+        /// (articulated body algorithm, forward kinematics etc) have linear complexity
+        /// in the number of joints, including fixed joints.
+        const URDF_MERGE_FIXED_LINKS = 1 << 19;
+        const URDF_IGNORE_VISUAL_SHAPES = 1 << 20;
+        const URDF_IGNORE_COLLISION_SHAPES = 1 << 21;
+        const URDF_PRINT_URDF_INFO = 1 << 22;
+        const URDF_GOOGLEY_UNDEFINED_COLORS = 1 << 23;
+    }
+}
+
+impl Default for LoadModelFlags {
+    fn default() -> Self {
+        LoadModelFlags::NONE
     }
 }

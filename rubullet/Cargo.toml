@@ -48,6 +48,7 @@ path = "examples/inverse_dynamics.rs"
 nalgebra = "0.23"
 image = "0.23.12"
 rubullet-sys = { path = "../rubullet-sys" }
+bitflags = "1.2.1"
 
 [dev-dependencies]
 anyhow = "1.0"

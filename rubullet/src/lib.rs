@@ -14,7 +14,7 @@
 //!     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
 //!     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
 //!
-//!     let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
+//!     let _plane_id = physics_client.load_urdf("plane.urdf", None)?;
 //!
 //!     let cube_start_position = Isometry3::translation(0.0, 0.0, 1.0);
 //!     let box_id = physics_client.load_urdf(
@@ -46,8 +46,9 @@ pub use crate::{
         BodyId, BodyInfo, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
         DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
         InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, ItemId,
-        JointInfo, JointState, JointType, KeyboardEvent, MouseButtonState, MouseEvent,
-        MultiBodyOptions, TextureId, UrdfOptions, VisualId, VisualShapeData, VisualShapeOptions,
+        JointInfo, JointState, JointType, KeyboardEvent, LoadModelFlags, MouseButtonState,
+        MouseEvent, MultiBodyOptions, TextureId, UrdfOptions, VisualId, VisualShapeData,
+        VisualShapeOptions,
     },
 };
 // A utility for creating C-string literals.

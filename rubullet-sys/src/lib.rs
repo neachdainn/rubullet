@@ -135,6 +135,10 @@ extern "C" {
         startOrnZ: f64,
         startOrnW: f64,
     ) -> c_int;
+    pub fn b3LoadUrdfCommandSetUseMultiBody(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useMultiBody: c_int,
+    ) -> c_int;
     pub fn b3LoadUrdfCommandSetUseFixedBase(
         commandHandle: b3SharedMemoryCommandHandle,
         useFixedBase: c_int,

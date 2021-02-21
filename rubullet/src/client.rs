@@ -16,8 +16,8 @@ use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
     InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, MouseButtonState, MouseEvent, MultiBodyOptions, TextureId, Velocity, VisualId,
-    VisualShapeOptions,
+    LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions, SDFOptions,
+    TextureId, Velocity, VisualId, VisualShapeOptions,
 };
 use crate::{
     BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
@@ -35,8 +35,8 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
 };
 use rubullet_sys::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
-    b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, eURDF_Flags, B3_MAX_NUM_INDICES,
-    B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
+    b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES,
+    MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -233,10 +233,37 @@ impl PhysicsClient {
 
     /// Sends a command to the physics server to load a physics model from a Unified Robot
     /// Description Format (URDF) model.
-    pub fn load_urdf<P: AsRef<Path>>(
+    ///
+    /// # Arguments
+    /// * `file` - a relative or absolute path to the URDF file on the file system of the physics server
+    /// * `options` - use additional options like `global_scaling` and `use_maximal_coordinates` for
+    /// loading the URDF-file. See [`UrdfOptions`](`crate::types::UrdfOptions`).
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let cube = physics_client.load_urdf("cube.urdf", None)?;
+    ///     assert_eq!("baseLink", physics_client.get_body_info(cube)?.base_name);
+    ///     for i in 0..10 {
+    ///         let _cube = physics_client.load_urdf(
+    ///             "cube.urdf",
+    ///             UrdfOptions {
+    ///                 flags: LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES,
+    ///                 ..Default::default()
+    ///             },
+    ///         )?;
+    ///     }
+    ///     assert_eq!(11, physics_client.get_num_bodies());
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn load_urdf<P: AsRef<Path>, Options: Into<Option<UrdfOptions>>>(
         &mut self,
         file: P,
-        options: UrdfOptions,
+        options: Options,
     ) -> Result<BodyId, Error> {
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
@@ -245,28 +272,11 @@ impl PhysicsClient {
         let file = CString::new(file.as_ref().as_os_str().as_bytes())
             .map_err(|_| Error::new("Invalid path"))?;
 
-        // There's probably a cleaner way to do it. The one-liner I came up with was neat but bad
-        // code.
-        let mut flags = 0;
-        if options.use_inertia_from_file {
-            flags |= ffi::eURDF_Flags::URDF_USE_INERTIA_FROM_FILE as c_int;
-        }
-        if options.use_self_collision {
-            flags |= ffi::eURDF_Flags::URDF_USE_SELF_COLLISION as c_int;
-        }
-        if options.enable_sleeping {
-            flags |= ffi::eURDF_Flags::URDF_ENABLE_SLEEPING as c_int;
-        }
-        if options.maintain_link_order {
-            flags |= ffi::eURDF_Flags::URDF_MAINTAIN_LINK_ORDER as c_int;
-        }
-        if options.enable_cached_graphics_shapes {
-            flags |= ffi::eURDF_Flags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES as c_int;
-        }
+        let options = options.into().unwrap_or_else(|| UrdfOptions::default());
         unsafe {
             // As always, PyBullet does not document and does not check return codes.
             let command = ffi::b3LoadUrdfCommandInit(self.handle.as_ptr(), file.as_ptr());
-            let _ret = ffi::b3LoadUrdfCommandSetFlags(command, flags);
+            let _ret = ffi::b3LoadUrdfCommandSetFlags(command, options.flags.bits());
             let _ret = ffi::b3LoadUrdfCommandSetStartPosition(
                 command,
                 options.base_transform.translation.x,
@@ -280,7 +290,13 @@ impl PhysicsClient {
                 options.base_transform.rotation.coords.z,
                 options.base_transform.rotation.coords.w,
             );
-
+            if let Some(use_maximal_coordinates) = options.use_maximal_coordinates {
+                if use_maximal_coordinates {
+                    ffi::b3LoadUrdfCommandSetUseMultiBody(command, 0);
+                } else {
+                    ffi::b3LoadUrdfCommandSetUseMultiBody(command, 1);
+                }
+            }
             if options.use_fixed_base {
                 let _ret = ffi::b3LoadUrdfCommandSetUseFixedBase(command, 1);
             }
@@ -306,12 +322,8 @@ impl PhysicsClient {
     /// a Simulation Description Format (SDF) model.
     /// # Arguments
     /// * `file` - a relative or absolute path to the SDF file on the file system of the physics server.
-    /// * `global_scaling` -  will apply a scale factor to the SDF model.
-    /// * `use_maximal_coordinates` - By default, the joints in the SDF file are created using the
-    /// reduced coordinate method: the joints are simulated using the
-    /// Featherstone Articulated Body Algorithm (ABA, btMultiBody in Bullet 2.x).
-    /// The use_maximal_coordinates option will create a 6 degree of freedom rigid body for each link,
-    /// and constraints between those rigid bodies are used to model joints.
+    /// * `options` -  use additional options like `global_scaling` and `use_maximal_coordinates` for
+    /// loading the SDF-file. See [`SDFOptions`](`crate::types::SDFOptions`).
     ///
     /// # Return
     /// Returns a list of unique body id's
@@ -323,18 +335,16 @@ impl PhysicsClient {
     /// fn main() -> Result<()> {
     ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
     ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
-    ///     let stadium = physics_client.load_sdf("two_cubes.sdf", None, None)?;
-    ///     assert_eq!(3, stadium.len()); // 2 cubes + 1 plane
+    ///     let cubes = physics_client.load_sdf("two_cubes.sdf", None)?;
+    ///     assert_eq!(3, cubes.len()); // 2 cubes + 1 plane
     ///     Ok(())
     /// }
     /// ```
-    pub fn load_sdf<P: AsRef<Path>>(
+    pub fn load_sdf<P: AsRef<Path>, Options: Into<Option<SDFOptions>>>(
         &mut self,
         file: P,
-        global_scaling: Option<f64>,
-        use_maximal_coordinates: Option<bool>,
+        options: Options,
     ) -> Result<Vec<BodyId>, Error> {
-        let use_maximal_coordinates = use_maximal_coordinates.unwrap_or(false);
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
         }
@@ -344,12 +354,15 @@ impl PhysicsClient {
 
         unsafe {
             let command = ffi::b3LoadSdfCommandInit(self.handle.as_ptr(), file.as_ptr());
-            if use_maximal_coordinates {
-                ffi::b3LoadSdfCommandSetUseMultiBody(command, 0);
+            if let Some(options) = options.into() {
+                if options.use_maximal_coordinates {
+                    ffi::b3LoadSdfCommandSetUseMultiBody(command, 0);
+                }
+                if options.global_scaling > 0. {
+                    ffi::b3LoadSdfCommandSetUseGlobalScaling(command, options.global_scaling);
+                }
             }
-            if let Some(scaling) = global_scaling {
-                ffi::b3LoadSdfCommandSetUseGlobalScaling(command, scaling);
-            }
+
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
             let status_type = ffi::b3GetStatusType(status_handle);
@@ -379,7 +392,7 @@ impl PhysicsClient {
     /// a MuJoCo model.
     /// # Arguments
     /// * `file` - a relative or absolute path to the MuJoCo file on the file system of the physics server.
-    /// * `flags` -  specify some flags.
+    /// * `flags` -  Flags for loading the model. Set to None if you do not whish to provide any.
     ///
     /// # Return
     /// Returns a list of unique body id's
@@ -393,13 +406,16 @@ impl PhysicsClient {
     ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     ///     let stadium = physics_client.load_mjcf("mjcf/hello_mjcf.xml", None)?;
     ///     assert_eq!(2, stadium.len()); // 1 cube + 1 plane
+    ///
+    ///     let plane = physics_client.load_mjcf("mjcf/ground_plane.xml", LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES)?;
+    ///     assert_eq!(1, plane.len());
     ///     Ok(())
     /// }
     /// ```
-    pub fn load_mjcf<P: AsRef<Path>>(
+    pub fn load_mjcf<P: AsRef<Path>, Flags: Into<Option<LoadModelFlags>>>(
         &mut self,
         file: P,
-        flags: Option<Vec<eURDF_Flags>>,
+        flags: Flags,
     ) -> Result<Vec<BodyId>, Error> {
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
@@ -410,12 +426,8 @@ impl PhysicsClient {
 
         unsafe {
             let command = ffi::b3LoadMJCFCommandInit(self.handle.as_ptr(), file.as_ptr());
-            if let Some(flags_vec) = flags {
-                let mut flags = 0;
-                for &flag in flags_vec.iter() {
-                    flags |= flag as i32;
-                }
-                ffi::b3LoadMJCFCommandSetFlags(command, flags);
+            if let Some(flags) = flags.into() {
+                ffi::b3LoadMJCFCommandSetFlags(command, flags.bits());
             }
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
@@ -603,7 +615,7 @@ impl PhysicsClient {
     ///fn main() -> Result<()> {
     ///    let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
     ///    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
-    ///    let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
+    ///    let _plane_id = physics_client.load_urdf("plane.urdf", None)?;
     ///    let cube_start_position = Isometry3::translation(0.0, 0.0, 1.0);
     ///    let box_id = physics_client.load_urdf(
     ///        "r2d2.urdf",
@@ -1406,7 +1418,7 @@ impl PhysicsClient {
     ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///#     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
-    ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
+    ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///#     let joint_index = 1;
     ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
     ///# Ok(())
@@ -1424,7 +1436,7 @@ impl PhysicsClient {
     /// pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
-    ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", Default::default())?;
+    ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///     let joint_index = 1;
     ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);
     ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));

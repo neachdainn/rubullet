@@ -12,7 +12,7 @@ fn main() -> Result<()> {
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 120.));
     // physics_client.configure_debug_visualizer(DebugVisualizerFlag::)
-    let _plane_id = physics_client.load_urdf("plane100.urdf", Default::default())?;
+    let _plane_id = physics_client.load_urdf("plane100.urdf", None)?;
     let shift = Isometry3::translation(0.0, -0.02, 0.0);
     let visual_shape = physics_client.create_visual_shape(
         GeometricVisualShape::MeshFile {

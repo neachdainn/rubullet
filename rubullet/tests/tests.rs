@@ -6,7 +6,7 @@ use rubullet::types::ControlModeArray::Torques;
 use rubullet::types::{JointInfo, JointState};
 use rubullet::{
     BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
-    InverseKinematicsParametersBuilder, JointType, PhysicsClient, UrdfOptions,
+    InverseKinematicsParametersBuilder, JointType, LoadModelFlags, PhysicsClient, UrdfOptions,
 };
 use std::f64::consts::PI;
 use std::time::Duration;
@@ -34,9 +34,7 @@ fn test_load_urdf() {
     physics_client
         .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
-    let _plane_id = physics_client
-        .load_urdf("plane.urdf", Default::default())
-        .unwrap();
+    let _plane_id = physics_client.load_urdf("plane.urdf", None).unwrap();
 }
 #[test]
 fn test_add_and_remove_bodies() {
@@ -45,13 +43,9 @@ fn test_add_and_remove_bodies() {
         .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
     assert_eq!(physics_client.get_num_bodies(), 0);
-    let _plane_id = physics_client
-        .load_urdf("plane.urdf", Default::default())
-        .unwrap();
+    let _plane_id = physics_client.load_urdf("plane.urdf", None).unwrap();
     assert_eq!(physics_client.get_num_bodies(), 1);
-    let r2d2 = physics_client
-        .load_urdf("r2d2.urdf", Default::default())
-        .unwrap();
+    let r2d2 = physics_client.load_urdf("r2d2.urdf", None).unwrap();
     assert_eq!(physics_client.get_num_bodies(), 2);
     physics_client.remove_body(r2d2);
     assert_eq!(physics_client.get_num_bodies(), 1);
@@ -64,9 +58,7 @@ fn test_get_and_reset_base_transformation() {
     physics_client
         .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
-    let r2d2 = physics_client
-        .load_urdf("r2d2.urdf", Default::default())
-        .unwrap();
+    let r2d2 = physics_client.load_urdf("r2d2.urdf", None).unwrap();
     let desired_transform = Isometry3::from_parts(
         Translation3::new(0.2, 0.3, 0.4),
         UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
@@ -107,9 +99,7 @@ fn test_get_body_info() {
     physics_client
         .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
-    let r2d2 = physics_client
-        .load_urdf("r2d2.urdf", Default::default())
-        .unwrap();
+    let r2d2 = physics_client.load_urdf("r2d2.urdf", None).unwrap();
     let body_info = physics_client.get_body_info(r2d2).unwrap();
     assert_eq!(body_info.base_name.as_str(), "base_link");
     assert_eq!(body_info.body_name.as_str(), "physics");
@@ -121,9 +111,7 @@ fn test_get_joint_info() {
     physics_client
         .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
         .unwrap();
-    let r2d2 = physics_client
-        .load_urdf("r2d2.urdf", Default::default())
-        .unwrap();
+    let r2d2 = physics_client.load_urdf("r2d2.urdf", None).unwrap();
     let joint_info = physics_client.get_joint_info(r2d2, 1);
     assert_eq!(1, joint_info.joint_index);
     assert_eq!("right_base_joint", joint_info.joint_name);
@@ -605,7 +593,7 @@ impl PandaSim {
         let urdf_options = UrdfOptions {
             use_fixed_base: true,
             base_transform: cube_start_position.clone(),
-            enable_cached_graphics_shapes: true,
+            flags: LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES,
             ..Default::default()
         };
         let panda_id = client.load_urdf("franka_panda/panda.urdf", urdf_options)?;
