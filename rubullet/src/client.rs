@@ -1535,9 +1535,20 @@ impl PhysicsClient {
         body: BodyId,
         joint_indices: &[i32],
         control_mode: ControlModeArray,
-        maximum_force: Option<Vec<f64>>,
+        maximum_force: Option<&[f64]>,
     ) -> Result<(), Error> {
-        let forces = maximum_force.unwrap_or_else(|| vec![100000.; joint_indices.len()]);
+        let alloc_vec;
+        let forces;
+        match maximum_force {
+            None => {
+                alloc_vec = vec![100000.; joint_indices.len()];
+                forces = alloc_vec.as_slice();
+            }
+            Some(max_forces) => {
+                forces = max_forces;
+            }
+        }
+
         if forces.len() != joint_indices.len() {
             return Err(Error::new(
                 "number of maximum forces should match the number of joint indices",
@@ -1573,11 +1584,7 @@ impl PhysicsClient {
                             target_positions[i],
                         );
                         ffi::b3JointControlSetKp(command_handle, info.m_u_index, kp);
-                        ffi::b3JointControlSetDesiredVelocity(
-                            command_handle,
-                            info.m_u_index,
-                            0.,
-                        );
+                        ffi::b3JointControlSetDesiredVelocity(command_handle, info.m_u_index, 0.);
 
                         ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                         ffi::b3JointControlSetMaximumForce(

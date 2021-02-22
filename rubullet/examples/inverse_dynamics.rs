@@ -25,9 +25,8 @@ fn main() -> Result<()> {
         id_robot,
         &id_revolute_joints,
         ControlModeArray::Velocities(&[0., 0.]),
-        Some([0., 0.].to_vec()),
+        Some(&[0., 0.]),
     )?;
-
     // Target Positions:
     let start = 0.;
     let end = 1.;
