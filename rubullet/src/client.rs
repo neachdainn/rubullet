@@ -9,7 +9,10 @@ use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 // until then...
 use std::os::unix::ffi::OsStrExt;
 
-use nalgebra::{DMatrix, Isometry3, Matrix6xX, Quaternion, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{
+    DMatrix, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
+    Vector3,
+};
 
 use self::gui_marker::GuiMarker;
 use crate::types::{
@@ -1699,22 +1702,40 @@ impl PhysicsClient {
     /// * `camera_target_position` - position of the target (focus) point, in Cartesian world coordinates
     /// * `camera_up_vector` - up vector of the camera, in Cartesian world coordinates
     ///
+    /// # Example
+    /// ```rust
+    /// use rubullet::PhysicsClient;
+    /// use nalgebra::{Point3, Vector3};
+    ///
+    /// // variant 1: using arrays
+    /// let eye_position = [1.; 3];
+    /// let target_position = [1., 0., 0.];
+    /// let up_vector = [0., 1., 0.];
+    /// let view_matrix_from_arrays = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
+    ///
+    /// // variant 2: using vectors and points
+    /// let eye_position = Point3::new(1.,1.,1.);
+    /// let target_position = Point3::new(1., 0., 0.);
+    /// let up_vector = Vector3::new(0., 1., 0.);
+    /// let view_matrix_from_points = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
+    /// assert_eq!(view_matrix_from_arrays.as_slice(),view_matrix_from_points.as_slice());
+    /// ```
     /// # See also
     /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix(
-        camera_eye_position: &[f32; 3],
-        camera_target_position: &[f32; 3],
-        camera_up_vector: &[f32; 3],
-    ) -> [f32; 16] {
-        let mut view_matrix = [0_f32; 16];
+    pub fn compute_view_matrix<Point: Into<Point3<f32>>, Vector: Into<Vector3<f32>>>(
+        camera_eye_position: Point,
+        camera_target_position: Point,
+        camera_up_vector: Vector,
+    ) -> Matrix4<f32> {
+        let mut view_matrix: Matrix4<f32> = Matrix4::zeros();
         unsafe {
             ffi::b3ComputeViewMatrixFromPositions(
-                camera_eye_position.as_ptr(),
-                camera_target_position.as_ptr(),
-                camera_up_vector.as_ptr(),
+                camera_eye_position.into().coords.as_ptr(),
+                camera_target_position.into().coords.as_ptr(),
+                camera_up_vector.into().as_slice().as_ptr(),
                 view_matrix.as_mut_ptr(),
             );
             view_matrix
@@ -1729,25 +1750,55 @@ impl PhysicsClient {
     /// * `yaw` - yaw angle in degrees left/right around up-axis.
     /// * `pitch` - pitch in degrees up/down.
     /// * `roll` - roll in degrees around forward vector
-    /// * `up_axis_index` - either 1 for Y axis or 2 for Z axis up
+    /// * `z_axis_is_up` - if true the Z axis is the up axis of the camera. Otherwise the Y axis will be the up axis.
     ///
+    /// # Example
+    /// ```rust
+    /// use rubullet::PhysicsClient;
+    /// use nalgebra::Point3;
+    /// // variant 1: using array
+    /// let target_position = [1., 0., 0.];
+    /// let view_matrix_from_array = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
+    ///     target_position,
+    ///     0.6,
+    ///     0.2,
+    ///     0.3,
+    ///     0.5,
+    ///     false,
+    /// );
+    /// // variant 1: using Point3
+    /// let target_position = Point3::new(1., 0., 0.);
+    /// let view_matrix_from_point = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
+    ///     target_position,
+    ///     0.6,
+    ///     0.2,
+    ///     0.3,
+    ///     0.5,
+    ///     false,
+    /// );
+    /// assert_eq!(view_matrix_from_array.as_slice(),view_matrix_from_point.as_slice());
+    /// ```
     /// # See also
     /// * [compute_view_matrix](`Self::compute_view_matrix`)
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix_from_yaw_pitch_roll(
-        camera_target_position: &[f32; 3],
+    pub fn compute_view_matrix_from_yaw_pitch_roll<Point: Into<Point3<f32>>>(
+        camera_target_position: Point,
         distance: f32,
         yaw: f32,
         pitch: f32,
         roll: f32,
-        up_axis_index: i32,
-    ) -> [f32; 16] {
-        let mut view_matrix = [0_f32; 16];
+        z_axis_is_up: bool,
+    ) -> Matrix4<f32> {
+        let mut view_matrix: Matrix4<f32> = Matrix4::zeros();
+        let up_axis_index = match z_axis_is_up {
+            true => 2,
+            false => 1,
+        };
         unsafe {
             ffi::b3ComputeViewMatrixFromYawPitchRoll(
-                camera_target_position.as_ptr(),
+                camera_target_position.into().coords.as_ptr(),
                 distance,
                 yaw,
                 pitch,
@@ -1781,8 +1832,8 @@ impl PhysicsClient {
         top: f32,
         near_val: f32,
         far_val: f32,
-    ) -> [f32; 16] {
-        let mut projection_matrix = [0_f32; 16];
+    ) -> Matrix4<f32> {
+        let mut projection_matrix = Matrix4::zeros();
         unsafe {
             ffi::b3ComputeProjectionMatrix(
                 left,
@@ -1815,8 +1866,8 @@ impl PhysicsClient {
         aspect: f32,
         near_val: f32,
         far_val: f32,
-    ) -> [f32; 16] {
-        let mut projection_matrix = [0_f32; 16];
+    ) -> Matrix4<f32> {
+        let mut projection_matrix = Matrix4::zeros();
         unsafe {
             ffi::b3ComputeProjectionMatrixFOV(
                 fov,
@@ -1849,8 +1900,8 @@ impl PhysicsClient {
         &mut self,
         width: i32,
         height: i32,
-        view_matrix: &[f32; 16],
-        projection_matrix: &[f32; 16],
+        view_matrix: Matrix4<f32>,
+        projection_matrix: Matrix4<f32>,
     ) -> Result<Images, Error> {
         unsafe {
             let command = ffi::b3InitRequestCameraImage(self.handle.as_ptr());
@@ -3151,116 +3202,5 @@ mod gui_marker {
             // We are the only marker so no need to CAS
             GUI_EXISTS.store(false, Ordering::SeqCst)
         }
-    }
-}
-
-#[cfg(test)]
-pub mod tests {
-    use crate::PhysicsClient;
-
-    #[test]
-    fn compute_view_matrix_test() {
-        let eye_position = [1.; 3];
-        let target_position = [1., 0., 0.];
-        let up_vector = [0., 1., 0.];
-        let view_matrix =
-            PhysicsClient::compute_view_matrix(&eye_position, &target_position, &up_vector);
-        let desired_matrix = [
-            0.99999994,
-            0.0,
-            -0.0,
-            0.0,
-            -0.0,
-            0.7071067,
-            0.70710677,
-            0.0,
-            0.0,
-            -0.7071067,
-            0.70710677,
-            0.0,
-            -0.99999994,
-            -0.0,
-            -1.4142135,
-            1.0,
-        ];
-        assert_eq!(view_matrix, desired_matrix);
-    }
-    #[test]
-    fn compute_view_matrix_from_yaw_pitch_roll_test() {
-        let target_position = [1., 0., 0.];
-        let view_matrix = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
-            &target_position,
-            0.6,
-            0.2,
-            0.3,
-            0.5,
-            1,
-        );
-        let desired_matrix = [
-            -0.9999939799308777,
-            -1.8276923583471216e-05,
-            -0.0034906466025859118,
-            0.0,
-            2.2373569663614035e-10,
-            0.9999864101409912,
-            -0.005235963501036167,
-            0.0,
-            0.003490694332867861,
-            -0.00523593183606863,
-            -0.9999802708625793,
-            0.0,
-            0.9999939799308777,
-            1.8277205526828766e-05,
-            -0.5965093970298767,
-            1.0,
-        ];
-        assert_eq!(view_matrix, desired_matrix);
-    }
-    #[test]
-    fn compute_projection_matrix_fov_test() {
-        let projection_matrix = PhysicsClient::compute_projection_matrix_fov(0.4, 0.6, 0.2, 0.6);
-        let desired_matrix = [
-            477.4628601074219,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            286.47772216796875,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            -1.9999998807907104,
-            -1.0,
-            0.0,
-            0.0,
-            -0.5999999642372131,
-            0.0,
-        ];
-        assert_eq!(projection_matrix, desired_matrix);
-    }
-    #[test]
-    fn compute_projection_matrix_test() {
-        let projection_matrix =
-            PhysicsClient::compute_projection_matrix(0.1, 0.2, 0.3, 0.4, 0.2, 0.6);
-        let desired_matrix = [
-            4.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            4.000000476837158,
-            0.0,
-            0.0,
-            3.0,
-            7.000000953674316,
-            -1.9999998807907104,
-            -1.0,
-            0.0,
-            0.0,
-            -0.5999999642372131,
-            0.0,
-        ];
-        assert_eq!(projection_matrix, desired_matrix);
     }
 }

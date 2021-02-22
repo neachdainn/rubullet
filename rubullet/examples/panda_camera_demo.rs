@@ -2,7 +2,7 @@ use std::f64::consts::PI;
 use std::time::Duration;
 
 use anyhow::Result;
-use nalgebra::{Isometry3, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Matrix4, Quaternion, Rotation3, Translation3, UnitQuaternion, Vector3};
 use rubullet::*;
 
 fn main() -> Result<()> {
@@ -20,8 +20,8 @@ fn main() -> Result<()> {
         let _images = physics_client.get_camera_image(
             128,
             128,
-            &panda.view_matrix,
-            &panda.projection_matrix,
+            panda.view_matrix,
+            panda.projection_matrix,
         )?;
         _images.rgba.save("/tmp/test.png")?;
         panda.step(&mut physics_client);
@@ -35,8 +35,8 @@ pub struct PandaSim {
     pub offset: Vector3<f64>,
     pub id: BodyId,
     pub t: Duration,
-    pub view_matrix: [f32; 16],
-    pub projection_matrix: [f32; 16],
+    pub view_matrix: Matrix4<f32>,
+    pub projection_matrix: Matrix4<f32>,
 }
 
 impl PandaSim {
@@ -145,7 +145,7 @@ impl PandaSim {
         }
         let t = Duration::new(0, 0);
         let view_matrix =
-            PhysicsClient::compute_view_matrix(&[0.5, 0.5, 0.5], &[0., 0.5, 0.], &[0., 1., 0.]);
+            PhysicsClient::compute_view_matrix([0.5, 0.5, 0.5], [0., 0.5, 0.], [0., 1., 0.]);
         let projection_matrix = PhysicsClient::compute_projection_matrix_fov(60., 1., 0.02, 1.);
 
         Ok(PandaSim {

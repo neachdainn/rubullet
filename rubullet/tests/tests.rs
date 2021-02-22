@@ -22,6 +22,17 @@ fn float_compare(a: f64, b: f64, thresh: f64) {
     println!("{} {}", a, b);
     assert!((a - b).abs() < thresh);
 }
+fn slice_compare_f32(a: &[f32], b: &[f32], thresh: f32) {
+    assert_eq!(a.len(), b.len());
+    for i in 0..a.len() {
+        float32_compare(a[i], b[i], thresh);
+    }
+}
+
+fn float32_compare(a: f32, b: f32, thresh: f32) {
+    println!("{} {}", a, b);
+    assert!((a - b).abs() < thresh);
+}
 
 #[test]
 fn test_connect() {
@@ -750,4 +761,107 @@ impl PandaSim {
         slice_compare(joint_poses.as_slice(), &target_joint_poses, 1e-6);
         slice_compare(mass.as_slice(), &target_mass_matrix, 1e-6);
     }
+}
+#[test]
+fn compute_view_matrix_test() {
+    let eye_position = [1.; 3];
+    let target_position = [1., 0., 0.];
+    let up_vector = [0., 1., 0.];
+    let view_matrix = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
+    let desired_matrix = [
+        0.99999994,
+        0.0,
+        -0.0,
+        0.0,
+        -0.0,
+        0.7071067,
+        0.70710677,
+        0.0,
+        0.0,
+        -0.7071067,
+        0.70710677,
+        0.0,
+        -0.99999994,
+        -0.0,
+        -1.4142135,
+        1.0,
+    ];
+    slice_compare_f32(view_matrix.as_slice(), &desired_matrix, 1e-7);
+}
+#[test]
+fn compute_view_matrix_from_yaw_pitch_roll_test() {
+    let target_position = [1., 0., 0.];
+    let view_matrix = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
+        target_position,
+        0.6,
+        0.2,
+        0.3,
+        0.5,
+        false,
+    );
+    let desired_matrix = [
+        -0.9999939799308777,
+        -1.8276923583471216e-05,
+        -0.0034906466025859118,
+        0.0,
+        2.2373569663614035e-10,
+        0.9999864101409912,
+        -0.005235963501036167,
+        0.0,
+        0.003490694332867861,
+        -0.00523593183606863,
+        -0.9999802708625793,
+        0.0,
+        0.9999939799308777,
+        1.8277205526828766e-05,
+        -0.5965093970298767,
+        1.0,
+    ];
+    slice_compare_f32(view_matrix.as_slice(), &desired_matrix, 1e-7);
+}
+#[test]
+fn compute_projection_matrix_fov_test() {
+    let projection_matrix = PhysicsClient::compute_projection_matrix_fov(0.4, 0.6, 0.2, 0.6);
+    let desired_matrix = [
+        477.4628601074219,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        286.47772216796875,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.9999998807907104,
+        -1.0,
+        0.0,
+        0.0,
+        -0.5999999642372131,
+        0.0,
+    ];
+    slice_compare_f32(projection_matrix.as_slice(), &desired_matrix, 1e-7);
+}
+#[test]
+fn compute_projection_matrix_test() {
+    let projection_matrix = PhysicsClient::compute_projection_matrix(0.1, 0.2, 0.3, 0.4, 0.2, 0.6);
+    let desired_matrix = [
+        4.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        4.000000476837158,
+        0.0,
+        0.0,
+        3.0,
+        7.000000953674316,
+        -1.9999998807907104,
+        -1.0,
+        0.0,
+        0.0,
+        -0.5999999642372131,
+        0.0,
+    ];
+    slice_compare_f32(projection_matrix.as_slice(), &desired_matrix, 1e-7);
 }
