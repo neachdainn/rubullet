@@ -21,13 +21,7 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )?;
-    let _cube = physics_client.load_urdf(
-        "cube.urdf",
-        UrdfOptions {
-            flags: LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES,
-            ..Default::default()
-        },
-    )?;
+
     for _ in 0..10000 {
         physics_client.step_simulation()?;
         thread::sleep(Duration::from_micros(4167));
