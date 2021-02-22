@@ -1545,7 +1545,6 @@ impl PhysicsClient {
         }
         let kp = 0.1;
         let kd = 1.0;
-        let target_velocities = vec![0.; joint_indices.len()];
         let num_joints = self.get_num_joints(body);
         unsafe {
             let command_handle = ffi::b3JointControlCommandInit2(
@@ -1577,7 +1576,7 @@ impl PhysicsClient {
                         ffi::b3JointControlSetDesiredVelocity(
                             command_handle,
                             info.m_u_index,
-                            target_velocities[i],
+                            0.,
                         );
 
                         ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
