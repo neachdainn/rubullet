@@ -2915,7 +2915,7 @@ impl PhysicsClient {
                     let mut new_batch_positions =
                         Vec::<f64>::with_capacity(batch_positions.len() * 3);
                     for pos in batch_positions.iter() {
-                        new_batch_positions.extend_from_slice(pos);
+                        new_batch_positions.extend_from_slice(pos.coords.as_slice());
                     }
                     ffi::b3CreateMultiBodySetBatchPositions(
                         self.handle.as_ptr(),
@@ -2933,7 +2933,7 @@ impl PhysicsClient {
                     let link_position = [position_vector.x, position_vector.y, position_vector.z];
                     let link_orientation = [rotation.i, rotation.j, rotation.k, rotation.w];
 
-                    let link_joint_axis = options.link_joint_axis[i];
+                    let link_joint_axis: [f64; 3] = options.link_joint_axis[i].into();
 
                     let position_vector = &options.link_inertial_frame_poses[i].translation.vector;
                     let rotation = &options.link_inertial_frame_poses[i].rotation;
@@ -2963,7 +2963,7 @@ impl PhysicsClient {
                     ffi::b3CreateMultiBodyUseMaximalCoordinates(command_handle);
                 }
                 if let Some(flags) = options.flags {
-                    ffi::b3CreateMultiBodySetFlags(command_handle, flags);
+                    ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
                 }
                 let status_handle =
                     b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);

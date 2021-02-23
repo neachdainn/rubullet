@@ -100,7 +100,7 @@ fn main() -> Result<()> {
                         let link_inertial_frame_poses = vec![Isometry3::translation(0., 0., 0.)];
                         let indices = vec![0];
                         let joint_types = vec![JointType::Revolute];
-                        let axis = vec![[0., 0., 1.]];
+                        let axis = vec![Vector3::new(0., 0., 1.)];
 
                         physics_client.create_multi_body(
                             col_box_id,

@@ -3,8 +3,8 @@ use crate::Error;
 use bitflags;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
-    DVector, Isometry3, Matrix3xX, Matrix6xX, Quaternion, Translation3, UnitQuaternion, Vector3,
-    Vector6, U3,
+    DVector, Isometry3, Matrix3xX, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
+    Vector3, Vector6, U3,
 };
 use rubullet_sys::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
 use std::convert::TryFrom;
@@ -1070,15 +1070,15 @@ pub struct MultiBodyOptions {
     /// list of joint types, one for each link.
     pub link_joint_types: Vec<JointType>,
     /// List of joint axis in local frame
-    pub link_joint_axis: Vec<[f64; 3]>,
+    pub link_joint_axis: Vec<Vector3<f64>>,
     /// experimental, best to leave it false.
     pub use_maximal_coordinates: bool,
     /// similar to the flags passed in load_urdf, for example URDF_USE_SELF_COLLISION.
-    /// See [load_urdf](`crate::PhysicsClient::load_urdf()`) for flags explanation.
-    pub flags: Option<i32>,
-    /// array of base positions, for fast batch creation of many multibodies.
+    /// See [`LoadModelFlags`](`LoadModelFlags`) for flags explanation.
+    pub flags: Option<LoadModelFlags>,
+    /// list of base positions, for fast batch creation of many multibodies.
     /// See create_multi_body_batch.rs example.
-    pub batch_positions: Option<Vec<[f64; 3]>>,
+    pub batch_positions: Option<Vec<Point3<f64>>>,
 }
 impl Default for MultiBodyOptions {
     fn default() -> Self {
