@@ -938,7 +938,7 @@ pub enum GeometricCollisionShape {
     /// A Plane.
     Plane {
         /// normal of the plane.
-        plane_normal: [f64; 3],
+        plane_normal: Vector3<f64>,
     },
     /// Load a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
@@ -1020,7 +1020,7 @@ pub enum GeometricVisualShape {
     /// thus cannot be adapted through the normal of the visual.
     Plane {
         /// Normal of the plane. Seems to have no effect!
-        plane_normal: [f64; 3],
+        plane_normal: Vector3<f64>,
     },
     /// Loads a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
