@@ -2048,7 +2048,7 @@ impl PhysicsClient {
     /// Lets you add custom sliders and buttons to tune parameters.
     ///
     /// # Arguments
-    /// * `param_name` - name of the parameter. Needs to be something that can be converted to a string
+    /// * `param_name` - name of the parameter. Needs to be something that can be converted to a &str.
     /// * `range_min` - minimum value of the slider. If minimum value > maximum value a button instead
     /// of a slider will appear.
     /// * `range_max` - maximum value of the slider
@@ -2070,7 +2070,7 @@ impl PhysicsClient {
     ///     Ok(())
     /// }
     /// ```
-    pub fn add_user_debug_parameter<Text: Into<String>>(
+    pub fn add_user_debug_parameter<'a, Text: Into<&'a str>>(
         &mut self,
         param_name: Text,
         range_min: f64,
@@ -2078,9 +2078,10 @@ impl PhysicsClient {
         start_value: f64,
     ) -> Result<ItemId, Error> {
         unsafe {
+            let param_name = CString::new(param_name.into().as_bytes()).unwrap();
             let command_handle = ffi::b3InitUserDebugAddParameter(
                 self.handle.as_ptr(),
-                param_name.into().as_str().as_ptr(),
+                param_name.as_ptr(),
                 range_min,
                 range_max,
                 start_value,
@@ -2119,7 +2120,7 @@ impl PhysicsClient {
     }
     /// You can add some 3d text at a specific location using a color and size.
     /// # Arguments
-    /// * `text` - text represented  by something which can be converted to a string
+    /// * `text` - text represented  by something which can be converted to a &str
     /// * `text_position` - 3d position of the text in Cartesian world coordinates [x,y,z]
     /// * `options` - advanced options for the text. Use None for default settings.
     ///
@@ -2152,7 +2153,7 @@ impl PhysicsClient {
     /// ```
     pub fn add_user_debug_text<
         'a,
-        Text: Into<String>,
+        Text: Into<&'a str>,
         Options: Into<Option<AddDebugTextOptions<'a>>>,
     >(
         &mut self,
@@ -2162,9 +2163,10 @@ impl PhysicsClient {
     ) -> Result<ItemId, Error> {
         unsafe {
             let options = options.into().unwrap_or_default();
+            let text = CString::new(text.into().as_bytes()).unwrap();
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
                 self.handle.as_ptr(),
-                text.into().as_str().as_ptr(),
+                text.as_ptr(),
                 text_position.as_ptr(),
                 options.text_color_rgb.as_ptr(),
                 options.text_size,

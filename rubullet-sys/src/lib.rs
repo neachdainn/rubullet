@@ -497,9 +497,7 @@ extern "C" {
 
     pub fn b3InitUserDebugAddParameter(
         physClient: b3PhysicsClientHandle,
-        // this was once a normal char but i could only get pointers as u8 instead of i8
-        // so now this parameter is a uchar. seems to work
-        txt: *const c_uchar,
+        txt: *const c_char,
         rangeMin: f64,
         rangeMax: f64,
         startValue: f64,
@@ -527,9 +525,7 @@ extern "C" {
     ) -> b3SharedMemoryCommandHandle;
     pub fn b3InitUserDebugDrawAddText3D(
         physClient: b3PhysicsClientHandle,
-        // this was once a normal char but i could only get pointers as u8 instead of i8
-        // so now this parameter is a uchar. seems to work
-        txt: *const c_uchar,
+        txt: *const c_char,
         positionXYZ: *const f64,
         colorRGB: *const f64,
         textSize: f64,
