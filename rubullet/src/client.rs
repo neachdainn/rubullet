@@ -2312,7 +2312,7 @@ impl PhysicsClient {
             );
             for &event in data.iter() {
                 events.push(KeyboardEvent {
-                    key: std::char::from_u32_unchecked(event.m_keyCode as u32),
+                    key: std::char::from_u32(event.m_keyCode as u32).expect("Got invalid key code"),
                     key_state: event.m_keyState,
                 });
             }
