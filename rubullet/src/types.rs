@@ -11,6 +11,7 @@ use std::convert::TryFrom;
 use std::ffi::CStr;
 
 use std::os::raw::c_int;
+use std::path::PathBuf;
 
 /// The unique ID for a body within a physics server.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -942,7 +943,7 @@ pub enum GeometricCollisionShape {
     /// Load a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
         /// Path to the .obj file as String.
-        filename: String,
+        filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
         /// Set to 1 if you want to activate have the GEOM_FORCE_CONCAVE_TRIMESH Flag.
@@ -962,7 +963,7 @@ pub enum GeometricCollisionShape {
     /// Loads a Heightfield from a file
     HeightfieldFile {
         /// Path to the .obj file as String.
-        filename: String,
+        filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
         /// Texture scaling. Use 1. for original scaling.
@@ -1024,7 +1025,7 @@ pub enum GeometricVisualShape {
     /// Loads a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
         /// Path to the .obj file as String
-        filename: String,
+        filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
     },

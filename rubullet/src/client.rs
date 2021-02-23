@@ -2554,7 +2554,7 @@ impl PhysicsClient {
                     mesh_scale,
                     texture_scaling,
                 } => {
-                    let file = CString::new(filename.as_str()).unwrap();
+                    let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateCollisionShapeAddHeightfield(
                         command_handle,
                         file.as_ptr(),
@@ -2594,7 +2594,7 @@ impl PhysicsClient {
                     mesh_scale,
                     flags,
                 } => {
-                    let file = CString::new(filename.as_str()).unwrap();
+                    let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateCollisionShapeAddMesh(
                         command_handle,
                         file.as_ptr(),
@@ -2721,7 +2721,7 @@ impl PhysicsClient {
                     filename,
                     mesh_scale,
                 } => {
-                    let file = CString::new(filename.as_str()).unwrap();
+                    let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateVisualShapeAddMesh(
                         command_handle,
                         file.as_ptr(),

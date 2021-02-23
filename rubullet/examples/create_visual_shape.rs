@@ -4,6 +4,7 @@ use std::{thread, time::Duration};
 use anyhow::Result;
 use nalgebra::{Isometry3, Vector3};
 use rubullet::*;
+use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
@@ -16,7 +17,7 @@ fn main() -> Result<()> {
     let shift = Isometry3::translation(0.0, -0.02, 0.0);
     let visual_shape = physics_client.create_visual_shape(
         GeometricVisualShape::MeshFile {
-            filename: "duck.obj".to_string(),
+            filename: PathBuf::from("duck.obj"),
             mesh_scale: [0.1; 3],
         },
         VisualShapeOptions {
@@ -27,7 +28,7 @@ fn main() -> Result<()> {
     )?;
     let collision_shape = physics_client.create_collision_shape(
         GeometricCollisionShape::MeshFile {
-            filename: "duck_vhacd.obj".to_string(),
+            filename: PathBuf::from("duck_vhacd.obj"),
             mesh_scale: [0.1; 3],
             flags: None,
         },
