@@ -51,17 +51,6 @@ pub use crate::{
         VisualShapeOptions,
     },
 };
-// A utility for creating C-string literals.
-/*
-macro_rules! cstr
-{
-    ($lit:expr) => {
-        concat!($lit, "\0") as *const str
-            as *const [::std::os::raw::c_char]
-            as *const ::std::os::raw::c_char
-    }
-}
-*/
 pub mod client;
 pub mod error;
 pub mod mode;
