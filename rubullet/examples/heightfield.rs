@@ -4,14 +4,14 @@ use std::time::Duration;
 use anyhow::Result;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
 use rand::prelude::*;
-use rubullet::types::DebugVisualizerFlag::COV_ENABLE_RENDERING;
+use rubullet::types::DebugVisualizerFlag::CovEnableRendering;
 use rubullet::*;
 
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
-    physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, false);
+    physics_client.configure_debug_visualizer(CovEnableRendering, false);
     let height_pertubation_range = 0.05;
     let mut rng = thread_rng();
     let num_heightfield_rows = 256;
@@ -133,7 +133,7 @@ fn main() -> Result<()> {
             }
         }
     }
-    physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, true);
+    physics_client.configure_debug_visualizer(CovEnableRendering, true);
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
     physics_client.set_real_time_simulation(true);
 

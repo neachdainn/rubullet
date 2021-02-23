@@ -7,7 +7,7 @@ use rubullet::*;
 
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
-    physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
+    physics_client.configure_debug_visualizer(DebugVisualizerFlag::CovEnableYAxisUp, true);
     physics_client.set_additional_search_path(
         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
     )?;

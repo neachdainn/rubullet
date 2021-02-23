@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::Result;
 use nalgebra::{Isometry3, Point3, Vector3};
 use rubullet::types::DebugVisualizerFlag::{
-    COV_ENABLE_GUI, COV_ENABLE_RENDERING, COV_ENABLE_TINY_RENDERER,
+    CovEnableGui, CovEnableRendering, CovEnableTinyRenderer,
 };
 use rubullet::*;
 
@@ -15,9 +15,9 @@ fn main() -> Result<()> {
     physics_client.set_time_step(Duration::from_secs_f64(1. / 120.));
     let _plane_id = physics_client.load_urdf("plane100.urdf", None)?;
 
-    physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, false);
-    physics_client.configure_debug_visualizer(COV_ENABLE_GUI, false);
-    physics_client.configure_debug_visualizer(COV_ENABLE_TINY_RENDERER, false);
+    physics_client.configure_debug_visualizer(CovEnableRendering, false);
+    physics_client.configure_debug_visualizer(CovEnableGui, false);
+    physics_client.configure_debug_visualizer(CovEnableTinyRenderer, false);
 
     let shift = Isometry3::translation(0.0, -0.02, 0.0);
     let mesh_scale = [0.1; 3];
@@ -164,7 +164,7 @@ fn main() -> Result<()> {
         },
     )?;
     physics_client.sync_body_info()?;
-    physics_client.configure_debug_visualizer(COV_ENABLE_RENDERING, true);
+    physics_client.configure_debug_visualizer(CovEnableRendering, true);
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
 
     loop {

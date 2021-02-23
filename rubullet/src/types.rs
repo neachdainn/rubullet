@@ -718,25 +718,24 @@ impl ControlModeArray<'_> {
     }
 }
 /// Flags for [`configure_debug_visualizer()`](`crate::PhysicsClient::configure_debug_visualizer`)
-#[allow(non_camel_case_types)]
 pub enum DebugVisualizerFlag {
-    COV_ENABLE_GUI = 1,
-    COV_ENABLE_SHADOWS,
-    COV_ENABLE_WIREFRAME,
-    COV_ENABLE_VR_TELEPORTING,
-    COV_ENABLE_VR_PICKING,
-    COV_ENABLE_VR_RENDER_CONTROLLERS,
-    COV_ENABLE_RENDERING,
-    COV_ENABLE_SYNC_RENDERING_INTERNAL,
-    COV_ENABLE_KEYBOARD_SHORTCUTS,
-    COV_ENABLE_MOUSE_PICKING,
-    COV_ENABLE_Y_AXIS_UP,
-    COV_ENABLE_TINY_RENDERER,
-    COV_ENABLE_RGB_BUFFER_PREVIEW,
-    COV_ENABLE_DEPTH_BUFFER_PREVIEW,
-    COV_ENABLE_SEGMENTATION_MARK_PREVIEW,
-    COV_ENABLE_PLANAR_REFLECTION,
-    COV_ENABLE_SINGLE_STEP_RENDERING,
+    CovEnableGui = 1,
+    CovEnableShadows,
+    CovEnableWireframe,
+    CovEnableVrTeleporting,
+    CovEnableVrPicking,
+    CovEnableVrRenderControllers,
+    CovEnableRendering,
+    CovEnableSyncRenderingInternal,
+    CovEnableKeyboardShortcuts,
+    CovEnableMousePicking,
+    CovEnableYAxisUp,
+    CovEnableTinyRenderer,
+    CovEnableRgbBufferPreview,
+    CovEnableDepthBufferPreview,
+    CovEnableSegmentationMarkPreview,
+    CovEnablePlanarReflection,
+    CovEnableSingleStepRendering,
 }
 
 #[derive(Debug)]

@@ -571,7 +571,7 @@ pub fn inverse_dynamics_test() {
 #[test]
 fn test_mass_matrix_and_inverse_kinematics() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Direct)?;
-    physics_client.configure_debug_visualizer(DebugVisualizerFlag::COV_ENABLE_Y_AXIS_UP, true);
+    physics_client.configure_debug_visualizer(DebugVisualizerFlag::CovEnableYAxisUp, true);
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
     physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
 
