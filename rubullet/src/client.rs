@@ -1067,16 +1067,17 @@ impl PhysicsClient {
     ///
     /// See [`InverseKinematicsParametersBuilder`](`crate::types::InverseKinematicsParametersBuilder`) and
     /// [`InverseKinematicsParameters`](`crate::types::InverseKinematicsParameters`) for more details.
-    ///
+    /// # Arguments
+    /// * `body` - The [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
     /// # Note
     /// If you set the [`NullSpaceParameters`](`crate::types::InverseKinematicsNullSpaceParameters`)
     /// wrong this function will return an error, while the PyBullet just uses the normal Ik instead.
     pub fn calculate_inverse_kinematics(
         &mut self,
+        body: BodyId,
         params: InverseKinematicsParameters,
     ) -> Result<Vec<f64>, Error> {
         let solver = params.solver.into();
-        let body = params.body;
         let end_effector_link_index = params.end_effector_link_index;
 
         let pos = params.target_position;

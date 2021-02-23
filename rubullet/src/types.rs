@@ -184,8 +184,6 @@ pub struct InverseKinematicsNullSpaceParameters<'a> {
 /// Parameters for the [`calculate_inverse_kinematics()`](`crate::client::PhysicsClient::calculate_inverse_kinematics()`)
 /// You can easily create them using the [`InverseKinematicsParametersBuilder`](`InverseKinematicsParametersBuilder`)
 pub struct InverseKinematicsParameters<'a> {
-    /// The [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
-    pub body: BodyId,
     /// end effector link index
     pub end_effector_link_index: u32,
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
@@ -228,7 +226,6 @@ impl From<IkSolver> for i32 {
 impl<'a> Default for InverseKinematicsParameters<'a> {
     fn default() -> Self {
         InverseKinematicsParameters {
-            body: BodyId(0),
             end_effector_link_index: 0,
             target_position: Point3::new(0., 0., 0.),
             target_orientation: None,
@@ -248,12 +245,6 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 /// ```rust
 /// # use rubullet::{InverseKinematicsParametersBuilder, BodyId, InverseKinematicsNullSpaceParameters, PhysicsClient, UrdfOptions};
 /// # use nalgebra::Isometry3;
-/// # use rubullet::mode::Mode::Direct;
-/// #    let mut client = PhysicsClient::connect(Direct).unwrap();
-/// #    client.set_additional_search_path(
-/// #        "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
-/// #        ).unwrap();
-/// #    let panda_id = client.load_urdf("franka_panda/panda.urdf", UrdfOptions::default()).unwrap();
 /// const INITIAL_JOINT_POSITIONS: [f64; 9] =
 ///     [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
 /// const PANDA_NUM_DOFS: usize = 7;
@@ -269,7 +260,6 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 ///        rest_poses: &INITIAL_JOINT_POSITIONS,
 ///    };
 /// let inverse_kinematics_parameters = InverseKinematicsParametersBuilder::new(
-///             panda_id,
 ///             PANDA_END_EFFECTOR_INDEX,
 ///             &Isometry3::translation(0.3,0.3,0.3),
 ///         )
@@ -284,18 +274,12 @@ pub struct InverseKinematicsParametersBuilder<'a> {
 impl<'a> InverseKinematicsParametersBuilder<'a> {
     /// creates a new InverseKinematicsParametersBuilder
     /// # Arguments
-    /// * `body` -  the [`BodyId`](`BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
     /// * `end_effector_link_index` -  end effector link index
     /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
     /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
-    pub fn new(
-        body: BodyId,
-        end_effector_link_index: u32,
-        target_pose: &'a Isometry3<f64>,
-    ) -> Self {
+    pub fn new(end_effector_link_index: u32, target_pose: &'a Isometry3<f64>) -> Self {
         let target_position: Point3<f64> = target_pose.translation.vector.into();
         let params = InverseKinematicsParameters {
-            body,
             end_effector_link_index,
             target_position,
             target_orientation: Some(target_pose.rotation),

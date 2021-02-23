@@ -642,15 +642,12 @@ impl PandaSim {
             ),
             UnitQuaternion::<f64>::from_euler_angles(PI / 2., 0., 0.),
         );
-        let inverse_kinematics_parameters = InverseKinematicsParametersBuilder::new(
-            self.id,
-            PandaSim::PANDA_END_EFFECTOR_INDEX,
-            &pose,
-        )
-        .set_max_num_iterations(5)
-        .build();
+        let inverse_kinematics_parameters =
+            InverseKinematicsParametersBuilder::new(PandaSim::PANDA_END_EFFECTOR_INDEX, &pose)
+                .set_max_num_iterations(5)
+                .build();
         let joint_poses = client
-            .calculate_inverse_kinematics(inverse_kinematics_parameters)
+            .calculate_inverse_kinematics(self.id, inverse_kinematics_parameters)
             .unwrap();
 
         for i in 0..PandaSim::PANDA_NUM_DOFS {
