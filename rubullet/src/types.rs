@@ -32,8 +32,8 @@ pub struct TextureId(pub(crate) c_int);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ItemId(pub(crate) c_int);
 
-#[derive(Debug, PartialEq, Copy, Clone)]
 /// An enum to represent different types of joints
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum JointType {
     Revolute = 0,
     Prismatic = 1,
@@ -60,7 +60,7 @@ impl TryFrom<i32> for JointType {
         }
     }
 }
-#[derive(Debug)]
+
 /// Contains basic information about a joint like its type and name. It can be obtained via
 /// [`get_joint_info()`](`crate::PhysicsClient::get_joint_info()`)
 /// # Example
@@ -83,6 +83,7 @@ impl TryFrom<i32> for JointType {
 /// ```
 /// # See also
 /// * [`JointState`](`crate::types::JointState`) - For information about the current state of the joint.
+#[derive(Debug)]
 pub struct JointInfo {
     /// the same joint index as the input parameter
     pub joint_index: i32,
@@ -199,7 +200,7 @@ pub struct InverseKinematicsParameters<'a> {
     pub joint_damping: Option<&'a [f64]>,
     /// Solver which should be used for the Inverse Kinematics
     pub solver: IkSolver,
-    /// By default RuBullet uses the joint positions of the body.#
+    /// By default RuBullet uses the joint positions of the body.
     /// If provided, the targetPosition and targetOrientation is in local space!
     pub current_position: Option<&'a [f64]>,
     /// Refine the IK solution until the distance between target and actual end effector position
@@ -737,7 +738,6 @@ pub enum DebugVisualizerFlag {
     CovEnableSingleStepRendering,
 }
 
-#[derive(Debug)]
 /// Describes the State of a Link
 /// # Kind of Frames
 /// * `world_frame` - center of mass
@@ -775,6 +775,7 @@ pub enum DebugVisualizerFlag {
 /// # See also
 /// * [`get_link_state()`](`crate::client::PhysicsClient::get_link_state()`)
 /// * [`get_link_states()`](`crate::client::PhysicsClient::get_link_states()`)
+#[derive(Debug)]
 pub struct LinkState {
     /// Cartesian pose of the center of mass
     pub world_pose: Isometry3<f64>,
