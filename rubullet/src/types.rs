@@ -1,6 +1,5 @@
 //! Custom data types for RuBullet
 use crate::Error;
-use bitflags;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
     DVector, Isometry3, Matrix3xX, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
@@ -199,7 +198,7 @@ pub struct InverseKinematicsParameters<'a> {
     /// joint_damping allows to tune the IK solution using joint damping factors
     pub joint_damping: Option<&'a [f64]>,
     /// Solver which should be used for the Inverse Kinematics
-    pub solver: IKSolver,
+    pub solver: IkSolver,
     /// By default RuBullet uses the joint positions of the body.#
     /// If provided, the targetPosition and targetOrientation is in local space!
     pub current_position: Option<&'a [f64]>,
@@ -212,15 +211,15 @@ pub struct InverseKinematicsParameters<'a> {
 }
 /// Specifies which Inverse Kinematics Solver to use in
 /// [`calculate_inverse_kinematics()`](`crate::client::PhysicsClient::calculate_inverse_kinematics()`)
-pub enum IKSolver {
+pub enum IkSolver {
     /// Damped Least Squares
-    DLS = 0,
+    Dls = 0,
     /// Selective Damped Least
-    SDLS = 1,
+    Sdls = 1,
 }
 
-impl From<IKSolver> for i32 {
-    fn from(solver: IKSolver) -> Self {
+impl From<IkSolver> for i32 {
+    fn from(solver: IkSolver) -> Self {
         solver as i32
     }
 }
@@ -234,7 +233,7 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
             target_orientation: None,
             limits: None,
             joint_damping: None,
-            solver: IKSolver::DLS,
+            solver: IkSolver::Dls,
             current_position: None,
             max_num_iterations: 20,
             residual_threshold: None,
@@ -324,7 +323,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         self
     }
     /// Use a different IK-Solver. The default is DLS
-    pub fn set_ik_solver(mut self, solver: IKSolver) -> Self {
+    pub fn set_ik_solver(mut self, solver: IkSolver) -> Self {
         self.params.solver = solver;
         self
     }
@@ -598,7 +597,7 @@ impl Default for UrdfOptions {
     }
 }
 /// Options for loading models from an SDF file into the physics server.
-pub struct SDFOptions {
+pub struct SdfOptions {
     /// Experimental. By default, the joints in the URDF file are created using the reduced
     /// coordinate method: the joints are simulated using the
     /// Featherstone Articulated Body Algorithm (ABA, btMultiBody in Bullet 2.x).
@@ -609,9 +608,9 @@ pub struct SDFOptions {
     pub global_scaling: f64,
 }
 
-impl Default for SDFOptions {
+impl Default for SdfOptions {
     fn default() -> Self {
-        SDFOptions {
+        SdfOptions {
             use_maximal_coordinates: false,
             global_scaling: 1.0,
         }
@@ -623,15 +622,15 @@ impl Default for SDFOptions {
 ///
 /// | Mode                    | Implementation | Component                        | Constraint error to be minimized                                                                          |
 /// |-------------------------|----------------|----------------------------------|-----------------------------------------------------------------------------------------------------------|
-/// | Position,PositionWithPD | constraint     | velocity and position constraint | error = position_gain*(desired_position-actual_position)+velocity_gain*(desired_velocity-actual_velocity) |
+/// | Position,PositionWithPd | constraint     | velocity and position constraint | error = position_gain*(desired_position-actual_position)+velocity_gain*(desired_velocity-actual_velocity) |
 /// | Velocity                | constraint     | pure velocity constraint         | error = desired_velocity - actual_velocity                                                                |
 /// | Torque                  | External Force |                                  |                                                                                                           |
-/// | PD                      | ???            | ???                              | ???                                                                                                       |
+/// | Pd                      | ???            | ???                              | ???                                                                                                       |
 pub enum ControlMode {
     /// Position Control with the desired joint position.
     Position(f64),
     /// Same as Position, but you can set your own gains
-    PositionWithPD {
+    PositionWithPd {
         /// desired target position
         target_position: f64,
         /// desired target velocity
@@ -648,7 +647,7 @@ pub enum ControlMode {
     /// Torque control with the desired joint torque.
     Torque(f64),
     /// PD Control
-    PD {
+    Pd {
         /// desired target position
         target_position: f64,
         /// desired target velocity
@@ -668,8 +667,8 @@ impl ControlMode {
             ControlMode::Position(_) => 2,
             ControlMode::Velocity(_) => 0,
             ControlMode::Torque(_) => 1,
-            ControlMode::PD { .. } => 3,
-            ControlMode::PositionWithPD { .. } => 2,
+            ControlMode::Pd { .. } => 3,
+            ControlMode::PositionWithPd { .. } => 2,
         }
     }
 }
@@ -679,7 +678,7 @@ pub enum ControlModeArray<'a> {
     /// Position Control with the desired joint positions.
     Positions(&'a [f64]),
     /// Same as Positions, but you can set your own gains
-    PositionsWithPD {
+    PositionsWithPd {
         /// desired target positions
         target_positions: &'a [f64],
         /// desired target velocities
@@ -694,7 +693,7 @@ pub enum ControlModeArray<'a> {
     /// Torque control with the desired joint torques.
     Torques(&'a [f64]),
     /// PD Control
-    PD {
+    Pd {
         /// desired target positions
         target_positions: &'a [f64],
         /// desired target velocities
@@ -712,8 +711,8 @@ impl ControlModeArray<'_> {
             ControlModeArray::Positions(_) => 2,
             ControlModeArray::Velocities(_) => 0,
             ControlModeArray::Torques(_) => 1,
-            ControlModeArray::PD { .. } => 3,
-            ControlModeArray::PositionsWithPD { .. } => 2,
+            ControlModeArray::Pd { .. } => 3,
+            ControlModeArray::PositionsWithPd { .. } => 2,
         }
     }
 }

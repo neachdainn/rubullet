@@ -19,7 +19,7 @@ use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
     InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions, SDFOptions,
+    LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions, SdfOptions,
     TextureId, Velocity, VisualId, VisualShapeOptions,
 };
 use crate::{
@@ -275,7 +275,7 @@ impl PhysicsClient {
         let file = CString::new(file.as_ref().as_os_str().as_bytes())
             .map_err(|_| Error::new("Invalid path"))?;
 
-        let options = options.into().unwrap_or_else(|| UrdfOptions::default());
+        let options = options.into().unwrap_or_default();
         unsafe {
             // As always, PyBullet does not document and does not check return codes.
             let command = ffi::b3LoadUrdfCommandInit(self.handle.as_ptr(), file.as_ptr());
@@ -326,7 +326,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `file` - a relative or absolute path to the SDF file on the file system of the physics server.
     /// * `options` -  use additional options like `global_scaling` and `use_maximal_coordinates` for
-    /// loading the SDF-file. See [`SDFOptions`](`crate::types::SDFOptions`).
+    /// loading the SDF-file. See [`SdfOptions`](`crate::types::SdfOptions`).
     ///
     /// # Return
     /// Returns a list of unique body id's
@@ -343,7 +343,7 @@ impl PhysicsClient {
     ///     Ok(())
     /// }
     /// ```
-    pub fn load_sdf<P: AsRef<Path>, Options: Into<Option<SDFOptions>>>(
+    pub fn load_sdf<P: AsRef<Path>, Options: Into<Option<SdfOptions>>>(
         &mut self,
         file: P,
         options: Options,
@@ -1483,14 +1483,14 @@ impl PhysicsClient {
                     ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                     ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
                 }
-                ControlMode::PD {
+                ControlMode::Pd {
                     target_position: pos,
                     target_velocity: vel,
                     position_gain: kp,
                     velocity_gain: kd,
                     maximum_velocity: max_vel,
                 }
-                | ControlMode::PositionWithPD {
+                | ControlMode::PositionWithPd {
                     target_position: pos,
                     target_velocity: vel,
                     position_gain: kp,
@@ -1597,13 +1597,13 @@ impl PhysicsClient {
                         );
                     }
                 }
-                ControlModeArray::PD {
+                ControlModeArray::Pd {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,
                     velocity_gains: vg,
                 }
-                | ControlModeArray::PositionsWithPD {
+                | ControlModeArray::PositionsWithPd {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,

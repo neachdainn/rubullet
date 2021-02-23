@@ -192,7 +192,7 @@ pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: 
         .set_joint_motor_control_array(
             robot,
             indices.as_slice(),
-            ControlModeArray::PositionsWithPD {
+            ControlModeArray::PositionsWithPd {
                 target_positions: position,
                 target_velocities: zero_vec.as_slice(),
                 position_gains: position_gains.as_slice(),

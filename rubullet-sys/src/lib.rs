@@ -1,6 +1,5 @@
 //! Foreign function interface for Bullet C API.
-#![allow(non_camel_case_types, non_snake_case)]
-
+#![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
 use std::os::raw::{c_char, c_int, c_uchar};
 
 #[repr(C)]
