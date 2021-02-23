@@ -1076,8 +1076,6 @@ impl PhysicsClient {
         params: InverseKinematicsParameters,
     ) -> Result<Vec<f64>, Error> {
         let solver = params.solver.into();
-        let max_num_iterations = params.max_num_iterations;
-        let residual_threshold = params.residual_threshold.unwrap_or(-1.);
         let body = params.body;
         let end_effector_link_index = params.end_effector_link_index;
 
@@ -1088,8 +1086,7 @@ impl PhysicsClient {
         let mut sz_joint_ranges = 0;
         let mut sz_rest_poses = 0;
 
-        if params.limits.is_some() {
-            let limits = params.limits.as_ref().unwrap();
+        if let Some(limits) = &params.limits {
             sz_lower_limits = limits.lower_limits.len();
             sz_upper_limits = limits.upper_limits.len();
             sz_joint_ranges = limits.joint_ranges.len();
@@ -1143,10 +1140,13 @@ impl PhysicsClient {
                     current_positions.unwrap().as_ptr(),
                 )
             }
-            if max_num_iterations > 0 {
-                ffi::b3CalculateInverseKinematicsSetMaxNumIterations(command, max_num_iterations);
+            if let Some(max_num_iterations) = params.max_num_iterations {
+                ffi::b3CalculateInverseKinematicsSetMaxNumIterations(
+                    command,
+                    max_num_iterations as i32,
+                );
             }
-            if residual_threshold >= 0. {
+            if let Some(residual_threshold) = params.residual_threshold {
                 ffi::b3CalculateInverseKinematicsSetResidualThreshold(command, residual_threshold);
             }
             if has_null_space {
@@ -1159,9 +1159,9 @@ impl PhysicsClient {
                     ffi::b3CalculateInverseKinematicsPosOrnWithNullSpaceVel(
                         command,
                         dof_count as i32,
-                        end_effector_link_index,
-                        pos.as_ptr(),
-                        orientation.as_ptr(),
+                        end_effector_link_index as i32,
+                        pos.coords.as_ptr(),
+                        orientation.coords.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
@@ -1171,26 +1171,26 @@ impl PhysicsClient {
                     ffi::b3CalculateInverseKinematicsPosWithNullSpaceVel(
                         command,
                         dof_count as i32,
-                        end_effector_link_index,
-                        pos.as_ptr(),
+                        end_effector_link_index as i32,
+                        pos.coords.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
                         rest_poses.as_ptr(),
                     );
                 }
-            } else if ori.is_some() {
+            } else if let Some(orientation) = ori {
                 ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
                     command,
-                    end_effector_link_index,
-                    pos.as_ptr(),
-                    ori.unwrap().as_ptr(),
+                    end_effector_link_index as i32,
+                    pos.coords.as_ptr(),
+                    orientation.coords.as_ptr(),
                 );
             } else {
                 ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
                     command,
-                    end_effector_link_index,
-                    pos.as_ptr(),
+                    end_effector_link_index as i32,
+                    pos.coords.as_ptr(),
                 );
             }
 

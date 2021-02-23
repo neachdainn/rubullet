@@ -187,13 +187,13 @@ pub struct InverseKinematicsParameters<'a> {
     /// The [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`crate::PhysicsClient::load_urdf()`) etc.
     pub body: BodyId,
     /// end effector link index
-    pub end_effector_link_index: i32,
+    pub end_effector_link_index: u32,
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
     /// By default this is in Cartesian world space, unless you provide current_position joint angles.
-    pub target_position: [f64; 3],
+    pub target_position: Point3<f64>,
     /// Target orientation in Cartesian world space, quaternion [x,y,z,w].
     /// If not specified, pure position IK will be used.
-    pub target_orientation: Option<[f64; 4]>,
+    pub target_orientation: Option<UnitQuaternion<f64>>,
     /// Optional null-space IK
     pub limits: Option<InverseKinematicsNullSpaceParameters<'a>>,
     /// joint_damping allows to tune the IK solution using joint damping factors
@@ -201,11 +201,11 @@ pub struct InverseKinematicsParameters<'a> {
     /// Solver which should be used for the Inverse Kinematics
     pub solver: IkSolver,
     /// By default RuBullet uses the joint positions of the body.
-    /// If provided, the targetPosition and targetOrientation is in local space!
+    /// If provided, the target_position and target_orientation is in local space!
     pub current_position: Option<&'a [f64]>,
     /// Refine the IK solution until the distance between target and actual end effector position
-    /// is below this threshold, or the max_num_iterations is reached
-    pub max_num_iterations: i32,
+    /// is below the residual threshold, or the max_num_iterations is reached
+    pub max_num_iterations: Option<u32>,
     /// Refine the IK solution until the distance between target and actual end effector position
     /// is below this threshold, or the max_num_iterations is reached
     pub residual_threshold: Option<f64>,
@@ -230,13 +230,13 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
         InverseKinematicsParameters {
             body: BodyId(0),
             end_effector_link_index: 0,
-            target_position: [0., 0., 0.],
+            target_position: Point3::new(0., 0., 0.),
             target_orientation: None,
             limits: None,
             joint_damping: None,
             solver: IkSolver::Dls,
             current_position: None,
-            max_num_iterations: 20,
+            max_num_iterations: None,
             residual_threshold: None,
         }
     }
@@ -257,7 +257,7 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 /// const INITIAL_JOINT_POSITIONS: [f64; 9] =
 ///     [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
 /// const PANDA_NUM_DOFS: usize = 7;
-/// const PANDA_END_EFFECTOR_INDEX: i32 = 11;
+/// const PANDA_END_EFFECTOR_INDEX: u32 = 11;
 /// const LL: [f64; 9] = [-7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
 /// const UL: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
 /// const JR: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
@@ -288,22 +288,17 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     /// * `end_effector_link_index` -  end effector link index
     /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
     /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
-    pub fn new<Index>(
+    pub fn new(
         body: BodyId,
-        end_effector_link_index: Index,
+        end_effector_link_index: u32,
         target_pose: &'a Isometry3<f64>,
-    ) -> Self
-    where
-        Index: Into<i32>,
-    {
-        let target_position: [f64; 3] = target_pose.translation.vector.into();
-        let quat = &target_pose.rotation.coords;
-        let target_orientation = [quat.x, quat.y, quat.z, quat.w];
+    ) -> Self {
+        let target_position: Point3<f64> = target_pose.translation.vector.into();
         let params = InverseKinematicsParameters {
             body,
-            end_effector_link_index: end_effector_link_index.into(),
+            end_effector_link_index,
             target_position,
-            target_orientation: Some(target_orientation),
+            target_orientation: Some(target_pose.rotation),
             ..Default::default()
         };
         InverseKinematicsParametersBuilder { params }
@@ -328,7 +323,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         self.params.solver = solver;
         self
     }
-    /// Specify the current position if you do not want to use the position of the body.
+    /// Specify the current joint position if you do not want to use the position of the body.
     /// If you use it the target pose will be in local space!
     pub fn set_current_position(mut self, current_position: &'a [f64]) -> Self {
         self.params.current_position = Some(current_position);
@@ -336,7 +331,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     }
     /// Sets the maximum number of iterations. The default is 20.
     pub fn set_max_num_iterations(mut self, iterations: u32) -> Self {
-        self.params.max_num_iterations = iterations as i32;
+        self.params.max_num_iterations = Some(iterations);
         self
     }
     /// Recalculate the IK until the distance between target and actual end effector is smaller than

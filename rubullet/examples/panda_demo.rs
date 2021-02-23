@@ -34,7 +34,7 @@ impl PandaSim {
     const INITIAL_JOINT_POSITIONS: [f64; 9] =
         [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
     const PANDA_NUM_DOFS: usize = 7;
-    const PANDA_END_EFFECTOR_INDEX: i32 = 11;
+    const PANDA_END_EFFECTOR_INDEX: u32 = 11;
     const LL: [f64; 9] = [-7.; 9];
     const UL: [f64; 9] = [7.; 9];
     const JR: [f64; 9] = [7.; 9];

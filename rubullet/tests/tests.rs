@@ -591,7 +591,7 @@ impl PandaSim {
     const INITIAL_JOINT_POSITIONS: [f64; 9] =
         [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
     const PANDA_NUM_DOFS: usize = 7;
-    const PANDA_END_EFFECTOR_INDEX: i32 = 11;
+    const PANDA_END_EFFECTOR_INDEX: u32 = 11;
     pub fn new(client: &mut PhysicsClient, offset: Vector3<f64>) -> Result<Self, Error> {
         client.set_additional_search_path(
             "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
