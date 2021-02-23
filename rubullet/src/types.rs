@@ -942,7 +942,7 @@ pub enum GeometricCollisionShape {
     },
     /// Load a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
-        /// Path to the .obj file as String.
+        /// Path to the .obj file.
         filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
@@ -962,7 +962,7 @@ pub enum GeometricCollisionShape {
     },
     /// Loads a Heightfield from a file
     HeightfieldFile {
-        /// Path to the .obj file as String.
+        /// Path to the .obj file.
         filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
@@ -1024,7 +1024,7 @@ pub enum GeometricVisualShape {
     },
     /// Loads a .obj (Wavefront) file. Will create convex hulls for each object.
     MeshFile {
-        /// Path to the .obj file as String
+        /// Path to the .obj file.
         filename: PathBuf,
         /// Scaling of the Mesh. Use [1.;3] for original scaling.
         mesh_scale: [f64; 3],
