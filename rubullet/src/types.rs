@@ -872,6 +872,7 @@ pub struct VisualShapeOptions {
     /// specular reflection color, red, green, blue components in range \[0,1\]
     pub specular_colors: [f64; 3],
     /// Additional flags. Currently not used
+    #[doc(hidden)]
     pub flags: Option<i32>,
 }
 impl Default for VisualShapeOptions {
@@ -1095,6 +1096,7 @@ pub struct ChangeVisualShapeOptions {
     /// specular color components, RED, GREEN and BLUE, can be from 0 to large number (>100).
     pub specular_color: Option<[f64; 3]>,
     /// Not yet used anywhere. But it is in the code.
+    #[doc(hidden)]
     pub flags: Option<i32>,
 }
 impl Default for ChangeVisualShapeOptions {
