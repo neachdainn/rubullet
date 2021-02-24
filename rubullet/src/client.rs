@@ -217,7 +217,15 @@ impl PhysicsClient {
     /// Sets the default gravity force for all objects.
     ///
     /// By default, there is no gravitational force enabled.
-    pub fn set_gravity(&mut self, gravity: Vector3<f64>) -> Result<(), Error> {
+    ///
+    /// # Arguments
+    /// * `gravity` - a gravity vector. Can be a Vector3, a \[f64;3\]-array or anything else that can be
+    /// converted into a Vector3.
+    pub fn set_gravity<GravityVector: Into<Vector3<f64>>>(
+        &mut self,
+        gravity: GravityVector,
+    ) -> Result<(), Error> {
+        let gravity = gravity.into();
         if !self.can_submit_command() {
             return Err(Error::new("Not connected to physics server"));
         }
