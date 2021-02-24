@@ -86,7 +86,7 @@ impl TryFrom<i32> for JointType {
 #[derive(Debug)]
 pub struct JointInfo {
     /// the same joint index as the input parameter
-    pub joint_index: i32,
+    pub joint_index: usize,
     /// the name of the joint, as specified in the URDF (or SDF etc) file
     pub joint_name: String,
     /// type of the joint, this also implies the number of position and velocity variables.
@@ -152,7 +152,7 @@ impl From<b3JointInfo> for JointInfo {
                 joint_type: JointType::try_from(m_joint_type).unwrap(),
                 q_index: m_q_index,
                 u_index: m_u_index,
-                joint_index: m_joint_index,
+                joint_index: m_joint_index as usize,
                 flags: m_flags,
                 joint_damping: m_joint_damping,
                 joint_friction: m_joint_friction,

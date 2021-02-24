@@ -178,7 +178,7 @@ impl PandaSim {
         for i in 0..PandaSim::PANDA_NUM_DOFS {
             client.set_joint_motor_control_2(
                 self.id,
-                i as i32,
+                i,
                 ControlMode::Position(joint_poses[i]),
                 Some(240. * 5.),
             );

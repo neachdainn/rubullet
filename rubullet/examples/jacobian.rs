@@ -7,11 +7,11 @@ use anyhow::Result;
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
     let num_joints = client.get_num_joints(robot);
-    assert_eq!(num_joints as usize, position.len());
-    let indices = (0..num_joints).into_iter().collect::<Vec<i32>>();
-    let zero_vec = vec![0.; num_joints as usize];
-    let position_gains = vec![1.; num_joints as usize];
-    let velocity_gains = vec![0.3; num_joints as usize];
+    assert_eq!(num_joints, position.len());
+    let indices = (0..num_joints).into_iter().collect::<Vec<usize>>();
+    let zero_vec = vec![0.; num_joints];
+    let position_gains = vec![1.; num_joints];
+    let velocity_gains = vec![0.3; num_joints];
     client
         .set_joint_motor_control_array(
             robot,
@@ -32,7 +32,7 @@ pub fn get_joint_states(
     robot: BodyId,
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     let num_joints = client.get_num_joints(robot);
-    let indices = (0..num_joints).into_iter().collect::<Vec<i32>>();
+    let indices = (0..num_joints).into_iter().collect::<Vec<usize>>();
     let joint_states = client.get_joint_states(robot, indices.as_slice()).unwrap();
     let pos = joint_states
         .iter()
@@ -54,7 +54,7 @@ pub fn get_motor_joint_states(
     robot: BodyId,
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     let num_joints = client.get_num_joints(robot);
-    let indices = (0..num_joints).into_iter().collect::<Vec<i32>>();
+    let indices = (0..num_joints).into_iter().collect::<Vec<usize>>();
     let joint_states = client.get_joint_states(robot, indices.as_slice()).unwrap();
     let joint_infos: Vec<JointInfo> = (0..num_joints)
         .into_iter()
@@ -90,7 +90,7 @@ pub fn multiply_jacobian(
     let mut result = Vector3::new(0., 0., 0.);
     let mut i = 0;
     for c in 0..vector.len() {
-        if client.get_joint_info(robot, c as i32).q_index > -1 {
+        if client.get_joint_info(robot, c).q_index > -1 {
             for r in 0..3 {
                 result[r] += jacobian[(r, i)] * vector[c];
             }
@@ -125,9 +125,9 @@ fn main() -> Result<()> {
     // let kuka_id = p.load_urdf("kuka_iiwa/model.urdf", UrdfOptions::default())?;
     // let kuka_id = p.load_urdf("kuka_lwr/kuka.urdf", UrdfOptions::default())?;
     let num_joints = p.get_num_joints(kuka_id);
-    let kuka_end_effector_index = num_joints - 1;
+    let kuka_end_effector_index = num_joints as i32 - 1;
 
-    set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints as usize].as_slice());
+    set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints].as_slice());
     p.step_simulation()?;
 
     let (_pos, vel, _torq) = get_joint_states(&mut p, kuka_id);

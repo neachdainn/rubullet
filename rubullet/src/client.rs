@@ -842,8 +842,8 @@ impl PhysicsClient {
     /// returns the number of joints of a body
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    pub fn get_num_joints(&mut self, body: BodyId) -> i32 {
-        unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) }
+    pub fn get_num_joints(&mut self, body: BodyId) -> usize {
+        unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) as usize }
     }
     /// Query info about a joint like its name and type
     /// # Arguments
@@ -851,11 +851,11 @@ impl PhysicsClient {
     /// * `joint_index` - an index in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
     ///
     /// See [JointInfo](`crate::types::JointInfo`) for an example use
-    pub fn get_joint_info(&mut self, body: BodyId, joint_index: i32) -> JointInfo {
+    pub fn get_joint_info(&mut self, body: BodyId, joint_index: usize) -> JointInfo {
         self.get_joint_info_intern(body, joint_index).into()
     }
 
-    fn get_joint_info_intern(&mut self, body: BodyId, joint_index: i32) -> b3JointInfo {
+    fn get_joint_info_intern(&mut self, body: BodyId, joint_index: usize) -> b3JointInfo {
         unsafe {
             let mut joint_info = b3JointInfo {
                 m_link_name: [2; 1024],
@@ -878,7 +878,12 @@ impl PhysicsClient {
                 m_q_size: 0,
                 m_u_size: 0,
             };
-            ffi::b3GetJointInfo(self.handle.as_ptr(), body.0, joint_index, &mut joint_info);
+            ffi::b3GetJointInfo(
+                self.handle.as_ptr(),
+                body.0,
+                joint_index as i32,
+                &mut joint_info,
+            );
             joint_info
         }
     }
@@ -894,11 +899,12 @@ impl PhysicsClient {
     pub fn reset_joint_state<Velocity: Into<Option<f64>>>(
         &mut self,
         body: BodyId,
-        joint_index: i32,
+        joint_index: usize,
         value: f64,
         velocity: Velocity,
     ) -> Result<(), Error> {
         unsafe {
+            let joint_index = joint_index as i32;
             let num_joints = ffi::b3GetNumJoints(self.handle.as_ptr(), body.0);
             if joint_index > num_joints {
                 return Err(Error::new("Joint index out-of-range."));
@@ -927,13 +933,14 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `joint_index` - a joint index in the range \[0..[`get_num_joints(body)`](`Self::get_num_joints()`)\]
-    pub fn get_joint_state(&mut self, body: BodyId, joint_index: i32) -> Result<JointState, Error> {
+    pub fn get_joint_state(
+        &mut self,
+        body: BodyId,
+        joint_index: usize,
+    ) -> Result<JointState, Error> {
         unsafe {
             if body.0 < 0 {
                 return Err(Error::new("getJointState failed; invalid BodyId"));
-            }
-            if joint_index < 0 {
-                return Err(Error::new("getJointState failed; invalid joint_index"));
             }
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             let status_handle =
@@ -946,7 +953,7 @@ impl PhysicsClient {
             if 0 != ffi::b3GetJointState(
                 self.handle.as_ptr(),
                 status_handle,
-                joint_index,
+                joint_index as i32,
                 &mut sensor_state,
             ) {
                 return Ok(sensor_state.into());
@@ -962,7 +969,7 @@ impl PhysicsClient {
     pub fn get_joint_states(
         &mut self,
         body: BodyId,
-        joint_indices: &[i32],
+        joint_indices: &[usize],
     ) -> Result<Vec<JointState>, Error> {
         unsafe {
             if body.0 < 0 {
@@ -979,17 +986,16 @@ impl PhysicsClient {
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getJointState failed."));
             }
-            let mut result_list_joint_states =
-                Vec::<JointState>::with_capacity(num_joints as usize);
+            let mut result_list_joint_states = Vec::<JointState>::with_capacity(num_joints);
             for &joint_index in joint_indices.iter() {
-                if joint_index < 0 || joint_index >= num_joints {
+                if joint_index >= num_joints {
                     return Err(Error::new("getJointStates failed; invalid joint_index"));
                 }
                 let mut sensor_state = b3JointSensorState::default();
                 if 0 != ffi::b3GetJointState(
                     self.handle.as_ptr(),
                     status_handle,
-                    joint_index,
+                    joint_index as i32,
                     &mut sensor_state,
                 ) {
                     result_list_joint_states.push(sensor_state.into());
@@ -1450,7 +1456,7 @@ impl PhysicsClient {
     pub fn set_joint_motor_control_2(
         &mut self,
         body: BodyId,
-        joint_index: i32,
+        joint_index: usize,
         control_mode: ControlMode,
         maximum_force: Option<f64>,
     ) {
@@ -1537,7 +1543,7 @@ impl PhysicsClient {
     pub fn set_joint_motor_control_array(
         &mut self,
         body: BodyId,
-        joint_indices: &[i32],
+        joint_indices: &[usize],
         control_mode: ControlModeArray,
         maximum_force: Option<&[f64]>,
     ) -> Result<(), Error> {
@@ -1569,7 +1575,7 @@ impl PhysicsClient {
             );
 
             for &joint_index in joint_indices.iter() {
-                if joint_index < 0 || joint_index >= num_joints {
+                if joint_index >= num_joints {
                     return Err(Error::new("Joint index out-of-range."));
                 }
             }
@@ -2493,14 +2499,14 @@ impl PhysicsClient {
     pub fn enable_joint_torque_sensor(
         &mut self,
         body: BodyId,
-        joint_index: i32,
+        joint_index: usize,
         enable_sensor: bool,
     ) -> Result<(), Error> {
         unsafe {
             let command_handle = ffi::b3CreateSensorCommandInit(self.handle.as_ptr(), body.0);
             ffi::b3CreateSensorEnable6DofJointForceTorqueSensor(
                 command_handle,
-                joint_index,
+                joint_index as i32,
                 enable_sensor as i32,
             );
             let status_handle =
@@ -3160,8 +3166,8 @@ impl PhysicsClient {
         Err(Error::new("Couldn't get body info"))
     }
     /// returns the total number of bodies in the physics server
-    pub fn get_num_bodies(&mut self) -> i32 {
-        unsafe { ffi::b3GetNumBodies(self.handle.as_ptr()) }
+    pub fn get_num_bodies(&mut self) -> usize {
+        unsafe { ffi::b3GetNumBodies(self.handle.as_ptr()) as usize }
     }
 }
 
