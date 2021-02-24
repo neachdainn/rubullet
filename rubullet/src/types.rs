@@ -185,7 +185,7 @@ pub struct InverseKinematicsNullSpaceParameters<'a> {
 /// You can easily create them using the [`InverseKinematicsParametersBuilder`](`InverseKinematicsParametersBuilder`)
 pub struct InverseKinematicsParameters<'a> {
     /// end effector link index
-    pub end_effector_link_index: u32,
+    pub end_effector_link_index: usize,
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
     /// By default this is in Cartesian world space, unless you provide current_position joint angles.
     pub target_position: Point3<f64>,
@@ -203,7 +203,7 @@ pub struct InverseKinematicsParameters<'a> {
     pub current_position: Option<&'a [f64]>,
     /// Refine the IK solution until the distance between target and actual end effector position
     /// is below the residual threshold, or the max_num_iterations is reached
-    pub max_num_iterations: Option<u32>,
+    pub max_num_iterations: Option<usize>,
     /// Refine the IK solution until the distance between target and actual end effector position
     /// is below this threshold, or the max_num_iterations is reached
     pub residual_threshold: Option<f64>,
@@ -248,7 +248,7 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
 /// const INITIAL_JOINT_POSITIONS: [f64; 9] =
 ///     [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32, 0.02, 0.02];
 /// const PANDA_NUM_DOFS: usize = 7;
-/// const PANDA_END_EFFECTOR_INDEX: u32 = 11;
+/// const PANDA_END_EFFECTOR_INDEX: usize = 11;
 /// const LL: [f64; 9] = [-7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
 /// const UL: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
 /// const JR: [f64; 9] = [7.; 9]; // size is 9 = 7 DOF + 2 DOF for the gripper
@@ -277,7 +277,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     /// * `end_effector_link_index` -  end effector link index
     /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
     /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
-    pub fn new(end_effector_link_index: u32, target_pose: &'a Isometry3<f64>) -> Self {
+    pub fn new(end_effector_link_index: usize, target_pose: &'a Isometry3<f64>) -> Self {
         let target_position: Point3<f64> = target_pose.translation.vector.into();
         let params = InverseKinematicsParameters {
             end_effector_link_index,
@@ -314,7 +314,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
         self
     }
     /// Sets the maximum number of iterations. The default is 20.
-    pub fn set_max_num_iterations(mut self, iterations: u32) -> Self {
+    pub fn set_max_num_iterations(mut self, iterations: usize) -> Self {
         self.params.max_num_iterations = Some(iterations);
         self
     }
