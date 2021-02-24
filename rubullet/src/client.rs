@@ -609,10 +609,10 @@ impl PhysicsClient {
     /// Reset the linear and/or angular velocity of the base of a body
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `linear_velocity` - either a &[f64;3] which contains the desired linear velocity (x,y,z)
+    /// * `linear_velocity` - either a \[f64;3\] or a Vector3 which contains the desired linear velocity (x,y,z)
     ///  in Cartesian world coordinates or `None` to not change the linear velocity
-    /// * `angular_velocity` - either a &[f64;3] which contains the desired angular velocity
-    /// (wx,wy,wz) in Cartesian world coordinates or `None` to not change the linear velocity
+    /// * `angular_velocity` - either a \[f64;3\] or a Vector3 which contains the desired angular velocity
+    /// (wx,wy,wz) in Cartesian world coordinates or `None` to not change the angular velocity
     ///
     /// # Errors
     /// * When you set both linear_velocity and angular_velocity to `None`
