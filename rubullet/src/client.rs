@@ -637,23 +637,20 @@ impl PhysicsClient {
     ///    )?;
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, [1., 2., 3.], [4., 5., 6.])?;
+    ///        .reset_base_velocity(box_id, [1., 2., 3.], [4., 5., 6.]);
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
     ///    assert_eq!(velocity.to_vector().as_slice(), &[1., 2., 3., 4., 5., 6.]);
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, Vector3::zeros(), None)?;
+    ///        .reset_base_velocity(box_id, Vector3::zeros(), None);
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
     ///    assert_eq!(velocity.to_vector().as_slice(), &[0., 0., 0., 4., 5., 6.]);
     ///
     ///    physics_client
-    ///        .reset_base_velocity(box_id, None, [0., 0., 0.])?;
+    ///        .reset_base_velocity(box_id, None, [0., 0., 0.]);
     ///    let velocity = physics_client.get_base_velocity(box_id)?;
     ///    assert_eq!(velocity.to_vector().as_slice(), & [0.; 6]);
     ///
-    ///    assert!(physics_client
-    ///        .reset_base_velocity::<Vector3<f64>,_,_>(box_id, None, None)
-    ///        .is_err());
     ///    Ok(())
     ///}
     /// ```
@@ -666,17 +663,13 @@ impl PhysicsClient {
         body: BodyId,
         linear_velocity: Linear,
         angular_velocity: Angular,
-    ) -> Result<(), Error> {
+    ) {
         let maybe_lin = linear_velocity.into();
         let maybe_angular = angular_velocity.into();
         unsafe {
             let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
             match (maybe_lin, maybe_angular) {
-                (None, None) => {
-                    return Err(Error::new(
-                        "expected at least linearVelocity and/or angularVelocity.",
-                    ));
-                }
+                (None, None) => {}
                 (Some(linear), Some(angular)) => {
                     let linear: [f64; 3] = linear.into().into();
                     let angular: [f64; 3] = angular.into().into();
@@ -701,7 +694,6 @@ impl PhysicsClient {
             let _status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
-        Ok(())
     }
     /// Queries the Cartesian world pose for the center of mass for a link.
     /// It will also report the local inertial frame of the center of mass to the URDF link frame,
