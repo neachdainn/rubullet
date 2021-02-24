@@ -2442,38 +2442,32 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index or -1 for the base.
-    /// * `force_object` - force vector to be applied [x,y,z]. See flags for coordinate system
+    /// * `force_object` - force vector to be applied [x,y,z] either as an array, Point3 or Vector3.
+    /// See flags for coordinate system
     /// * `position_object` - position on the link where the force is applied.
     /// * `flags` - Specify the coordinate system of force/position:
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
-    pub fn apply_external_force(
+    pub fn apply_external_force<Force: Into<Vector3<f64>>, Position: Into<Point3<f64>>>(
         &mut self,
         body: BodyId,
         link_index: i32,
-        force_object: &[f64],
-        position_object: &[f64],
+        force_object: Force,
+        position_object: Position,
         flags: ExternalForceFrame,
-    ) -> Result<(), Error> {
-        if force_object.len() != 3 {
-            return Err(Error::new("force object has wrong length"));
-        }
-        if position_object.len() != 3 {
-            return Err(Error::new("position object has wrong length"));
-        }
+    ) {
         unsafe {
             let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
             ffi::b3ApplyExternalForce(
                 command,
                 body.0,
                 link_index,
-                force_object.as_ptr(),
-                position_object.as_ptr(),
+                force_object.into().as_ptr(),
+                position_object.into().coords.as_ptr(),
                 flags as i32,
             );
             let _status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
-        Ok(())
     }
     /// Applies a torque to a body.
     ///
@@ -2485,32 +2479,29 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index or -1 for the base.
-    /// * `torque_object` - torque vector to be applied [x,y,z]. See flags for coordinate system
+    /// * `torque_object` - torque vector to be applied [x,y,z] either as an array or a Vector3.
+    /// See flags for coordinate system
     /// * `flags` - Specify the coordinate system of torque:
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
-    pub fn apply_external_torque(
+    pub fn apply_external_torque<Torque: Into<Vector3<f64>>>(
         &mut self,
         body: BodyId,
         link_index: i32,
-        torque_object: &[f64],
+        torque_object: Torque,
         flags: ExternalForceFrame,
-    ) -> Result<(), Error> {
-        if torque_object.len() != 3 {
-            return Err(Error::new("torque object has wrong length"));
-        }
+    ) {
         unsafe {
             let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
             ffi::b3ApplyExternalTorque(
                 command,
                 body.0,
                 link_index,
-                torque_object.as_ptr(),
+                torque_object.into().as_ptr(),
                 flags as i32,
             );
             let _status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
-        Ok(())
     }
     /// You can enable or disable a joint force/torque sensor in each joint.
     /// Once enabled, if you perform a [`step_simulation()`](`Self::step_simulation()`),
