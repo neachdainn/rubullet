@@ -63,7 +63,7 @@ fn main() -> Result<()> {
     )?;
     let col_box_id = physics_client.create_collision_shape(
         GeometricCollisionShape::Box {
-            half_extents: [sphere_radius; 3],
+            half_extents: Vector3::from_element(sphere_radius),
         },
         Isometry3::identity(),
     )?;

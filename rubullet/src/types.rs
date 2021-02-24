@@ -895,8 +895,8 @@ pub enum GeometricCollisionShape {
     /// A Cuboid
     Box {
         /// [x,y,z] lengths starting from the middle of the box.
-        /// For example [0.5,0.5,0.5] is a unit cube.
-        half_extents: [f64; 3],
+        /// For example Vector3::new(0.5,0.5,0.5) would be a unit cube.
+        half_extents: Vector3<f64>,
     },
     /// Like a cylinder but with a half sphere on each end. The total length of a capsule is
     /// length + 2 * radius.
@@ -975,8 +975,8 @@ pub enum GeometricVisualShape {
     /// A Cuboid
     Box {
         /// [x,y,z] lengths starting from the middle of the box.
-        /// For example [0.5,0.5,0.5] is a unit cube.
-        half_extents: [f64; 3],
+        /// For example Vector3::new(0.5,0.5,0.5) would be a unit cube.
+        half_extents: Vector3<f64>,
     },
     /// Like a cylinder but with a half sphere on each end. The total length of a capsule is
     /// length + 2 * radius.

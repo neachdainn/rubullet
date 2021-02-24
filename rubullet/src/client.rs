@@ -2860,6 +2860,7 @@ impl PhysicsClient {
     /// ```rust
     ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
+    ///# use nalgebra::Vector3;
     ///# use rubullet::mode::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
@@ -2869,7 +2870,7 @@ impl PhysicsClient {
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
     ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
     ///    let box_shape = GeometricVisualShape::Box {
-    ///        half_extents: [0.5; 3],
+    ///        half_extents: Vector3::from_element(0.5),
     ///    };
     ///    let box_visual = physics_client.create_visual_shape(
     ///        box_shape,
@@ -2999,6 +3000,7 @@ impl PhysicsClient {
     /// ```rust
     ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
+    ///# use nalgebra::Vector3;
     ///# use rubullet::mode::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
@@ -3008,7 +3010,7 @@ impl PhysicsClient {
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
     ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
     ///    let box_shape = GeometricVisualShape::Box {
-    ///        half_extents: [0.5; 3],
+    ///        half_extents: Vector3::from_element(0.5),
     ///    };
     ///    let box_visual = physics_client.create_visual_shape(
     ///        box_shape,

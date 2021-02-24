@@ -124,7 +124,7 @@ fn main() -> Result<()> {
     )?;
     let collision_shape_id = physics_client.create_collision_shape(
         GeometricCollisionShape::Box {
-            half_extents: mesh_scale,
+            half_extents: Vector3::from_column_slice(&mesh_scale),
         },
         Isometry3::identity(),
     )?;
