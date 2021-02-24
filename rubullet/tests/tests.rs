@@ -651,7 +651,7 @@ impl PandaSim {
             .unwrap();
 
         for i in 0..PandaSim::PANDA_NUM_DOFS {
-            client.set_joint_motor_control_2(
+            client.set_joint_motor_control(
                 self.id,
                 i,
                 ControlMode::Position(joint_poses[i]),

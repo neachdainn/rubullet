@@ -161,7 +161,7 @@ impl PandaSim {
             .calculate_inverse_kinematics(self.id, inverse_kinematics_parameters)
             .unwrap();
         for i in 0..PandaSim::PANDA_NUM_DOFS {
-            client.set_joint_motor_control_2(
+            client.set_joint_motor_control(
                 self.id,
                 i,
                 ControlMode::Position(joint_poses[i]),

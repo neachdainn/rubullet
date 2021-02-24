@@ -1417,7 +1417,8 @@ impl PhysicsClient {
         Err(Error::new("Error in calculateJacobian"))
     }
 
-    /// sets joint motor commands. This function differs a bit from the corresponding PyBullet function.
+    /// sets joint motor commands. This function is the rust version of `setJointMotorControl2` from PyBullet.
+    /// This function differs a bit from the corresponding PyBullet function.
     /// Instead of providing optional arguments that depend on the Control Mode, the necessary parameters
     /// are directly encoded in the ControlMode Enum.
     ///
@@ -1438,7 +1439,7 @@ impl PhysicsClient {
     ///#     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///#     let joint_index = 1;
-    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
     ///# Ok(())
     ///# }
     /// ```
@@ -1456,12 +1457,14 @@ impl PhysicsClient {
     ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///     let joint_index = 1;
-    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Torque(100.), None);
-    ///     client.set_joint_motor_control_2(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Torque(100.), None);
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
     /// Ok(())
     /// }
     /// ```
-    pub fn set_joint_motor_control_2(
+    #[doc(alias = "set_joint_motor_control_2")]
+    #[doc(alias = "setJointMotorControl2")]
+    pub fn set_joint_motor_control(
         &mut self,
         body: BodyId,
         joint_index: usize,
@@ -1540,8 +1543,8 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
         }
     }
-    /// The array version of [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`).
-    /// This reduces the calling overhead and should therefore be faster. See [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`)
+    /// The array version of [`set_joint_motor_control()`](`crate::client::PhysicsClient::set_joint_motor_control()`).
+    /// This reduces the calling overhead and should therefore be faster. See [`set_joint_motor_control()`](`crate::client::PhysicsClient::set_joint_motor_control()`)
     /// for more details.
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.

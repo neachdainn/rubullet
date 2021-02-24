@@ -598,7 +598,7 @@ impl Default for SdfOptions {
 }
 /// The Control Mode specifies how the robot should move (Position Control, Velocity Control, Torque Control)
 /// Each Control Mode has its own set of Parameters. The Position mode for example takes a desired joint
-/// position as input. It can be used in [`set_joint_motor_control_2()`](`crate::client::PhysicsClient::set_joint_motor_control_2()`)
+/// position as input. It can be used in [`set_joint_motor_control()`](`crate::client::PhysicsClient::set_joint_motor_control()`)
 ///
 /// | Mode                    | Implementation | Component                        | Constraint error to be minimized                                                                          |
 /// |-------------------------|----------------|----------------------------------|-----------------------------------------------------------------------------------------------------------|

@@ -123,7 +123,7 @@ fn main() -> Result<()> {
                 };
 
                 for joint in 0..physics_client.get_num_joints(sphere_uid) {
-                    physics_client.set_joint_motor_control_2(
+                    physics_client.set_joint_motor_control(
                         sphere_uid,
                         joint,
                         ControlMode::Velocity(1.),
