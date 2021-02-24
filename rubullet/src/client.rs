@@ -1991,7 +1991,7 @@ impl PhysicsClient {
     }
 
     /// You can add a 3d line specified by a 3d starting point (from) and end point (to),
-    /// a color [red,green,blue], a line width and a duration in seconds.
+    /// a color \[red,green,blue\], a line width and a duration in seconds.
     ///
     /// # Arguments
     /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates. Can be
@@ -2144,7 +2144,7 @@ impl PhysicsClient {
     /// You can add some 3d text at a specific location using a color and size.
     /// # Arguments
     /// * `text` - text represented  by something which can be converted to a &str
-    /// * `text_position` - 3d position of the text in Cartesian world coordinates [x,y,z]. Can be
+    /// * `text_position` - 3d position of the text in Cartesian world coordinates \[x,y,z\]. Can be
     /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
     /// * `options` - advanced options for the text. Use None for default settings.
     ///
@@ -2287,7 +2287,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index
-    /// * `object_debug_color` - debug color in [Red,Green,Blue]. If not provided, the custom color will be removed.
+    /// * `object_debug_color` - debug color in \[Red,Green,Blue\]. If not provided, the custom color will be removed.
     pub fn set_debug_object_color(
         &mut self,
         body: BodyId,
@@ -2442,7 +2442,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index or -1 for the base.
-    /// * `force_object` - force vector to be applied [x,y,z] either as an array, Point3 or Vector3.
+    /// * `force_object` - force vector to be applied \[x,y,z\] either as an array, Point3 or Vector3.
     /// See flags for coordinate system
     /// * `position_object` - position on the link where the force is applied.
     /// * `flags` - Specify the coordinate system of force/position:
@@ -2479,7 +2479,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index or -1 for the base.
-    /// * `torque_object` - torque vector to be applied [x,y,z] either as an array or a Vector3.
+    /// * `torque_object` - torque vector to be applied \[x,y,z\] either as an array or a Vector3.
     /// See flags for coordinate system
     /// * `flags` - Specify the coordinate system of torque:
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.

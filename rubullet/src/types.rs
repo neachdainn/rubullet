@@ -189,7 +189,7 @@ pub struct InverseKinematicsParameters<'a> {
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
     /// By default this is in Cartesian world space, unless you provide current_position joint angles.
     pub target_position: Point3<f64>,
-    /// Target orientation in Cartesian world space, quaternion [x,y,z,w].
+    /// Target orientation in Cartesian world space.
     /// If not specified, pure position IK will be used.
     pub target_orientation: Option<UnitQuaternion<f64>>,
     /// Optional null-space IK
@@ -519,7 +519,7 @@ pub struct JointState {
     /// The velocity value of this joint.
     pub joint_velocity: f64,
     /// These are the joint reaction forces, if a torque sensor is enabled for this joint it is [Fx, Fy, Fz, Mx, My, Mz].
-    /// Without torque sensor, it is [0,0,0,0,0,0].
+    /// Without torque sensor, it is \[0,0,0,0,0,0\].
     /// note to roboticists: this is NOT the motor torque/force, but the spatial reaction force vector at joint.
     pub joint_force_torque: [f64; 6],
     /// This is the motor torque applied during the last [`step_simulation()`](`crate::PhysicsClient::step_simulation()`).
@@ -867,9 +867,9 @@ fn combined_position_orientation_array_to_isometry(combined: [f64; 7]) -> Isomet
 pub struct VisualShapeOptions {
     /// offset of the shape with respect to the link frame
     pub frame_offset: Isometry3<f64>,
-    /// color components for red, green, blue and alpha, each in range [0,1]
+    /// color components for red, green, blue and alpha, each in range \[0,1\]
     pub rgba_colors: [f64; 4],
-    /// specular reflection color, red, green, blue components in range [0,1]
+    /// specular reflection color, red, green, blue components in range \[0,1\]
     pub specular_colors: [f64; 3],
     /// Additional flags. Currently not used
     pub flags: Option<i32>,
@@ -894,7 +894,7 @@ pub enum GeometricCollisionShape {
     },
     /// A Cuboid
     Box {
-        /// [x,y,z] lengths starting from the middle of the box.
+        /// \[x,y,z\] lengths starting from the middle of the box.
         /// For example Vector3::new(0.5,0.5,0.5) would be a unit cube.
         half_extents: Vector3<f64>,
     },
@@ -931,7 +931,7 @@ pub enum GeometricCollisionShape {
     },
     /// Create your own mesh.
     Mesh {
-        /// list of [x,y,z] coordinates.
+        /// list of \[x,y,z\] coordinates.
         vertices: Vec<[f64; 3]>,
         /// triangle indices, should be a multiple of 3
         indices: Option<Vec<i32>>,
@@ -974,7 +974,7 @@ pub enum GeometricVisualShape {
     },
     /// A Cuboid
     Box {
-        /// [x,y,z] lengths starting from the middle of the box.
+        /// \[x,y,z\] lengths starting from the middle of the box.
         /// For example Vector3::new(0.5,0.5,0.5) would be a unit cube.
         half_extents: Vector3<f64>,
     },
@@ -1011,7 +1011,7 @@ pub enum GeometricVisualShape {
     Mesh {
         /// Scaling of the Mesh. Use [1.;3] for normal scaling.
         mesh_scale: [f64; 3],
-        /// list of [x,y,z] coordinates.
+        /// list of \[x,y,z\] coordinates.
         vertices: Vec<[f64; 3]>,
         /// triangle indices, should be a multiple of 3
         indices: Vec<i32>,
