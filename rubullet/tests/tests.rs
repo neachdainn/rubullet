@@ -309,7 +309,7 @@ fn test_jacobian() {
         .calculate_jacobian(
             kuka_id,
             kuka_end_effector_index,
-            &result.local_inertial_pose.translation,
+            result.local_inertial_pose.translation,
             mpos.as_slice(),
             zero_vec.as_slice(),
             zero_vec.as_slice(),

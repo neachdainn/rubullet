@@ -1321,17 +1321,18 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `link_index` - link index for the jacobian.
-    /// * `local_position` - the point on the specified link to compute the jacobian for, in link local coordinates around its center of mass.
+    /// * `local_position` - the point on the specified link to compute the jacobian for, in link local coordinates around its center of mass. It needs to be something
+    /// that can be converted to a Translation3 (Vector3, Point3, \[f64;3\], ..)
     /// * `object_positions` - joint positions (angles)
     /// * `object_velocities` - joint velocities
     /// * `object_accelerations` - desired joint accelerations
     ///
     /// See jacobian.rs for an example
-    pub fn calculate_jacobian(
+    pub fn calculate_jacobian<LocalPosition: Into<Translation3<f64>>>(
         &mut self,
         body: BodyId,
         link_index: i32,
-        local_position: &Translation3<f64>,
+        local_position: LocalPosition,
         object_positions: &[f64],
         object_velocities: &[f64],
         object_accelerations: &[f64],
@@ -1369,7 +1370,6 @@ impl PhysicsClient {
             }
         }
         if dof_count_org != 0 && dof_count_org == object_positions.len() {
-            let local_point = local_position.vector.as_slice();
             let joint_positions = object_positions;
             let joint_velocities = object_velocities;
             let joint_accelerations = object_accelerations;
@@ -1379,7 +1379,7 @@ impl PhysicsClient {
                     self.handle.as_ptr(),
                     body.0,
                     link_index,
-                    local_point.as_ptr(),
+                    local_position.into().vector.as_ptr(),
                     joint_positions.as_ptr(),
                     joint_velocities.as_ptr(),
                     joint_accelerations.as_ptr(),
