@@ -343,7 +343,7 @@ pub struct AddDebugTextOptions<'a> {
     /// or local space (when parent is specified). Note that a different implementation/shader is
     /// used for camera facing text, with different appearance: camera facing text uses bitmap
     /// fonts, text with specified orientation uses TrueType fonts.
-    pub text_orientation: Option<&'a [f64]>,
+    pub text_orientation: Option<UnitQuaternion<f64>>,
     /// If specified the text will be drawn relative to the parents object coordinate system.
     pub parent_object_id: Option<BodyId>,
     /// When using "parent_object_id" you can also define in which link the coordinate system should be.

@@ -2128,7 +2128,8 @@ impl PhysicsClient {
     /// You can add some 3d text at a specific location using a color and size.
     /// # Arguments
     /// * `text` - text represented  by something which can be converted to a &str
-    /// * `text_position` - 3d position of the text in Cartesian world coordinates [x,y,z]
+    /// * `text_position` - 3d position of the text in Cartesian world coordinates [x,y,z]. Can be
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
     /// * `options` - advanced options for the text. Use None for default settings.
     ///
     /// # Return
@@ -2142,15 +2143,18 @@ impl PhysicsClient {
     ///# use rubullet::types::AddDebugTextOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
-    ///#
+    ///# use nalgebra::Point3;
     ///# pub fn main() -> Result<()> {
-    ///#     let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
-    ///     let text_red = client.add_user_debug_text(
-    ///         "My text in red",
-    ///         &[0., 0., 2.],
+    ///#     use nalgebra::UnitQuaternion;
+    /// use std::f64::consts::PI;
+    /// let mut client = PhysicsClient::connect(Gui)?;
+    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text_red_on_floor = client.add_user_debug_text(
+    ///         "My red text on the floor",
+    ///         [0.;3],
     ///         AddDebugTextOptions {
     ///             text_color_rgb: &[1., 0., 0.],
+    ///             text_orientation: Some(UnitQuaternion::from_euler_angles(0.,0.,0.)),
     ///             ..Default::default()
     ///         },
     ///     )?;
@@ -2161,11 +2165,12 @@ impl PhysicsClient {
     pub fn add_user_debug_text<
         'a,
         Text: Into<&'a str>,
+        Position: Into<Point3<f64>>,
         Options: Into<Option<AddDebugTextOptions<'a>>>,
     >(
         &mut self,
         text: Text,
-        text_position: &[f64],
+        text_position: Position,
         options: Options,
     ) -> Result<ItemId, Error> {
         unsafe {
@@ -2174,7 +2179,7 @@ impl PhysicsClient {
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
                 self.handle.as_ptr(),
                 text.as_ptr(),
-                text_position.as_ptr(),
+                text_position.into().coords.as_ptr(),
                 options.text_color_rgb.as_ptr(),
                 options.text_size,
                 options.life_time,
@@ -2187,7 +2192,10 @@ impl PhysicsClient {
                 );
             }
             if let Some(text_orientation) = options.text_orientation {
-                ffi::b3UserDebugTextSetOrientation(command_handle, text_orientation.as_ptr());
+                ffi::b3UserDebugTextSetOrientation(
+                    command_handle,
+                    text_orientation.coords.as_ptr(),
+                );
             }
             if let Some(replacement_id) = options.replace_item_id {
                 ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement_id.0);
@@ -2218,7 +2226,7 @@ impl PhysicsClient {
     ///#
     ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
+    ///     let text = client.add_user_debug_text("My text", [0., 0., 1.], None)?;
     ///     client.remove_user_debug_item(text);
     ///#     Ok(())
     ///# }
@@ -2240,9 +2248,10 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///#     let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", &[0., 0., 1.], None)?;
-    ///     let text_2 = client.add_user_debug_text("My text2", &[0., 0., 2.], None)?;
+    ///#     use nalgebra::Point3;
+    /// let mut client = PhysicsClient::connect(Gui)?;
+    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text_2 = client.add_user_debug_text("My text2", [0., 0., 2.], None)?;
     ///     client.remove_all_user_debug_items();
     ///#     std::thread::sleep(Duration::from_secs(10));
     ///#     Ok(())
