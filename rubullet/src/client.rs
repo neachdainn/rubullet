@@ -1986,8 +1986,10 @@ impl PhysicsClient {
     /// a color [red,green,blue], a line width and a duration in seconds.
     ///
     /// # Arguments
-    /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates
-    /// * `line_to_xyz` - end point of the line in Cartesian world coordinates
+    /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates. Can be
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// * `line_to_xyz` - end point of the line in Cartesian world coordinates. Can be
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
     /// * `options` - advanced options for the line. Use None for default settings.
     ///
     /// # Return
@@ -2003,10 +2005,11 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///     let mut client = PhysicsClient::connect(Gui)?;
+    ///#     use nalgebra::Point3;
+    /// let mut client = PhysicsClient::connect(Gui)?;
     ///     let red_line = client.add_user_debug_line(
-    ///         &[0.; 3],
-    ///         &[1.; 3],
+    ///         [0.; 3],
+    ///         Point3::new(1.,1.,1.),
     ///         AddDebugLineOptions {
     ///             line_color_rgb: &[1., 0., 0.],
     ///             ..Default::default()
@@ -2016,18 +2019,23 @@ impl PhysicsClient {
     ///#     Ok(())
     ///# }
     /// ```
-    pub fn add_user_debug_line<'a, Options: Into<Option<AddDebugLineOptions<'a>>>>(
+    pub fn add_user_debug_line<
+        'a,
+        Options: Into<Option<AddDebugLineOptions<'a>>>,
+        Start: Into<Point3<f64>>,
+        End: Into<Point3<f64>>,
+    >(
         &mut self,
-        line_from_xyz: &[f64],
-        line_to_xyz: &[f64],
+        line_from_xyz: Start,
+        line_to_xyz: End,
         options: Options,
     ) -> Result<ItemId, Error> {
         unsafe {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
                 self.handle.as_ptr(),
-                line_from_xyz.as_ptr(),
-                line_to_xyz.as_ptr(),
+                line_from_xyz.into().coords.as_ptr(),
+                line_to_xyz.into().coords.as_ptr(),
                 options.line_color_rgb.as_ptr(),
                 options.line_width,
                 options.life_time,
@@ -2146,7 +2154,7 @@ impl PhysicsClient {
     ///# use nalgebra::Point3;
     ///# pub fn main() -> Result<()> {
     ///#     use nalgebra::UnitQuaternion;
-    /// use std::f64::consts::PI;
+    ///# use std::f64::consts::PI;
     /// let mut client = PhysicsClient::connect(Gui)?;
     ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
     ///     let text_red_on_floor = client.add_user_debug_text(
