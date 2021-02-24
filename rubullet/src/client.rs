@@ -614,8 +614,6 @@ impl PhysicsClient {
     /// * `angular_velocity` - either a \[f64;3\] or a Vector3 which contains the desired angular velocity
     /// (wx,wy,wz) in Cartesian world coordinates or `None` to not change the angular velocity
     ///
-    /// # Errors
-    /// * When you set both linear_velocity and angular_velocity to `None`
     ///
     /// # Example
     /// ```rust
