@@ -3199,13 +3199,16 @@ impl PhysicsClient {
     /// will remove a body by its body unique id
     pub fn remove_body(&mut self, body: BodyId) {
         unsafe {
-            if body.0 >= 0 && self.can_submit_command() {
-                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(
-                    self.handle.as_ptr(),
-                    ffi::b3InitRemoveBodyCommand(self.handle.as_ptr(), body.0),
-                );
-                let _status_type = ffi::b3GetStatusType(status_handle);
-            }
+            assert!(body.0 >= 0, "Invalid BodyId");
+            assert!(
+                self.can_submit_command(),
+                "Internal Error: Can not submit command!",
+            );
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(
+                self.handle.as_ptr(),
+                ffi::b3InitRemoveBodyCommand(self.handle.as_ptr(), body.0),
+            );
+            let _status_type = ffi::b3GetStatusType(status_handle);
         }
     }
     /// gets the BodyInfo (base name and body name) of a body
