@@ -348,7 +348,7 @@ pub struct AddDebugTextOptions<'a> {
     pub parent_object_id: Option<BodyId>,
     /// When using "parent_object_id" you can also define in which link the coordinate system should be.
     /// By default it is the base frame (-1)
-    pub parent_link_index: Option<i32>,
+    pub parent_link_index: Option<usize>,
     /// replace an existing text item (to avoid flickering of remove/add)
     pub replace_item_id: Option<ItemId>,
 }
@@ -379,7 +379,7 @@ pub struct AddDebugLineOptions<'a> {
     pub parent_object_id: Option<BodyId>,
     /// When using "parent_object_id" you can also define in which link the coordinate system should be.
     /// By default it is the base frame (-1)
-    pub parent_link_index: Option<i32>,
+    pub parent_link_index: Option<usize>,
     /// replace an existing line (to improve performance and to avoid flickering of remove/add)
     pub replace_item_id: Option<BodyId>,
 }
@@ -1140,8 +1140,8 @@ impl From<b3BodyInfo> for BodyInfo {
 pub struct VisualShapeData {
     /// same id as in the input of [get_visual_shape_data](`crate::PhysicsClient::get_visual_shape_data`)
     pub body_id: BodyId,
-    /// link index or -1 for the base
-    pub link_index: i32,
+    /// link index or None for the base
+    pub link_index: Option<usize>,
     /// visual geometry type (TBD)
     pub visual_geometry_type: i32,
     /// dimensions (size, local scale) of the geometry
@@ -1160,9 +1160,13 @@ pub struct VisualShapeData {
 impl From<b3VisualShapeData> for VisualShapeData {
     fn from(b3: b3VisualShapeData) -> Self {
         unsafe {
+            let link_index = match b3.m_linkIndex {
+                -1 => None,
+                index => Some(index as usize),
+            };
             VisualShapeData {
                 body_id: BodyId(b3.m_objectUniqueId),
-                link_index: b3.m_linkIndex,
+                link_index,
                 visual_geometry_type: b3.m_visualGeometryType,
                 dimensions: b3.m_dimensions,
                 mesh_asset_file_name: CStr::from_ptr(b3.m_meshAssetFileName.as_ptr())

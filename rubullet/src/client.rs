@@ -2038,11 +2038,11 @@ impl PhysicsClient {
                 options.life_time,
             );
             if let Some(parent) = options.parent_object_id {
-                ffi::b3UserDebugItemSetParentObject(
-                    command_handle,
-                    parent.0,
-                    options.parent_link_index.unwrap_or(-1),
-                );
+                let parent_link_index = match options.parent_link_index {
+                    None => -1,
+                    Some(index) => index as i32,
+                };
+                ffi::b3UserDebugItemSetParentObject(command_handle, parent.0, parent_link_index);
             }
             if let Some(replacement) = options.replace_item_id {
                 ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement.0);
@@ -2190,10 +2190,14 @@ impl PhysicsClient {
                 options.life_time,
             );
             if let Some(parent_object) = options.parent_object_id {
+                let parent_link_index = match options.parent_link_index {
+                    None => -1,
+                    Some(index) => index as i32,
+                };
                 ffi::b3UserDebugItemSetParentObject(
                     command_handle,
                     parent_object.0,
-                    options.parent_link_index.unwrap_or(-1),
+                    parent_link_index,
                 );
             }
             if let Some(text_orientation) = options.text_orientation {
