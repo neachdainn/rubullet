@@ -2869,9 +2869,11 @@ impl PhysicsClient {
     /// the length of every vector is the same .
     /// # Arguments
     /// * `base_collision_shape` - unique id from [create_collision_shape](`Self::create_collision_shape`)
-    /// or -1. You can re-use the collision shape for multiple multibodies (instancing)
+    /// or use [`CollisionId::NONE`](`crate::types::CollisionId::NONE`) if you do not want to have a collision shape.
+    /// You can re-use the collision shape for multiple multibodies (instancing)
     /// * `base_visual_shape` - unique id from [create_visual_shape](`Self::create_visual_shape`)
-    /// or -1. You can re-use the visual shape (instancing)
+    /// or use [`VisualId::NONE`](`crate::types::VisualId::NONE`) if you do not want to set a visual shape.
+    /// You can re-use the visual shape (instancing)
     /// * `options` - additional options for creating a multi_body. See [MultiBodyOptions](`crate::MultiBodyOptions`)
     /// for details
     ///

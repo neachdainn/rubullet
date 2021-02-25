@@ -40,7 +40,7 @@ fn main() -> Result<()> {
 
     let terrain = physics_client.create_multi_body(
         terrain_shape,
-        VisualId(0),
+        VisualId::NONE,
         MultiBodyOptions::default(),
     )?;
 
@@ -68,7 +68,7 @@ fn main() -> Result<()> {
         Isometry3::identity(),
     )?;
     let mass = 1.;
-    let visual_shape_id = VisualId(-1);
+    let visual_shape_id = VisualId::NONE;
 
     for i in 0..3 {
         for j in 0..3 {
@@ -95,7 +95,7 @@ fn main() -> Result<()> {
                     } else {
                         let link_masses = vec![1.];
                         let link_collision_shapes = vec![col_box_id];
-                        let link_visual_shapes = vec![VisualId(-1)];
+                        let link_visual_shapes = vec![VisualId::NONE];
                         let link_poses = vec![Isometry3::translation(0., 0., 0.11)];
                         let link_inertial_frame_poses = vec![Isometry3::translation(0., 0., 0.)];
                         let indices = vec![0];

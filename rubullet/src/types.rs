@@ -18,11 +18,20 @@ pub struct BodyId(pub(crate) c_int);
 
 /// The unique ID for a Visual Shape
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct VisualId(pub c_int);
-
-/// The unique ID for a Collision Shape
+pub struct VisualId(pub(crate) c_int);
+impl VisualId {
+    /// Use it to create an object which does not have a visual appearance. It will be just be
+    /// the CollisionShape colored in red.
+    pub const NONE: VisualId = VisualId(-1);
+}
+/// The unique ID for a Collision Shape.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct CollisionId(pub c_int);
+pub struct CollisionId(pub(crate) c_int);
+
+impl CollisionId {
+    /// Use it to create an object which does not collide with anything.
+    pub const NONE: CollisionId = CollisionId(-1);
+}
 
 /// The unique ID for a Texture
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -1037,8 +1046,10 @@ pub struct MultiBodyOptions {
     /// List of the mass values, one for each link.
     pub link_masses: Vec<f64>,
     /// List of the collision shape unique id, one for each link.
+    /// Use [`CollisionId::NONE`](`crate::types::CollisionId::NONE`) if you do not want to have a collision shape.
     pub link_collision_shapes: Vec<CollisionId>,
     /// List of the visual shape unique id, one for each link.
+    /// Use [`VisualId::NONE`](`crate::types::VisualId::NONE`) if you do not want to set a visual shape.
     pub link_visual_shapes: Vec<VisualId>,
     /// list of local link poses, with respect to parent
     pub link_poses: Vec<Isometry3<f64>>,
