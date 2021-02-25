@@ -157,7 +157,7 @@ fn main() -> Result<()> {
 
     physics_client.change_visual_shape(
         body_id,
-        -1,
+        None,
         ChangeVisualShapeOptions {
             texture_id: Some(tex_uid),
             ..Default::default()

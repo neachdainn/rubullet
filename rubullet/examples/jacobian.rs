@@ -125,7 +125,7 @@ fn main() -> Result<()> {
     // let kuka_id = p.load_urdf("kuka_iiwa/model.urdf", UrdfOptions::default())?;
     // let kuka_id = p.load_urdf("kuka_lwr/kuka.urdf", UrdfOptions::default())?;
     let num_joints = p.get_num_joints(kuka_id);
-    let kuka_end_effector_index = num_joints as i32 - 1;
+    let kuka_end_effector_index = num_joints - 1;
 
     set_joint_positions(&mut p, kuka_id, vec![0.1; num_joints].as_slice());
     p.step_simulation()?;

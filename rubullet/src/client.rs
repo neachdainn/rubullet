@@ -713,7 +713,7 @@ impl PhysicsClient {
     pub fn get_link_state(
         &mut self,
         body: BodyId,
-        link_index: i32,
+        link_index: usize,
         compute_link_velocity: bool,
         compute_forward_kinematics: bool,
     ) -> Result<LinkState, Error> {
@@ -721,9 +721,7 @@ impl PhysicsClient {
             if body.0 < 0 {
                 return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
             }
-            if link_index < 0 {
-                return Err(Error::new("getLinkState failed; invalid linkIndex"));
-            }
+
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             if compute_link_velocity {
                 ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
@@ -741,7 +739,7 @@ impl PhysicsClient {
             if ffi::b3GetLinkState(
                 self.handle.as_ptr(),
                 status_handle,
-                link_index,
+                link_index as i32,
                 &mut link_state,
             ) != 0
             {
@@ -770,7 +768,7 @@ impl PhysicsClient {
     pub fn get_link_states(
         &mut self,
         body: BodyId,
-        link_indices: &[i32],
+        link_indices: &[usize],
         compute_link_velocity: bool,
         compute_forward_kinematics: bool,
     ) -> Result<Vec<LinkState>, Error> {
@@ -778,9 +776,7 @@ impl PhysicsClient {
             if body.0 < 0 {
                 return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
             }
-            if link_indices.iter().any(|&x| x < 0) {
-                return Err(Error::new("getLinkState failed; invalid linkIndex"));
-            }
+
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             if compute_link_velocity {
                 ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
@@ -800,7 +796,7 @@ impl PhysicsClient {
                 if ffi::b3GetLinkState(
                     self.handle.as_ptr(),
                     status_handle,
-                    link_index,
+                    link_index as i32,
                     &mut link_state,
                 ) != 0
                 {
@@ -1321,7 +1317,7 @@ impl PhysicsClient {
     pub fn calculate_jacobian<LocalPosition: Into<Translation3<f64>>>(
         &mut self,
         body: BodyId,
-        link_index: i32,
+        link_index: usize,
         local_position: LocalPosition,
         object_positions: &[f64],
         object_velocities: &[f64],
@@ -1368,7 +1364,7 @@ impl PhysicsClient {
                 let command_handle = ffi::b3CalculateJacobianCommandInit(
                     self.handle.as_ptr(),
                     body.0,
-                    link_index,
+                    link_index as i32,
                     local_position.into().vector.as_ptr(),
                     joint_positions.as_ptr(),
                     joint_velocities.as_ptr(),
@@ -2279,18 +2275,22 @@ impl PhysicsClient {
     /// You can override the color of a specific object and link using this method.
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `link_index` - link index
+    /// * `link_index` - link index. Use None for the base.
     /// * `object_debug_color` - debug color in \[Red,Green,Blue\]. If not provided, the custom color will be removed.
-    pub fn set_debug_object_color(
+    pub fn set_debug_object_color<Link: Into<Option<usize>>, Color: Into<Option<[f64; 3]>>>(
         &mut self,
         body: BodyId,
-        link_index: i32,
-        object_debug_color: Option<&[f64]>,
+        link_index: Link,
+        object_debug_color: Color,
     ) {
         unsafe {
+            let link_index = match link_index.into() {
+                None => -1,
+                Some(index) => index as i32,
+            };
             let command_handle = ffi::b3InitDebugDrawingCommand(self.handle.as_ptr());
 
-            if let Some(color) = object_debug_color {
+            if let Some(color) = object_debug_color.into() {
                 ffi::b3SetDebugObjectColor(command_handle, body.0, link_index, color.as_ptr());
             } else {
                 ffi::b3RemoveDebugObjectColor(command_handle, body.0, link_index);
@@ -2434,20 +2434,28 @@ impl PhysicsClient {
     ///
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `link_index` - link index or -1 for the base.
+    /// * `link_index` - link index or None for the base.
     /// * `force_object` - force vector to be applied \[x,y,z\] either as an array, Point3 or Vector3.
     /// See flags for coordinate system
     /// * `position_object` - position on the link where the force is applied.
     /// * `flags` - Specify the coordinate system of force/position:
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
-    pub fn apply_external_force<Force: Into<Vector3<f64>>, Position: Into<Point3<f64>>>(
+    pub fn apply_external_force<
+        Force: Into<Vector3<f64>>,
+        Position: Into<Point3<f64>>,
+        Link: Into<Option<usize>>,
+    >(
         &mut self,
         body: BodyId,
-        link_index: i32,
+        link_index: Link,
         force_object: Force,
         position_object: Position,
         flags: ExternalForceFrame,
     ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
             let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
             ffi::b3ApplyExternalForce(
@@ -2471,18 +2479,22 @@ impl PhysicsClient {
     /// This method will have undefined behavior (either 0, 1 or multiple torque applications).
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `link_index` - link index or -1 for the base.
+    /// * `link_index` - link index or None for the base.
     /// * `torque_object` - torque vector to be applied \[x,y,z\] either as an array or a Vector3.
     /// See flags for coordinate system
     /// * `flags` - Specify the coordinate system of torque:
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
-    pub fn apply_external_torque<Torque: Into<Vector3<f64>>>(
+    pub fn apply_external_torque<Torque: Into<Vector3<f64>>, Link: Into<Option<usize>>>(
         &mut self,
         body: BodyId,
-        link_index: i32,
+        link_index: Link,
         torque_object: Torque,
         flags: ExternalForceFrame,
     ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
             let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
             ffi::b3ApplyExternalTorque(
@@ -3001,7 +3013,7 @@ impl PhysicsClient {
     /// the RGBA color and other properties.
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `link_index` - link index
+    /// * `link_index` - link index or None for the base.
     /// * `options` - optional parameters to change the visual shape.
     /// See [ChangeVisualShapeOptions](`crate::types::ChangeVisualShapeOptions`)
     /// # Example
@@ -3036,7 +3048,7 @@ impl PhysicsClient {
     ///
     ///    physics_client.change_visual_shape(
     ///        box_id,
-    ///        -1,
+    ///        None,
     ///        ChangeVisualShapeOptions {
     ///            rgba_color: Some([1., 0., 0., 1.]),
     ///            ..Default::default()
@@ -3048,12 +3060,16 @@ impl PhysicsClient {
     ///#    Ok(())
     ///# }
     /// ```
-    pub fn change_visual_shape(
+    pub fn change_visual_shape<Link: Into<Option<usize>>>(
         &mut self,
         body: BodyId,
-        link_index: i32,
+        link_index: Link,
         options: ChangeVisualShapeOptions,
     ) -> Result<(), Error> {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
             let command_handle = ffi::b3InitUpdateVisualShape2(
                 self.handle.as_ptr(),

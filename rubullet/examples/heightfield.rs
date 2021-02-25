@@ -46,7 +46,7 @@ fn main() -> Result<()> {
 
     physics_client.change_visual_shape(
         terrain,
-        -1,
+        None,
         ChangeVisualShapeOptions {
             rgba_color: Some([1.; 4]),
             ..Default::default()
