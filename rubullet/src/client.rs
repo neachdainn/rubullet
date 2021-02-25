@@ -2608,19 +2608,19 @@ impl PhysicsClient {
                 }
                 GeometricCollisionShape::HeightfieldFile {
                     filename,
-                    mesh_scale,
+                    mesh_scaling,
                     texture_scaling,
                 } => {
                     let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateCollisionShapeAddHeightfield(
                         command_handle,
                         file.as_ptr(),
-                        mesh_scale.as_ptr(),
+                        mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                         texture_scaling,
                     );
                 }
                 GeometricCollisionShape::Heightfield {
-                    mesh_scale,
+                    mesh_scaling,
                     texture_scaling: heightfield_texture_scaling,
                     data: mut heightfield_data,
                     num_rows: num_heightfield_rows,
@@ -2638,7 +2638,7 @@ impl PhysicsClient {
                         shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
                             self.handle.as_ptr(),
                             command_handle,
-                            mesh_scale.as_ptr(),
+                            mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                             heightfield_texture_scaling,
                             heightfield_data.as_mut_slice().as_mut_ptr(),
                             num_heightfield_rows as i32,
@@ -2649,14 +2649,14 @@ impl PhysicsClient {
                 }
                 GeometricCollisionShape::MeshFile {
                     filename,
-                    mesh_scale,
+                    mesh_scaling,
                     flags,
                 } => {
                     let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateCollisionShapeAddMesh(
                         command_handle,
                         file.as_ptr(),
-                        mesh_scale.as_ptr(),
+                        mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                     );
                     if shape_index >= 0 {
                         if let Some(flags) = flags {
@@ -2667,7 +2667,7 @@ impl PhysicsClient {
                 GeometricCollisionShape::Mesh {
                     vertices,
                     indices,
-                    mesh_scale,
+                    mesh_scaling,
                 } => {
                     if vertices.len() > B3_MAX_NUM_VERTICES {
                         return Err(Error::new("Number of vertices exceeds the maximum."));
@@ -2684,7 +2684,7 @@ impl PhysicsClient {
                         shape_index = ffi::b3CreateCollisionShapeAddConcaveMesh(
                             self.handle.as_ptr(),
                             command_handle,
-                            mesh_scale.as_ptr(),
+                            mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                             new_vertices.as_slice().as_ptr(),
                             vertices.len() as i32,
                             indices.as_slice().as_ptr(),
@@ -2694,7 +2694,7 @@ impl PhysicsClient {
                         shape_index = ffi::b3CreateCollisionShapeAddConvexMesh(
                             self.handle.as_ptr(),
                             command_handle,
-                            mesh_scale.as_ptr(),
+                            mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                             new_vertices.as_slice().as_ptr(),
                             vertices.len() as i32,
                         );
@@ -2777,17 +2777,17 @@ impl PhysicsClient {
 
                 GeometricVisualShape::MeshFile {
                     filename,
-                    mesh_scale,
+                    mesh_scaling,
                 } => {
                     let file = CString::new(filename.into_os_string().as_bytes()).unwrap();
                     shape_index = ffi::b3CreateVisualShapeAddMesh(
                         command_handle,
                         file.as_ptr(),
-                        mesh_scale.as_ptr(),
+                        mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                     );
                 }
                 GeometricVisualShape::Mesh {
-                    mesh_scale,
+                    mesh_scaling,
                     vertices,
                     indices,
                     uvs,
@@ -2828,7 +2828,7 @@ impl PhysicsClient {
                     shape_index = ffi::b3CreateVisualShapeAddMesh2(
                         self.handle.as_ptr(),
                         command_handle,
-                        mesh_scale.as_ptr(),
+                        mesh_scaling.unwrap_or(Vector3::from_element(1.)).as_ptr(),
                         new_vertices.as_slice().as_ptr(),
                         new_vertices.len() as i32 / 3,
                         new_indices.as_slice().as_ptr(),

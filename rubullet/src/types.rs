@@ -937,8 +937,8 @@ pub enum GeometricCollisionShape {
     MeshFile {
         /// Path to the .obj file.
         filename: PathBuf,
-        /// Scaling of the Mesh. Use [1.;3] for original scaling.
-        mesh_scale: [f64; 3],
+        /// Scaling of the Mesh.Use None if you do not want to apply any scaling.
+        mesh_scaling: Option<Vector3<f64>>,
         /// Set to 1 if you want to activate have the GEOM_FORCE_CONCAVE_TRIMESH Flag.
         /// this will create a concave static triangle mesh. This should not be used with
         /// dynamic / moving objects, only for static (mass = 0) terrain.
@@ -951,21 +951,21 @@ pub enum GeometricCollisionShape {
         /// triangle indices, should be a multiple of 3
         indices: Option<Vec<i32>>,
         /// Scaling of the Mesh. Use [1.;3] for normal scaling.
-        mesh_scale: [f64; 3],
+        mesh_scaling: Option<Vector3<f64>>,
     },
     /// Loads a Heightfield from a file
     HeightfieldFile {
         /// Path to the .obj file.
         filename: PathBuf,
-        /// Scaling of the Mesh. Use [1.;3] for original scaling.
-        mesh_scale: [f64; 3],
+        /// Scaling of the Mesh.Use None if you do not want to apply any scaling.
+        mesh_scaling: Option<Vector3<f64>>,
         /// Texture scaling. Use 1. for original scaling.
         texture_scaling: f64,
     },
     /// Create your own Heightfield. See heightfield.rs for an example.
     Heightfield {
         /// Scaling of the Mesh. Use [1.;3] for normal scaling.
-        mesh_scale: [f64; 3],
+        mesh_scaling: Option<Vector3<f64>>,
         /// Texture scaling. Use 1. for normal scaling.
         texture_scaling: f64,
         /// Heightfield data. Should be of size num_rows * num_columns
@@ -1019,13 +1019,13 @@ pub enum GeometricVisualShape {
     MeshFile {
         /// Path to the .obj file.
         filename: PathBuf,
-        /// Scaling of the Mesh. Use [1.;3] for original scaling.
-        mesh_scale: [f64; 3],
+        /// Scaling of the Mesh.Use None if you do not want to apply any scaling.
+        mesh_scaling: Option<Vector3<f64>>,
     },
     /// Create your own mesh.
     Mesh {
         /// Scaling of the Mesh. Use [1.;3] for normal scaling.
-        mesh_scale: [f64; 3],
+        mesh_scaling: Option<Vector3<f64>>,
         /// list of \[x,y,z\] coordinates.
         vertices: Vec<[f64; 3]>,
         /// triangle indices, should be a multiple of 3

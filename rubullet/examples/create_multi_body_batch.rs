@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     physics_client.configure_debug_visualizer(CovEnableTinyRenderer, false);
 
     let shift = Isometry3::translation(0.0, -0.02, 0.0);
-    let mesh_scale = [0.1; 3];
+    let mesh_scaling = Vector3::from_element(0.1);
 
     let vertices = vec![
         [-1., -1., 1.],
@@ -110,7 +110,7 @@ fn main() -> Result<()> {
 
     let visual_shape_id = physics_client.create_visual_shape(
         GeometricVisualShape::Mesh {
-            mesh_scale,
+            mesh_scaling: Some(mesh_scaling),
             vertices,
             indices,
             uvs: Some(uvs),
@@ -124,7 +124,7 @@ fn main() -> Result<()> {
     )?;
     let collision_shape_id = physics_client.create_collision_shape(
         GeometricCollisionShape::Box {
-            half_extents: Vector3::from_column_slice(&mesh_scale),
+            half_extents: mesh_scaling,
         },
         Isometry3::identity(),
     )?;
@@ -135,9 +135,9 @@ fn main() -> Result<()> {
         for y in 0..32 {
             for z in 0..10 {
                 batch_positions.push(Point3::new(
-                    x as f64 * mesh_scale[0] * 5.5,
-                    y as f64 * mesh_scale[1] * 5.5,
-                    (0.5 + z as f64) * mesh_scale[2] * 2.5,
+                    x as f64 * mesh_scaling[0] * 5.5,
+                    y as f64 * mesh_scaling[1] * 5.5,
+                    (0.5 + z as f64) * mesh_scaling[2] * 2.5,
                 ));
             }
         }

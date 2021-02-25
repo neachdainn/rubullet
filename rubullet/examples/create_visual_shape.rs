@@ -18,7 +18,7 @@ fn main() -> Result<()> {
     let visual_shape = physics_client.create_visual_shape(
         GeometricVisualShape::MeshFile {
             filename: PathBuf::from("duck.obj"),
-            mesh_scale: [0.1; 3],
+            mesh_scaling: Some(Vector3::from_element(0.1)),
         },
         VisualShapeOptions {
             specular_colors: [0.4, 0.4, 0.],
@@ -29,12 +29,12 @@ fn main() -> Result<()> {
     let collision_shape = physics_client.create_collision_shape(
         GeometricCollisionShape::MeshFile {
             filename: PathBuf::from("duck_vhacd.obj"),
-            mesh_scale: [0.1; 3],
+            mesh_scaling: Some(Vector3::from_element(0.1)),
             flags: None,
         },
         shift,
     )?;
-    let mesh_scale = [0.1; 3];
+    let mesh_scaling = Vector3::from_element(0.1);
     let rangex = 1;
     let rangey = 1;
     for i in 0..rangex {
@@ -44,8 +44,8 @@ fn main() -> Result<()> {
                 visual_shape,
                 MultiBodyOptions {
                     base_pose: Isometry3::translation(
-                        ((-rangex as f64 / 2.) + i as f64) * mesh_scale[0] * 2.,
-                        ((-rangey as f64 / 2.) + j as f64) * mesh_scale[1] * 2.,
+                        ((-rangex as f64 / 2.) + i as f64) * mesh_scaling[0] * 2.,
+                        ((-rangey as f64 / 2.) + j as f64) * mesh_scaling[1] * 2.,
                         1.,
                     ),
                     base_mass: 1.,
