@@ -534,7 +534,7 @@ pub struct JointState {
     pub joint_velocity: f64,
     /// These are the joint reaction forces, if a torque sensor is enabled for this joint it is [Fx, Fy, Fz, Mx, My, Mz].
     /// Without torque sensor, it is \[0,0,0,0,0,0\].
-    /// note to roboticists: this is NOT the motor torque/force, but the spatial reaction force vector at joint.
+    /// This is is NOT the motor torque/force, but the spatial reaction force vector at joint.
     pub joint_force_torque: [f64; 6],
     /// This is the motor torque applied during the last [`step_simulation()`](`crate::PhysicsClient::step_simulation()`).
     /// Note that this only applies in velocity and position control.
