@@ -124,8 +124,8 @@ pub struct JointInfo {
     pub joint_axis: Vector3<f64>,
     /// joint pose in parent frame
     pub parent_frame_pose: Isometry3<f64>,
-    /// parent link index, -1 for base
-    pub parent_index: i32,
+    /// parent link index. None means that the base is the parent link
+    pub parent_index: Option<usize>,
 }
 impl From<b3JointInfo> for JointInfo {
     fn from(b3: b3JointInfo) -> Self {
@@ -151,6 +151,11 @@ impl From<b3JointInfo> for JointInfo {
                 m_q_size: _,
                 m_u_size: _,
             } = b3;
+            let parent_index = match m_parent_index {
+                -1 => None,
+                index => Some(index as usize),
+            };
+
             JointInfo {
                 link_name: CStr::from_ptr(m_link_name.as_ptr())
                     .to_string_lossy()
@@ -177,7 +182,7 @@ impl From<b3JointInfo> for JointInfo {
                     )),
                 ),
                 joint_axis: m_joint_axis.into(),
-                parent_index: m_parent_index,
+                parent_index,
             }
         }
     }

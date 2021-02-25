@@ -150,7 +150,7 @@ fn test_get_joint_info() {
         joint_info.parent_frame_pose.rotation.coords.as_slice(),
         1e-7,
     );
-    assert_eq!(0, joint_info.parent_index);
+    assert_eq!(0, joint_info.parent_index.unwrap());
     let joint_info = physics_client.get_joint_info(r2d2, 2);
     assert_eq!(2, joint_info.joint_index);
     assert_eq!("right_front_wheel_joint", joint_info.joint_name);
@@ -178,7 +178,7 @@ fn test_get_joint_info() {
         joint_info.parent_frame_pose.rotation.coords.as_slice(),
         1e-7,
     );
-    assert_eq!(1, joint_info.parent_index);
+    assert_eq!(1, joint_info.parent_index.unwrap());
 }
 
 pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: &[f64]) {
