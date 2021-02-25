@@ -718,9 +718,7 @@ impl PhysicsClient {
         compute_forward_kinematics: bool,
     ) -> Result<LinkState, Error> {
         unsafe {
-            if body.0 < 0 {
-                return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
-            }
+            assert!(body.0 >= 0, "get_link_state failed; invalid BodyId");
 
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             if compute_link_velocity {
@@ -773,9 +771,7 @@ impl PhysicsClient {
         compute_forward_kinematics: bool,
     ) -> Result<Vec<LinkState>, Error> {
         unsafe {
-            if body.0 < 0 {
-                return Err(Error::new("getLinkState failed; invalid bodyUniqueId"));
-            }
+            assert!(body.0 >= 0, "get_link_states failed; invalid BodyId");
 
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             if compute_link_velocity {
@@ -900,9 +896,7 @@ impl PhysicsClient {
         unsafe {
             let joint_index = joint_index as i32;
             let num_joints = ffi::b3GetNumJoints(self.handle.as_ptr(), body.0);
-            if joint_index > num_joints {
-                return Err(Error::new("Joint index out-of-range."));
-            }
+            assert!(joint_index < num_joints, "Joint index out-of-range.");
             let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
 
             ffi::b3CreatePoseCommandSetJointPosition(
@@ -933,9 +927,7 @@ impl PhysicsClient {
         joint_index: usize,
     ) -> Result<JointState, Error> {
         unsafe {
-            if body.0 < 0 {
-                return Err(Error::new("getJointState failed; invalid BodyId"));
-            }
+            assert!(body.0 >= 0, "get_joint_state failed; invalid BodyId");
             let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
@@ -966,9 +958,7 @@ impl PhysicsClient {
         joint_indices: &[usize],
     ) -> Result<Vec<JointState>, Error> {
         unsafe {
-            if body.0 < 0 {
-                return Err(Error::new("getJointState failed; invalid BodyId"));
-            }
+            assert!(body.0 >= 0, "get_joint_states failed; invalid BodyId");
             let num_joints = self.get_num_joints(body);
             if joint_indices.is_empty() {
                 return Err(Error::new("expected a sequence of joint indices"));
@@ -982,9 +972,12 @@ impl PhysicsClient {
             }
             let mut result_list_joint_states = Vec::<JointState>::with_capacity(num_joints);
             for &joint_index in joint_indices.iter() {
-                if joint_index >= num_joints {
-                    return Err(Error::new("getJointStates failed; invalid joint_index"));
-                }
+                assert!(
+                    joint_index < num_joints,
+                    "get_joint_states failed; invalid joint_index ({}). The robot only has {} joints",
+                    joint_index,
+                    num_joints,
+                );
                 let mut sensor_state = b3JointSensorState::default();
                 if 0 != ffi::b3GetJointState(
                     self.handle.as_ptr(),
@@ -1111,23 +1104,30 @@ impl PhysicsClient {
         {
             has_null_space = true;
         } else if params.limits.is_some() {
-            return Err(Error::new("Warning! Null space parameter lengths do not match the number DoF and will be ignored!"));
+            panic!(
+                "Null space parameter lengths do not match the number DoF! Robot has {} DoF",
+                dof_count
+            );
         }
         if let Some(positions) = current_positions {
-            if positions.len() != dof_count {
-                return Err(Error::new(
-                    "number of current_positions is not equal to the number of DoF's",
-                ));
-            } else {
-                has_current_positions = true;
-            }
+            assert_ne!(
+                positions.len(),
+                dof_count,
+                "number of current_positions ({}) is not equal to the number of DoF's ({})",
+                positions.len(),
+                dof_count
+            );
+            has_current_positions = true;
         }
         if let Some(damping) = joint_damping {
-            if damping.len() < dof_count {
-                return Err(Error::new("calculateInverseKinematics: the size of input joint damping values should be equal to the number of degrees of freedom, not using joint damping."));
-            } else {
-                has_joint_damping = true;
-            }
+            assert_eq!(damping.len(),
+                dof_count,
+                "calculateInverseKinematics: the size of input joint damping values ({}) should be equal to the number of degrees of freedom ({})",
+                damping.len(),
+                dof_count,
+            );
+
+            has_joint_damping = true;
         }
         let mut num_pos = 0;
         unsafe {
@@ -1251,11 +1251,12 @@ impl PhysicsClient {
         object_accelerations: &[f64],
     ) -> Result<Vec<f64>, Error> {
         let flags = 0; // TODO find out what those flags are and let the user set them
-        if object_velocities.len() != object_accelerations.len() {
-            return Err(Error::new(
-                "number of object velocities should be equal to the number of object accelerations",
-            ));
-        }
+        assert_eq!(object_velocities.len(),
+            object_accelerations.len(),
+            "number of object velocities ({}) should be equal to the number of object accelerations ({})",
+            object_velocities.len(),
+            object_accelerations.len(),
+        );
         unsafe {
             let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
                 self.handle.as_ptr(),
@@ -1323,16 +1324,21 @@ impl PhysicsClient {
         object_velocities: &[f64],
         object_accelerations: &[f64],
     ) -> Result<Jacobian, Error> {
-        if object_positions.len() != object_velocities.len() {
-            return Err(Error::new(
-                "object_velocities  has not the same size as object_positions",
-            ));
-        }
-        if object_positions.len() != object_accelerations.len() {
-            return Err(Error::new(
-                "object_accelerations  has not the same size as object_positions",
-            ));
-        }
+        assert_eq!(
+            object_velocities.len(),
+            object_positions.len(),
+            "object_velocities (size: {})  has not the same size as object_positions (size: {})",
+            object_velocities.len(),
+            object_positions.len(),
+        );
+        assert_eq!(
+            object_accelerations.len(),
+            object_positions.len(),
+            "object_accelerations (size: {})  has not the same size as object_positions (size: {})",
+            object_accelerations.len(),
+            object_positions.len(),
+        );
+
         let num_joints = self.get_num_joints(body);
         let mut dof_count_org = 0;
         for j in 0..num_joints {
@@ -1561,6 +1567,12 @@ impl PhysicsClient {
                 "number of maximum forces should match the number of joint indices",
             ));
         }
+        assert_eq!(forces.len(),
+            joint_indices.len(),
+            "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
+            forces.len(),
+            joint_indices.len(),
+        );
         let kp = 0.1;
         let kd = 1.0;
         let num_joints = self.get_num_joints(body);
@@ -1572,17 +1584,21 @@ impl PhysicsClient {
             );
 
             for &joint_index in joint_indices.iter() {
-                if joint_index >= num_joints {
-                    return Err(Error::new("Joint index out-of-range."));
-                }
+                assert!(
+                    joint_index < num_joints,
+                    "Joint index ({}) out-of-range. Robot has a total number of {} joints",
+                    joint_index,
+                    num_joints,
+                );
             }
             match control_mode {
                 ControlModeArray::Positions(target_positions) => {
-                    if target_positions.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of target positions should match the number of joint indices",
-                        ));
-                    }
+                    assert_eq!(target_positions.len(),
+                        joint_indices.len(),
+                        "number of target positions ({}) should match the number of joint indices ({})",
+                        target_positions.len(),
+                        joint_indices.len(),
+                    );
                     for i in 0..target_positions.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredPosition(
@@ -1613,26 +1629,31 @@ impl PhysicsClient {
                     position_gains: pg,
                     velocity_gains: vg,
                 } => {
-                    if pos.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of target positions should match the number of joint indices",
-                        ));
-                    }
-                    if vel.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of target velocities should match the number of joint indices",
-                        ));
-                    }
-                    if pg.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of position gains should match the number of joint indices",
-                        ));
-                    }
-                    if vg.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of velocity gains should match the number of joint indices",
-                        ));
-                    }
+                    assert_eq!(pos.len(),
+                        joint_indices.len(),
+                        "number of target positions ({}) should match the number of joint indices ({})",
+                        pos.len(),
+                        joint_indices.len(),
+                    );
+                    assert_eq!(vel.len(),
+                        joint_indices.len(),
+                        "number of target velocities ({}) should match the number of joint indices ({})",
+                        vel.len(),
+                        joint_indices.len(),
+                    );
+                    assert_eq!(pg.len(),
+                        joint_indices.len(),
+                        "number of position gains ({}) should match the number of joint indices ({})",
+                        pg.len(),
+                        joint_indices.len(),
+                    );
+                    assert_eq!(vg.len(),
+                        joint_indices.len(),
+                        "number of velocity gains ({}) should match the number of joint indices ({})",
+                        vg.len(),
+                        joint_indices.len(),
+                    );
+
                     for i in 0..pos.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredPosition(
@@ -1657,11 +1678,12 @@ impl PhysicsClient {
                     }
                 }
                 ControlModeArray::Velocities(vel) => {
-                    if vel.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of target velocities should match the number of joint indices",
-                        ));
-                    }
+                    assert_eq!(vel.len(),
+                        joint_indices.len(),
+                        "number of target velocities ({}) should match the number of joint indices ({})",
+                        vel.len(),
+                        joint_indices.len(),
+                    );
                     for i in 0..vel.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredVelocity(
@@ -1678,11 +1700,12 @@ impl PhysicsClient {
                     }
                 }
                 ControlModeArray::Torques(f) => {
-                    if f.len() != joint_indices.len() {
-                        return Err(Error::new(
-                            "number of target torques should match the number of joint indices",
-                        ));
-                    }
+                    assert_eq!(f.len(),
+                        joint_indices.len(),
+                        "number of target torques ({}) should match the number of joint indices ({})",
+                        f.len(),
+                        joint_indices.len(),
+                    );
                     for i in 0..f.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
                         ffi::b3JointControlSetDesiredForceTorque(
@@ -2606,19 +2629,20 @@ impl PhysicsClient {
                 } => {
                     if num_heightfield_columns > 0 && num_heightfield_rows > 0 {
                         let num_height_field_points = heightfield_data.len();
-                        if num_heightfield_rows * num_heightfield_columns
-                            != num_height_field_points as i32
-                        {
-                            return Err(Error::new("Size of heightfield_data doesn't match num_heightfield_columns*num_heightfield_rows"));
-                        }
+                        assert_eq!( num_heightfield_rows * num_heightfield_columns,
+                            num_height_field_points,
+                            "Size of heightfield_data ({}) doesn't match num_heightfield_columns * num_heightfield_rows = {}",
+                            num_height_field_points,
+                            num_heightfield_rows * num_heightfield_columns,
+                        );
                         shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
                             self.handle.as_ptr(),
                             command_handle,
                             mesh_scale.as_ptr(),
                             heightfield_texture_scaling,
                             heightfield_data.as_mut_slice().as_mut_ptr(),
-                            num_heightfield_rows,
-                            num_heightfield_columns,
+                            num_heightfield_rows as i32,
+                            num_heightfield_columns as i32,
                             replace_heightfield.unwrap_or_else(|| CollisionId(-1)).0,
                         );
                     }
@@ -2919,98 +2943,97 @@ impl PhysicsClient {
         options: MultiBodyOptions,
     ) -> Result<BodyId, Error> {
         unsafe {
-            if options.link_masses.len() == options.link_collision_shapes.len()
-                && options.link_masses.len() == options.link_visual_shapes.len()
-                && options.link_masses.len() == options.link_poses.len()
-                && options.link_masses.len() == options.link_joint_types.len()
-                && options.link_masses.len() == options.link_joint_axis.len()
-                && options.link_masses.len() == options.link_inertial_frame_poses.len()
-                && options.link_masses.len() == options.link_collision_shapes.len()
-            {
-                let command_handle = ffi::b3CreateMultiBodyCommandInit(self.handle.as_ptr());
-                let position_vector = &options.base_pose.translation.vector;
-                let rotation = &options.base_pose.rotation;
-                let base_position_array = [position_vector.x, position_vector.y, position_vector.z];
-                let base_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+            assert!(
+                options.link_masses.len() == options.link_collision_shapes.len()
+                    && options.link_masses.len() == options.link_visual_shapes.len()
+                    && options.link_masses.len() == options.link_poses.len()
+                    && options.link_masses.len() == options.link_joint_types.len()
+                    && options.link_masses.len() == options.link_joint_axis.len()
+                    && options.link_masses.len() == options.link_inertial_frame_poses.len()
+                    && options.link_masses.len() == options.link_collision_shapes.len(),
+                "All link arrays need to be same size."
+            );
 
-                let position_vector = &options.base_inertial_frame_pose.translation.vector;
-                let rotation = &options.base_inertial_frame_pose.rotation;
-                let base_inertial_position_array =
-                    [position_vector.x, position_vector.y, position_vector.z];
-                let base_inertial_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
-                let _base_index = ffi::b3CreateMultiBodyBase(
+            let command_handle = ffi::b3CreateMultiBodyCommandInit(self.handle.as_ptr());
+            let position_vector = &options.base_pose.translation.vector;
+            let rotation = &options.base_pose.rotation;
+            let base_position_array = [position_vector.x, position_vector.y, position_vector.z];
+            let base_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+
+            let position_vector = &options.base_inertial_frame_pose.translation.vector;
+            let rotation = &options.base_inertial_frame_pose.rotation;
+            let base_inertial_position_array =
+                [position_vector.x, position_vector.y, position_vector.z];
+            let base_inertial_rotation_array = [rotation.i, rotation.j, rotation.k, rotation.w];
+            let _base_index = ffi::b3CreateMultiBodyBase(
+                command_handle,
+                options.base_mass,
+                base_collision_shape.0,
+                base_visual_shape.0,
+                base_position_array.as_ptr(),
+                base_rotation_array.as_ptr(),
+                base_inertial_position_array.as_ptr(),
+                base_inertial_rotation_array.as_ptr(),
+            );
+            if let Some(batch_positions) = options.batch_positions {
+                let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
+                for pos in batch_positions.iter() {
+                    new_batch_positions.extend_from_slice(pos.coords.as_slice());
+                }
+                ffi::b3CreateMultiBodySetBatchPositions(
+                    self.handle.as_ptr(),
                     command_handle,
-                    options.base_mass,
-                    base_collision_shape.0,
-                    base_visual_shape.0,
-                    base_position_array.as_ptr(),
-                    base_rotation_array.as_ptr(),
-                    base_inertial_position_array.as_ptr(),
-                    base_inertial_rotation_array.as_ptr(),
+                    new_batch_positions.as_mut_slice().as_mut_ptr(),
+                    batch_positions.len() as i32,
                 );
-                if let Some(batch_positions) = options.batch_positions {
-                    let mut new_batch_positions =
-                        Vec::<f64>::with_capacity(batch_positions.len() * 3);
-                    for pos in batch_positions.iter() {
-                        new_batch_positions.extend_from_slice(pos.coords.as_slice());
-                    }
-                    ffi::b3CreateMultiBodySetBatchPositions(
-                        self.handle.as_ptr(),
-                        command_handle,
-                        new_batch_positions.as_mut_slice().as_mut_ptr(),
-                        batch_positions.len() as i32,
-                    );
-                }
-                for i in 0..options.link_masses.len() {
-                    let link_mass = options.link_masses[i];
-                    let link_collision_shape_index = options.link_collision_shapes[i].0;
-                    let link_visual_shape_index = options.link_visual_shapes[i].0;
-                    let position_vector = &options.link_poses[i].translation.vector;
-                    let rotation = &options.link_poses[i].rotation;
-                    let link_position = [position_vector.x, position_vector.y, position_vector.z];
-                    let link_orientation = [rotation.i, rotation.j, rotation.k, rotation.w];
+            }
+            for i in 0..options.link_masses.len() {
+                let link_mass = options.link_masses[i];
+                let link_collision_shape_index = options.link_collision_shapes[i].0;
+                let link_visual_shape_index = options.link_visual_shapes[i].0;
+                let position_vector = &options.link_poses[i].translation.vector;
+                let rotation = &options.link_poses[i].rotation;
+                let link_position = [position_vector.x, position_vector.y, position_vector.z];
+                let link_orientation = [rotation.i, rotation.j, rotation.k, rotation.w];
 
-                    let link_joint_axis: [f64; 3] = options.link_joint_axis[i].into();
+                let link_joint_axis: [f64; 3] = options.link_joint_axis[i].into();
 
-                    let position_vector = &options.link_inertial_frame_poses[i].translation.vector;
-                    let rotation = &options.link_inertial_frame_poses[i].rotation;
-                    let link_inertial_frame_position =
-                        [position_vector.x, position_vector.y, position_vector.z];
-                    let link_inertial_frame_orientation =
-                        [rotation.i, rotation.j, rotation.k, rotation.w];
+                let position_vector = &options.link_inertial_frame_poses[i].translation.vector;
+                let rotation = &options.link_inertial_frame_poses[i].rotation;
+                let link_inertial_frame_position =
+                    [position_vector.x, position_vector.y, position_vector.z];
+                let link_inertial_frame_orientation =
+                    [rotation.i, rotation.j, rotation.k, rotation.w];
 
-                    let link_parent_index = options.link_parent_indices[i];
-                    let link_joint_type = options.link_joint_types[i] as i32;
+                let link_parent_index = options.link_parent_indices[i];
+                let link_joint_type = options.link_joint_types[i] as i32;
 
-                    ffi::b3CreateMultiBodyLink(
-                        command_handle,
-                        link_mass,
-                        link_collision_shape_index as f64,
-                        link_visual_shape_index as f64,
-                        link_position.as_ptr(),
-                        link_orientation.as_ptr(),
-                        link_inertial_frame_position.as_ptr(),
-                        link_inertial_frame_orientation.as_ptr(),
-                        link_parent_index,
-                        link_joint_type,
-                        link_joint_axis.as_ptr(),
-                    );
-                }
-                if options.use_maximal_coordinates {
-                    ffi::b3CreateMultiBodyUseMaximalCoordinates(command_handle);
-                }
-                if let Some(flags) = options.flags {
-                    ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
-                }
-                let status_handle =
-                    b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
-                let status_type = ffi::b3GetStatusType(status_handle);
-                if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
-                    let uid = ffi::b3GetStatusBodyIndex(status_handle);
-                    return Ok(BodyId(uid));
-                }
-            } else {
-                return Err(Error::new("All link arrays need to be same size."));
+                ffi::b3CreateMultiBodyLink(
+                    command_handle,
+                    link_mass,
+                    link_collision_shape_index as f64,
+                    link_visual_shape_index as f64,
+                    link_position.as_ptr(),
+                    link_orientation.as_ptr(),
+                    link_inertial_frame_position.as_ptr(),
+                    link_inertial_frame_orientation.as_ptr(),
+                    link_parent_index,
+                    link_joint_type,
+                    link_joint_axis.as_ptr(),
+                );
+            }
+            if options.use_maximal_coordinates {
+                ffi::b3CreateMultiBodyUseMaximalCoordinates(command_handle);
+            }
+            if let Some(flags) = options.flags {
+                ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
+            }
+            let status_handle =
+                b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                return Ok(BodyId(uid));
             }
         }
         Err(Error::new("create_multi_body failed."))

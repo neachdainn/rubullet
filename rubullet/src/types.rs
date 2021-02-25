@@ -971,9 +971,9 @@ pub enum GeometricCollisionShape {
         /// Heightfield data. Should be of size num_rows * num_columns
         data: Vec<f32>,
         /// number of rows in data
-        num_rows: i32,
+        num_rows: usize,
         /// number of columns in data
-        num_columns: i32,
+        num_columns: usize,
         /// replacing an existing heightfield (updating its heights)
         /// (much faster than removing and re-creating a heightfield)
         replace_heightfield: Option<CollisionId>,
