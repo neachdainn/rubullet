@@ -2031,7 +2031,7 @@ impl PhysicsClient {
     ///         [0.; 3],
     ///         Point3::new(1.,1.,1.),
     ///         AddDebugLineOptions {
-    ///             line_color_rgb: &[1., 0., 0.],
+    ///             line_color_rgb: [1., 0., 0.],
     ///             ..Default::default()
     ///         },
     ///     )?;
@@ -2041,7 +2041,7 @@ impl PhysicsClient {
     /// ```
     pub fn add_user_debug_line<
         'a,
-        Options: Into<Option<AddDebugLineOptions<'a>>>,
+        Options: Into<Option<AddDebugLineOptions>>,
         Start: Into<Point3<f64>>,
         End: Into<Point3<f64>>,
     >(
@@ -2181,7 +2181,7 @@ impl PhysicsClient {
     ///         "My red text on the floor",
     ///         [0.;3],
     ///         AddDebugTextOptions {
-    ///             text_color_rgb: &[1., 0., 0.],
+    ///             text_color_rgb: [1., 0., 0.],
     ///             text_orientation: Some(UnitQuaternion::from_euler_angles(0.,0.,0.)),
     ///             ..Default::default()
     ///         },
@@ -2194,7 +2194,7 @@ impl PhysicsClient {
         'a,
         Text: Into<&'a str>,
         Position: Into<Point3<f64>>,
-        Options: Into<Option<AddDebugTextOptions<'a>>>,
+        Options: Into<Option<AddDebugTextOptions>>,
     >(
         &mut self,
         text: Text,

@@ -344,9 +344,9 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     }
 }
 /// Represents options for [`add_user_debug_text`](`crate::PhysicsClient::add_user_debug_text()`)
-pub struct AddDebugTextOptions<'a> {
+pub struct AddDebugTextOptions {
     /// RGB color [Red, Green, Blue] each component in range [0..1]. Default is [1.,1.,1.]
-    pub text_color_rgb: &'a [f64],
+    pub text_color_rgb: [f64; 3],
     /// size of the text. Default is 1.
     pub text_size: f64,
     /// Use 0 for permanent text, or positive time in seconds
@@ -367,10 +367,10 @@ pub struct AddDebugTextOptions<'a> {
     pub replace_item_id: Option<ItemId>,
 }
 
-impl<'a> Default for AddDebugTextOptions<'a> {
+impl Default for AddDebugTextOptions {
     fn default() -> Self {
         AddDebugTextOptions {
-            text_color_rgb: &[1.; 3],
+            text_color_rgb: [1.; 3],
             text_size: 1.,
             life_time: 0.,
             text_orientation: None,
@@ -381,9 +381,9 @@ impl<'a> Default for AddDebugTextOptions<'a> {
     }
 }
 /// Represents options for [`add_user_debug_line`](`crate::PhysicsClient::add_user_debug_line()`)
-pub struct AddDebugLineOptions<'a> {
+pub struct AddDebugLineOptions {
     /// RGB color [Red, Green, Blue] each component in range [0..1]. Default is [1.,1.,1.]
-    pub line_color_rgb: &'a [f64],
+    pub line_color_rgb: [f64; 3],
     /// line width (limited by OpenGL implementation). Default is 1.
     pub line_width: f64,
     /// Use 0 for a permanent line, or positive time in seconds
@@ -398,10 +398,10 @@ pub struct AddDebugLineOptions<'a> {
     pub replace_item_id: Option<BodyId>,
 }
 
-impl<'a> Default for AddDebugLineOptions<'a> {
+impl Default for AddDebugLineOptions {
     fn default() -> Self {
         AddDebugLineOptions {
-            line_color_rgb: &[1.; 3],
+            line_color_rgb: [1.; 3],
             line_width: 1.,
             life_time: 0.,
             parent_object_id: None,
