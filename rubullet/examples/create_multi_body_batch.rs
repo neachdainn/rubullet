@@ -3,9 +3,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use nalgebra::{Isometry3, Point3, Vector3};
-use rubullet::types::DebugVisualizerFlag::{
-    CovEnableGui, CovEnableRendering, CovEnableTinyRenderer,
-};
+use rubullet::DebugVisualizerFlag::{CovEnableGui, CovEnableRendering, CovEnableTinyRenderer};
 use rubullet::*;
 
 fn main() -> Result<()> {

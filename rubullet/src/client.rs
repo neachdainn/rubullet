@@ -2019,8 +2019,8 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     ///# use anyhow::Result;
-    ///# use rubullet::mode::Mode::Gui;
-    ///# use rubullet::types::AddDebugLineOptions;
+    ///# use rubullet::Mode::Gui;
+    ///# use rubullet::AddDebugLineOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
@@ -2094,7 +2094,7 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     /// use rubullet::PhysicsClient;
-    /// use rubullet::mode::Mode::Gui;
+    /// use rubullet::Mode::Gui;
     /// use anyhow::Result;
     /// pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Gui)?;
@@ -2167,8 +2167,8 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     ///# use anyhow::Result;
-    ///# use rubullet::mode::Mode::Gui;
-    ///# use rubullet::types::AddDebugTextOptions;
+    ///# use rubullet::Mode::Gui;
+    ///# use rubullet::AddDebugTextOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///# use nalgebra::Point3;
@@ -2252,7 +2252,7 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     ///# use anyhow::Result;
-    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::Mode::Gui;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
@@ -2275,7 +2275,7 @@ impl PhysicsClient {
     /// # Example
     /// ```no_run
     ///# use anyhow::Result;
-    ///# use rubullet::mode::Mode::Gui;
+    ///# use rubullet::Mode::Gui;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
     ///#
@@ -2912,7 +2912,7 @@ impl PhysicsClient {
     ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
     ///# use nalgebra::Vector3;
-    ///# use rubullet::mode::Mode::Direct;
+    ///# use rubullet::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
     ///# fn main() -> Result<()> {
@@ -3051,7 +3051,7 @@ impl PhysicsClient {
     ///# use anyhow::Result;
     ///# use nalgebra::Isometry3;
     ///# use nalgebra::Vector3;
-    ///# use rubullet::mode::Mode::Direct;
+    ///# use rubullet::Mode::Direct;
     ///# use rubullet::*;
     ///# use std::time::Duration;
     ///# fn main() -> Result<()> {

@@ -1,5 +1,5 @@
 use nalgebra::{Isometry3, Matrix3xX, Vector3};
-use rubullet::mode::Mode::Direct;
+use rubullet::Mode::Direct;
 use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
 

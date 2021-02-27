@@ -37,21 +37,24 @@
 //! }
 //! ```
 #![allow(dead_code)]
-
 pub use crate::{
     client::PhysicsClient,
     error::Error,
     mode::Mode,
     types::{
-        BodyId, BodyInfo, ChangeVisualShapeOptions, CollisionId, ControlMode, ControlModeArray,
-        DebugVisualizerFlag, GeometricCollisionShape, GeometricVisualShape,
-        InverseKinematicsNullSpaceParameters, InverseKinematicsParametersBuilder, ItemId,
-        JointInfo, JointState, JointType, KeyboardEvent, LoadModelFlags, MouseButtonState,
-        MouseEvent, MultiBodyOptions, TextureId, UrdfOptions, VisualId, VisualShapeData,
+        AddDebugLineOptions, AddDebugTextOptions, BodyId, BodyInfo, ChangeVisualShapeOptions,
+        CollisionId, ControlMode, ControlModeArray, DebugVisualizerFlag, ExternalForceFrame,
+        GeometricCollisionShape, GeometricVisualShape, IkSolver, Images,
+        InverseKinematicsNullSpaceParameters, InverseKinematicsParameters,
+        InverseKinematicsParametersBuilder, ItemId, Jacobian, JointInfo, JointState, JointType,
+        KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions,
+        SdfOptions, TextureId, UrdfOptions, Velocity, VisualId, VisualShapeData,
         VisualShapeOptions,
     },
 };
-pub mod client;
-pub mod error;
-pub mod mode;
-pub mod types;
+pub use image;
+pub use nalgebra;
+mod client;
+mod error;
+mod mode;
+mod types;

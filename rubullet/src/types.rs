@@ -76,7 +76,7 @@ impl TryFrom<i32> for JointType {
 /// ```rust
 /// use rubullet::{PhysicsClient, UrdfOptions};
 /// use nalgebra::Isometry3;
-/// use rubullet::mode::Mode::Direct;
+/// use rubullet::Mode::Direct;
 /// use anyhow::Result;
 /// fn main() -> Result<()> {
 ///
@@ -416,7 +416,7 @@ impl Default for AddDebugLineOptions {
 /// # Example
 /// Jacobian can be multiplied with joint velocities to get a velocity in cartesian coordinates:
 /// ```rust
-/// # use rubullet::types::{Velocity, Jacobian};
+/// # use rubullet::{Velocity, Jacobian};
 /// # use nalgebra::{Matrix6xX, DVector};
 /// let jacobian = Jacobian{jacobian:Matrix6xX::from_vec(vec![0.;12])};
 /// let velocity: Velocity = jacobian * DVector::from_vec(vec![1.;2]);
@@ -741,7 +741,7 @@ pub enum DebugVisualizerFlag {
 /// ```rust
 /// use rubullet::{PhysicsClient, UrdfOptions};
 /// use nalgebra::Isometry3;
-/// use rubullet::mode::Mode::Direct;
+/// use rubullet::Mode::Direct;
 /// use anyhow::Result;
 /// fn main() -> Result<()> {
 ///     let mut client = PhysicsClient::connect(Direct)?;
@@ -1210,7 +1210,7 @@ pub struct Images {
 /// Contains the cartesian velocity stored as Vector with 6 elements (x,y,z,wx,wy,wz).
 /// # Example
 /// ```rust
-/// use rubullet::types::Velocity;
+/// use rubullet::Velocity;
 /// use nalgebra::Vector6;
 /// let vel: Velocity = [0.; 6].into(); // creation from array
 /// let vel: Velocity = Vector6::zeros().into(); // creation from vector

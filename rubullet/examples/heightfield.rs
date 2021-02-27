@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::Result;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
 use rand::prelude::*;
-use rubullet::types::DebugVisualizerFlag::CovEnableRendering;
+use rubullet::DebugVisualizerFlag::CovEnableRendering;
 use rubullet::*;
 
 fn main() -> Result<()> {

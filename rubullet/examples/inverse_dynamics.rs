@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use rubullet::types::ControlModeArray::Torques;
+use rubullet::ControlModeArray::Torques;
 use rubullet::*;
 
 fn main() -> Result<()> {

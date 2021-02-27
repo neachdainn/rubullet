@@ -1,13 +1,13 @@
 use nalgebra::{DVector, Isometry3, Matrix3xX, Translation3, UnitQuaternion, Vector3};
 
 use anyhow::Result;
-use rubullet::mode::Mode::Direct;
-use rubullet::types::ControlModeArray::Torques;
-use rubullet::types::{JointInfo, JointState};
+use rubullet::ControlModeArray::Torques;
+use rubullet::Mode::Direct;
 use rubullet::{
     BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
     InverseKinematicsParametersBuilder, JointType, LoadModelFlags, PhysicsClient, UrdfOptions,
 };
+use rubullet::{JointInfo, JointState};
 use std::f64::consts::PI;
 use std::time::Duration;
 
