@@ -3,8 +3,8 @@
 //! This is largely modeled after the PyBullet API but utilizes Rust's more expressive type system
 //! where available.
 use std::convert::TryFrom;
-use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 use std::os::unix::ffi::OsStrExt;
+use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 
 use nalgebra::{
     DMatrix, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
