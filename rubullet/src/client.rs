@@ -388,7 +388,10 @@ impl PhysicsClient {
                 MAX_SDF_BODIES as i32,
             );
             if num_bodies as u32 > MAX_SDF_BODIES {
-                return Err(Error::new("SDF exceeds body capacity of 512"));
+                return Err(Error::with(format!(
+                    "SDF exceeds body capacity of {}",
+                    MAX_SDF_BODIES
+                )));
             }
             let mut bodies = Vec::<BodyId>::with_capacity(num_bodies as usize);
             if num_bodies > 0 && num_bodies <= MAX_SDF_BODIES as i32 {
@@ -454,7 +457,10 @@ impl PhysicsClient {
                 MAX_SDF_BODIES as i32,
             );
             if num_bodies as u32 > MAX_SDF_BODIES {
-                return Err(Error::new("SDF exceeds body capacity of 512"));
+                return Err(Error::with(format!(
+                    "MuJoCo exceeds body capacity of {}",
+                    MAX_SDF_BODIES
+                )));
             }
             let mut bodies = Vec::<BodyId>::with_capacity(num_bodies as usize);
             if num_bodies > 0 && num_bodies <= MAX_SDF_BODIES as i32 {
