@@ -46,10 +46,10 @@ pub use crate::{
         CollisionId, ControlMode, ControlModeArray, DebugVisualizerFlag, ExternalForceFrame,
         GeometricCollisionShape, GeometricVisualShape, IkSolver, Images,
         InverseKinematicsNullSpaceParameters, InverseKinematicsParameters,
-        InverseKinematicsParametersBuilder, ItemId, Jacobian, JointInfo, JointState, JointType,
-        KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions,
-        SdfOptions, TextureId, UrdfOptions, Velocity, VisualId, VisualShapeData,
-        VisualShapeOptions,
+        InverseKinematicsParametersBuilder, ItemId, Jacobian, JointInfo, JointInfoFlags,
+        JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState,
+        MouseEvent, MultiBodyOptions, SdfOptions, TextureId, UrdfOptions, Velocity, VisualId,
+        VisualShapeData, VisualShapeOptions,
     },
 };
 pub use image;

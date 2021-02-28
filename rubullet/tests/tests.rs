@@ -5,7 +5,8 @@ use rubullet::ControlModeArray::Torques;
 use rubullet::Mode::Direct;
 use rubullet::{
     BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
-    InverseKinematicsParametersBuilder, JointType, LoadModelFlags, PhysicsClient, UrdfOptions,
+    InverseKinematicsParametersBuilder, JointInfoFlags, JointType, LoadModelFlags, PhysicsClient,
+    UrdfOptions,
 };
 use rubullet::{JointInfo, JointState};
 use std::f64::consts::PI;
@@ -130,7 +131,7 @@ fn test_get_joint_info() {
     assert_eq!(JointType::Fixed, joint_info.joint_type);
     assert_eq!(-1, joint_info.q_index);
     assert_eq!(-1, joint_info.u_index);
-    assert_eq!(0, joint_info.flags);
+    assert!(joint_info.flags.is_empty());
     float_compare(0., joint_info.joint_damping, 1e-10);
     float_compare(0., joint_info.joint_friction, 1e-10);
     float_compare(0., joint_info.joint_lower_limit, 1e-10);
@@ -158,7 +159,7 @@ fn test_get_joint_info() {
     assert_eq!(JointType::Revolute, joint_info.joint_type);
     assert_eq!(7, joint_info.q_index);
     assert_eq!(6, joint_info.u_index);
-    assert_eq!(1, joint_info.flags);
+    assert_eq!(JointInfoFlags::JOINT_CHANGE_MAX_FORCE, joint_info.flags);
     float_compare(0., joint_info.joint_damping, 1e-10);
     float_compare(0., joint_info.joint_friction, 1e-10);
     float_compare(0., joint_info.joint_lower_limit, 1e-10);

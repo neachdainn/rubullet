@@ -105,7 +105,8 @@ pub struct JointInfo {
     /// the first velocity index in the velocity state variables for this body
     pub u_index: i32,
     /// reserved
-    pub flags: i32,
+    #[doc(hidden)]
+    pub flags: JointInfoFlags,
     /// the joint damping value, as specified in the URDF file
     pub joint_damping: f64,
     /// the joint friction value, as specified in the URDF file
@@ -167,7 +168,7 @@ impl From<b3JointInfo> for JointInfo {
                 q_index: m_q_index,
                 u_index: m_u_index,
                 joint_index: m_joint_index as usize,
-                flags: m_flags,
+                flags: JointInfoFlags::from_bits(m_flags).expect("Could not parse JointInfoFlags"),
                 joint_damping: m_joint_damping,
                 joint_friction: m_joint_friction,
                 joint_upper_limit: m_joint_upper_limit,
@@ -1306,5 +1307,20 @@ bitflags::bitflags! {
 impl Default for LoadModelFlags {
     fn default() -> Self {
         LoadModelFlags::NONE
+    }
+}
+bitflags::bitflags! {
+    #[doc(hidden)]
+    pub struct JointInfoFlags : i32 {
+        const NONE = 0;
+        const JOINT_CHANGE_MAX_FORCE = 1;
+        const JOINT_CHANGE_CHILD_FRAME_POSITION = 2;
+        const JOINT_CHANGE_CHILD_FRAME_ORIENTATION = 4;
+    }
+}
+
+impl Default for JointInfoFlags {
+    fn default() -> Self {
+        JointInfoFlags::NONE
     }
 }
