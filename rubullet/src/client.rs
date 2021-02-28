@@ -821,9 +821,8 @@ impl PhysicsClient {
     pub fn change_dynamics_linear_damping(&mut self, body: BodyId, linear_damping: f64) {
         unsafe {
             let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
-            if linear_damping >= 0. {
-                ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
-            }
+            assert!(linear_damping >= 0.);
+            ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
     }
@@ -831,9 +830,8 @@ impl PhysicsClient {
     pub fn change_dynamics_angular_damping(&mut self, body: BodyId, angular_damping: f64) {
         unsafe {
             let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
-            if angular_damping >= 0. {
-                ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
-            }
+            assert!(angular_damping >= 0.);
+            ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
         }
     }
