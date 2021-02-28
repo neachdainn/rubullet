@@ -36,7 +36,6 @@
 //!     Ok(())
 //! }
 //! ```
-#![allow(dead_code)]
 pub use crate::{
     client::PhysicsClient,
     error::Error,

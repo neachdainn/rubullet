@@ -58,7 +58,7 @@ pub struct PhysicsClient {
     handle: Handle,
 
     /// A marker indicating whether or not a GUI is in use by this client.
-    gui_marker: Option<GuiMarker>,
+    _gui_marker: Option<GuiMarker>,
 }
 
 impl PhysicsClient {
@@ -75,7 +75,7 @@ impl PhysicsClient {
     ///
     /// Other modes are currently not implemented.
     pub fn connect(mode: Mode) -> Result<PhysicsClient, Error> {
-        let (raw_handle, gui_marker) = match mode {
+        let (raw_handle, _gui_marker) = match mode {
             Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None) },
             Mode::Gui => {
                 // Only one GUI is allowed per process. Try to get the marker and fail if there is
@@ -103,7 +103,10 @@ impl PhysicsClient {
 
         // At this point, we need to disconnect the physics client at any error. So we create the
         // Rust struct and allow the `Drop` implementation to take care of that.
-        let mut client = PhysicsClient { handle, gui_marker };
+        let mut client = PhysicsClient {
+            handle,
+            _gui_marker,
+        };
 
         // Make sure it is up and running.
         if !client.can_submit_command() {
