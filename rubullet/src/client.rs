@@ -32,9 +32,8 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_SYNC_BODY_INFO_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
-    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
-    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
+    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
@@ -3196,21 +3195,6 @@ impl PhysicsClient {
             }
         }
         Err(Error::new("Error loading texture"))
-    }
-    /// sync_body_info will synchronize the body information (get_body_info) in case of multiple
-    /// clients connected to one physics server changing the world
-    /// ( [`load_urdf`](`Self::load_urdf()`), [remove_body](`Self::remove_body`) etc).
-    pub fn sync_body_info(&mut self) -> Result<(), Error> {
-        unsafe {
-            let command = ffi::b3InitSyncBodyInfoCommand(self.handle.as_ptr());
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
-            let status_type = ffi::b3GetStatusType(status_handle);
-            if status_type != CMD_SYNC_BODY_INFO_COMPLETED as i32 {
-                return Err(Error::new("Error in sync_body_info command"));
-            }
-        }
-        Ok(())
     }
     /// will remove a body by its body unique id
     pub fn remove_body(&mut self, body: BodyId) {

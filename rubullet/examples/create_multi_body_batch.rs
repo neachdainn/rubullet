@@ -161,7 +161,6 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )?;
-    physics_client.sync_body_info()?;
     physics_client.configure_debug_visualizer(CovEnableRendering, true);
     physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
 
