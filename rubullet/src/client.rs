@@ -4,9 +4,6 @@
 //! where available.
 use std::convert::TryFrom;
 use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
-// I currently do not know the best way to represent the file operations for Windows. PyBullet uses
-// raw C-strings but that doesn't seem appropriate here. I don't really have a Windows machine, so
-// until then...
 use std::os::unix::ffi::OsStrExt;
 
 use nalgebra::{
