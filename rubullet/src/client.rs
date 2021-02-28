@@ -1570,12 +1570,6 @@ impl PhysicsClient {
                 forces = max_forces;
             }
         }
-
-        if forces.len() != joint_indices.len() {
-            return Err(Error::new(
-                "number of maximum forces should match the number of joint indices",
-            ));
-        }
         assert_eq!(forces.len(),
             joint_indices.len(),
             "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
