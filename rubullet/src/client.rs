@@ -44,7 +44,7 @@ use std::time::Duration;
 /// For whatever reason, the Bullet C API obfuscates the handle type by defining the handle type as
 /// a pointer to an (essentially) anonymous struct. That's ugly to use here, and we know it isn't
 /// going to be null, so we'll just do this alias.
-type Handle = std::ptr::NonNull<ffi::b3PhysicsClientHandle__>;
+type Handle = ffi::b3PhysicsClientHandle;
 
 /// Connection to a physics server.
 ///
@@ -92,10 +92,7 @@ impl PhysicsClient {
                 (raw_handle, Some(gui_marker))
             }
         };
-
-        // Make sure the returned pointer is valid.
-        let handle =
-            Handle::new(raw_handle).ok_or_else(|| Error::new("Bullet returned a null handle"))?;
+        let handle = raw_handle.expect("Bullet returned a null pointer");
 
         // At this point, we need to disconnect the physics client at any error. So we create the
         // Rust struct and allow the `Drop` implementation to take care of that.
@@ -113,18 +110,16 @@ impl PhysicsClient {
         // do but it's what PyBullet does. Note that PyBullet does not check these for `null` so I
         // am assuming that they either can't be null or the consumer does the check.
         unsafe {
-            let command = ffi::b3InitSyncBodyInfoCommand(client.handle.as_ptr());
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(client.handle.as_ptr(), command);
+            let command = ffi::b3InitSyncBodyInfoCommand(client.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(client.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
 
             if status_type != ffi::EnumSharedMemoryServerStatus::CMD_SYNC_BODY_INFO_COMPLETED as _ {
                 return Err(Error::new("Connection terminated, couldn't get body info"));
             }
 
-            let command = ffi::b3InitSyncUserDataCommand(client.handle.as_ptr());
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(client.handle.as_ptr(), command);
+            let command = ffi::b3InitSyncUserDataCommand(client.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(client.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
 
             if status_type != ffi::EnumSharedMemoryServerStatus::CMD_SYNC_USER_DATA_COMPLETED as _ {
@@ -138,10 +133,10 @@ impl PhysicsClient {
     /// reset_simulation will remove all objects from the world and reset the world to initial conditions.
     pub fn reset_simulation(&mut self) {
         unsafe {
-            let command_handle = ffi::b3InitResetSimulationCommand(self.handle.as_ptr());
+            let command_handle = ffi::b3InitResetSimulationCommand(self.handle);
             ffi::b3InitResetSimulationSetFlags(command_handle, 0);
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
     /// Warning: in many cases it is best to leave the timeStep to default, which is 240Hz.
@@ -156,10 +151,9 @@ impl PhysicsClient {
     /// Don't change this time step regularly.
     pub fn set_time_step(&mut self, time_step: Duration) {
         unsafe {
-            let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
+            let command = ffi::b3InitPhysicsParamCommand(self.handle);
             let _ret = ffi::b3PhysicsParamSetTimeStep(command, time_step.as_secs_f64());
-            let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
     /// By default, the physics server will not step the simulation, unless you explicitly send a
@@ -183,13 +177,12 @@ impl PhysicsClient {
     /// * `enable_real_time_simulation` - activates or deactivates real-time simulation
     pub fn set_real_time_simulation(&mut self, enable_real_time_simulation: bool) {
         unsafe {
-            let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
+            let command = ffi::b3InitPhysicsParamCommand(self.handle);
             let _ret = ffi::b3PhysicsParamSetRealTimeSimulation(
                 command,
                 enable_real_time_simulation as i32,
             );
-            let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
     /// Sets an additional search path for loading assets.
@@ -204,10 +197,9 @@ impl PhysicsClient {
         unsafe {
             // Based on PyBullet, it appears that this path is copied and it does not need to live
             // after calling the function.
-            let command_handle =
-                ffi::b3SetAdditionalSearchPath(self.handle.as_ptr(), path.as_ptr());
+            let command_handle = ffi::b3SetAdditionalSearchPath(self.handle, path.as_ptr());
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
 
         Ok(())
@@ -232,10 +224,9 @@ impl PhysicsClient {
         unsafe {
             // PyBullet error checks none of these. Looking through the code, it looks like there is
             // no possible way to return an error on them.
-            let command = ffi::b3InitPhysicsParamCommand(self.handle.as_ptr());
+            let command = ffi::b3InitPhysicsParamCommand(self.handle);
             let _ret = ffi::b3PhysicsParamSetGravity(command, gravity.x, gravity.y, gravity.z);
-            let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
 
         Ok(())
@@ -285,7 +276,7 @@ impl PhysicsClient {
         let options = options.into().unwrap_or_default();
         unsafe {
             // As always, PyBullet does not document and does not check return codes.
-            let command = ffi::b3LoadUrdfCommandInit(self.handle.as_ptr(), file.as_ptr());
+            let command = ffi::b3LoadUrdfCommandInit(self.handle, file.as_ptr());
             let _ret = ffi::b3LoadUrdfCommandSetFlags(command, options.flags.bits());
             let _ret = ffi::b3LoadUrdfCommandSetStartPosition(
                 command,
@@ -316,8 +307,7 @@ impl PhysicsClient {
                     ffi::b3LoadUrdfCommandSetGlobalScaling(command, options.global_scaling as f64);
             }
 
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != ffi::EnumSharedMemoryServerStatus::CMD_URDF_LOADING_COMPLETED as c_int
             {
@@ -363,7 +353,7 @@ impl PhysicsClient {
             .map_err(|_| Error::new("Invalid path"))?;
 
         unsafe {
-            let command = ffi::b3LoadSdfCommandInit(self.handle.as_ptr(), file.as_ptr());
+            let command = ffi::b3LoadSdfCommandInit(self.handle, file.as_ptr());
             if let Some(options) = options.into() {
                 if options.use_maximal_coordinates {
                     ffi::b3LoadSdfCommandSetUseMultiBody(command, 0);
@@ -373,8 +363,7 @@ impl PhysicsClient {
                 }
             }
 
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != ffi::EnumSharedMemoryServerStatus::CMD_SDF_LOADING_COMPLETED as c_int
             {
@@ -438,12 +427,11 @@ impl PhysicsClient {
             .map_err(|_| Error::new("Invalid path"))?;
 
         unsafe {
-            let command = ffi::b3LoadMJCFCommandInit(self.handle.as_ptr(), file.as_ptr());
+            let command = ffi::b3LoadMJCFCommandInit(self.handle, file.as_ptr());
             if let Some(flags) = flags.into() {
                 ffi::b3LoadMJCFCommandSetFlags(command, flags.bits());
             }
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != ffi::EnumSharedMemoryServerStatus::CMD_MJCF_LOADING_COMPLETED as c_int
             {
@@ -481,9 +469,8 @@ impl PhysicsClient {
         }
 
         unsafe {
-            let command = ffi::b3InitStepSimulationCommand(self.handle.as_ptr());
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let command = ffi::b3InitStepSimulationCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type
                 != ffi::EnumSharedMemoryServerStatus::CMD_STEP_FORWARD_SIMULATION_COMPLETED as i32
@@ -504,9 +491,8 @@ impl PhysicsClient {
         }
 
         unsafe {
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
 
             if status_type
@@ -559,7 +545,7 @@ impl PhysicsClient {
     /// * `pose` - reset the base of the object at the specified position in world space coordinates
     pub fn reset_base_transform(&mut self, body: BodyId, pose: &Isometry3<f64>) {
         unsafe {
-            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle, body.0);
             ffi::b3CreatePoseCommandSetBasePosition(
                 command_handle,
                 pose.translation.x,
@@ -574,7 +560,7 @@ impl PhysicsClient {
                 pose.rotation.w,
             );
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
     /// You get access to the linear and angular velocity of the base of a body.
@@ -588,9 +574,8 @@ impl PhysicsClient {
     pub fn get_base_velocity(&mut self, body: BodyId) -> Result<Velocity, Error> {
         let mut base_velocity = [0.; 6];
         unsafe {
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             let mut actual_state_qdot: *const f64 = ptr::null();
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
@@ -670,7 +655,7 @@ impl PhysicsClient {
         let maybe_lin = linear_velocity.into();
         let maybe_angular = angular_velocity.into();
         unsafe {
-            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle, body.0);
             match (maybe_lin, maybe_angular) {
                 (None, None) => {}
                 (Some(linear), Some(angular)) => {
@@ -695,7 +680,7 @@ impl PhysicsClient {
                 }
             }
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
     /// Queries the Cartesian world pose for the center of mass for a link.
@@ -725,22 +710,21 @@ impl PhysicsClient {
         unsafe {
             assert!(body.0 >= 0, "get_link_state failed; invalid BodyId");
 
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
             if compute_link_velocity {
                 ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
             }
             if compute_forward_kinematics {
                 ffi::b3RequestActualStateCommandComputeForwardKinematics(cmd_handle, 1);
             }
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getLinkState failed."));
             }
             let mut link_state = b3LinkState::default();
             if ffi::b3GetLinkState(
-                self.handle.as_ptr(),
+                self.handle,
                 status_handle,
                 link_index as i32,
                 &mut link_state,
@@ -778,15 +762,14 @@ impl PhysicsClient {
         unsafe {
             assert!(body.0 >= 0, "get_link_states failed; invalid BodyId");
 
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
             if compute_link_velocity {
                 ffi::b3RequestActualStateCommandComputeLinkVelocity(cmd_handle, 1);
             }
             if compute_forward_kinematics {
                 ffi::b3RequestActualStateCommandComputeForwardKinematics(cmd_handle, 1);
             }
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getLinkState failed."));
@@ -795,7 +778,7 @@ impl PhysicsClient {
             for &link_index in link_indices.iter() {
                 let mut link_state = b3LinkState::default();
                 if ffi::b3GetLinkState(
-                    self.handle.as_ptr(),
+                    self.handle,
                     status_handle,
                     link_index as i32,
                     &mut link_state,
@@ -812,31 +795,31 @@ impl PhysicsClient {
 
     /// Returns whether or not this client can submit a command.
     fn can_submit_command(&mut self) -> bool {
-        unsafe { ffi::b3CanSubmitCommand(self.handle.as_ptr()) != 0 }
+        unsafe { ffi::b3CanSubmitCommand(self.handle) != 0 }
     }
 
     pub fn change_dynamics_linear_damping(&mut self, body: BodyId, linear_damping: f64) {
         unsafe {
-            let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
+            let command = ffi::b3InitChangeDynamicsInfo(self.handle);
             assert!(linear_damping >= 0.);
             ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
 
     pub fn change_dynamics_angular_damping(&mut self, body: BodyId, angular_damping: f64) {
         unsafe {
-            let command = ffi::b3InitChangeDynamicsInfo(self.handle.as_ptr());
+            let command = ffi::b3InitChangeDynamicsInfo(self.handle);
             assert!(angular_damping >= 0.);
             ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
     /// returns the number of joints of a body
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     pub fn get_num_joints(&mut self, body: BodyId) -> usize {
-        unsafe { ffi::b3GetNumJoints(self.handle.as_ptr(), body.0) as usize }
+        unsafe { ffi::b3GetNumJoints(self.handle, body.0) as usize }
     }
     /// Query info about a joint like its name and type
     /// # Arguments
@@ -871,12 +854,7 @@ impl PhysicsClient {
                 m_q_size: 0,
                 m_u_size: 0,
             };
-            ffi::b3GetJointInfo(
-                self.handle.as_ptr(),
-                body.0,
-                joint_index as i32,
-                &mut joint_info,
-            );
+            ffi::b3GetJointInfo(self.handle, body.0, joint_index as i32, &mut joint_info);
             joint_info
         }
     }
@@ -898,24 +876,23 @@ impl PhysicsClient {
     ) -> Result<(), Error> {
         unsafe {
             let joint_index = joint_index as i32;
-            let num_joints = ffi::b3GetNumJoints(self.handle.as_ptr(), body.0);
+            let num_joints = ffi::b3GetNumJoints(self.handle, body.0);
             assert!(joint_index < num_joints, "Joint index out-of-range.");
-            let command_handle = ffi::b3CreatePoseCommandInit(self.handle.as_ptr(), body.0);
+            let command_handle = ffi::b3CreatePoseCommandInit(self.handle, body.0);
 
             ffi::b3CreatePoseCommandSetJointPosition(
-                self.handle.as_ptr(),
+                self.handle,
                 command_handle,
                 joint_index,
                 value,
             );
             ffi::b3CreatePoseCommandSetJointVelocity(
-                self.handle.as_ptr(),
+                self.handle,
                 command_handle,
                 joint_index,
                 velocity.into().unwrap_or(0.),
             );
-            let _handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let _handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             Ok(())
         }
     }
@@ -931,16 +908,15 @@ impl PhysicsClient {
     ) -> Result<JointState, Error> {
         unsafe {
             assert!(body.0 >= 0, "get_joint_state failed; invalid BodyId");
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getJointState failed."));
             }
             let mut sensor_state = b3JointSensorState::default();
             if 0 != ffi::b3GetJointState(
-                self.handle.as_ptr(),
+                self.handle,
                 status_handle,
                 joint_index as i32,
                 &mut sensor_state,
@@ -966,9 +942,8 @@ impl PhysicsClient {
             if joint_indices.is_empty() {
                 return Err(Error::new("expected a sequence of joint indices"));
             }
-            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle.as_ptr(), body.0);
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), cmd_handle);
+            let cmd_handle = ffi::b3RequestActualStateCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type != CMD_ACTUAL_STATE_UPDATE_COMPLETED as i32 {
                 return Err(Error::new("getJointState failed."));
@@ -983,7 +958,7 @@ impl PhysicsClient {
                 );
                 let mut sensor_state = b3JointSensorState::default();
                 if 0 != ffi::b3GetJointState(
-                    self.handle.as_ptr(),
+                    self.handle,
                     status_handle,
                     joint_index as i32,
                     &mut sensor_state,
@@ -1017,19 +992,19 @@ impl PhysicsClient {
             let flags = 0; // TODO add flags
             unsafe {
                 let command_handle = ffi::b3CalculateMassMatrixCommandInit(
-                    self.handle.as_ptr(),
+                    self.handle,
                     body.0,
                     joint_positions.as_ptr(),
                     joint_positions.len() as i32,
                 );
                 ffi::b3CalculateMassMatrixSetFlags(command_handle, flags);
                 let status_handle =
-                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CALCULATED_MASS_MATRIX_COMPLETED as i32 {
                     let mut dof_count = 0;
                     ffi::b3GetStatusMassMatrix(
-                        self.handle.as_ptr(),
+                        self.handle,
                         status_handle,
                         &mut dof_count,
                         std::ptr::null_mut(),
@@ -1037,7 +1012,7 @@ impl PhysicsClient {
                     if dof_count != 0 {
                         let mut mass_vec = vec![0.; (dof_count * dof_count) as usize];
                         ffi::b3GetStatusMassMatrix(
-                            self.handle.as_ptr(),
+                            self.handle,
                             status_handle,
                             &mut dof_count,
                             mass_vec.as_mut_slice().as_mut_ptr(),
@@ -1090,7 +1065,7 @@ impl PhysicsClient {
             sz_rest_poses = limits.rest_poses.len();
         }
 
-        let dof_count = unsafe { ffi::b3ComputeDofCount(self.handle.as_ptr(), body.0) } as usize;
+        let dof_count = unsafe { ffi::b3ComputeDofCount(self.handle, body.0) } as usize;
 
         let mut has_null_space = false;
         let mut has_joint_damping = false;
@@ -1134,8 +1109,7 @@ impl PhysicsClient {
         }
         let mut num_pos = 0;
         unsafe {
-            let command =
-                ffi::b3CalculateInverseKinematicsCommandInit(self.handle.as_ptr(), body.0);
+            let command = ffi::b3CalculateInverseKinematicsCommandInit(self.handle, body.0);
             ffi::b3CalculateInverseKinematicsSelectSolver(command, solver);
             if has_current_positions {
                 ffi::b3CalculateInverseKinematicsSetCurrentPositions(
@@ -1205,8 +1179,7 @@ impl PhysicsClient {
                     joint_damping.unwrap().as_ptr(),
                 )
             }
-            let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
             let mut result_body_index: c_int = 0;
             let result = ffi::b3GetStatusInverseKinematicsJointPositions(
                 status_handle,
@@ -1262,7 +1235,7 @@ impl PhysicsClient {
         );
         unsafe {
             let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
-                self.handle.as_ptr(),
+                self.handle,
                 body.0,
                 object_positions.as_ptr(),
                 object_positions.len() as i32,
@@ -1272,7 +1245,7 @@ impl PhysicsClient {
             );
             ffi::b3CalculateInverseDynamicsSetFlags(command_handle, flags);
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED as i32 {
                 let mut body_unique_id = 0;
@@ -1371,7 +1344,7 @@ impl PhysicsClient {
 
             unsafe {
                 let command_handle = ffi::b3CalculateJacobianCommandInit(
-                    self.handle.as_ptr(),
+                    self.handle,
                     body.0,
                     link_index as i32,
                     local_position.into().vector.as_ptr(),
@@ -1380,7 +1353,7 @@ impl PhysicsClient {
                     joint_accelerations.as_ptr(),
                 );
                 let status_handle =
-                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CALCULATED_JACOBIAN_COMPLETED as i32 {
                     let mut dof_count = 0;
@@ -1471,11 +1444,8 @@ impl PhysicsClient {
         let kd = 1.0;
         let target_velocity = 0.;
         unsafe {
-            let command_handle = ffi::b3JointControlCommandInit2(
-                self.handle.as_ptr(),
-                body.0,
-                control_mode.get_int(),
-            );
+            let command_handle =
+                ffi::b3JointControlCommandInit2(self.handle, body.0, control_mode.get_int());
             let info = self.get_joint_info_intern(body, joint_index);
 
             match control_mode {
@@ -1535,7 +1505,7 @@ impl PhysicsClient {
                 }
             }
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
     /// The array version of [`set_joint_motor_control()`](`crate::client::PhysicsClient::set_joint_motor_control()`).
@@ -1574,11 +1544,8 @@ impl PhysicsClient {
         let kd = 1.0;
         let num_joints = self.get_num_joints(body);
         unsafe {
-            let command_handle = ffi::b3JointControlCommandInit2(
-                self.handle.as_ptr(),
-                body.0,
-                control_mode.get_int(),
-            );
+            let command_handle =
+                ffi::b3JointControlCommandInit2(self.handle, body.0, control_mode.get_int());
 
             for &joint_index in joint_indices.iter() {
                 assert!(
@@ -1714,7 +1681,7 @@ impl PhysicsClient {
                 }
             }
             let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
         Ok(())
     }
@@ -1928,7 +1895,7 @@ impl PhysicsClient {
         projection_matrix: Matrix4<f32>,
     ) -> Result<Images, Error> {
         unsafe {
-            let command = ffi::b3InitRequestCameraImage(self.handle.as_ptr());
+            let command = ffi::b3InitRequestCameraImage(self.handle);
             ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
             ffi::b3RequestCameraImageSetCameraMatrices(
                 command,
@@ -1936,12 +1903,11 @@ impl PhysicsClient {
                 projection_matrix.as_ptr(),
             );
             if self.can_submit_command() {
-                let status_handle =
-                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
-                    ffi::b3GetCameraImageData(self.handle.as_ptr(), &mut image_data);
+                    ffi::b3GetCameraImageData(self.handle, &mut image_data);
                     let buffer = std::slice::from_raw_parts(
                         image_data.m_rgb_color_data,
                         (width * height * 4) as usize,
@@ -1989,13 +1955,13 @@ impl PhysicsClient {
     // TODO implement the other options
     pub fn configure_debug_visualizer(&mut self, flag: DebugVisualizerFlag, enable: bool) {
         unsafe {
-            let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle.as_ptr());
+            let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle);
             ffi::b3ConfigureOpenGLVisualizerSetVisualizationFlags(
                 command_handle,
                 flag as i32,
                 enable as i32,
             );
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
 
@@ -2049,7 +2015,7 @@ impl PhysicsClient {
         unsafe {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
-                self.handle.as_ptr(),
+                self.handle,
                 line_from_xyz.into().coords.as_ptr(),
                 line_to_xyz.into().coords.as_ptr(),
                 options.line_color_rgb.as_ptr(),
@@ -2067,7 +2033,7 @@ impl PhysicsClient {
                 ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement.0);
             }
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item = ItemId(ffi::b3GetDebugItemUniqueId(status_handle));
@@ -2111,14 +2077,14 @@ impl PhysicsClient {
         unsafe {
             let param_name = CString::new(param_name.into().as_bytes()).unwrap();
             let command_handle = ffi::b3InitUserDebugAddParameter(
-                self.handle.as_ptr(),
+                self.handle,
                 param_name.as_ptr(),
                 range_min,
                 range_max,
                 start_value,
             );
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item_unique_id = ffi::b3GetDebugItemUniqueId(status_handle);
@@ -2135,9 +2101,9 @@ impl PhysicsClient {
     /// See [`add_user_debug_parameter()`)[`Self::add_user_debug_parameter()`] for an example.
     pub fn read_user_debug_parameter(&mut self, item: ItemId) -> Result<f64, Error> {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugReadParameter(self.handle.as_ptr(), item.0);
+            let command_handle = ffi::b3InitUserDebugReadParameter(self.handle, item.0);
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED as i32 {
                 let mut param_value = 0.;
@@ -2201,7 +2167,7 @@ impl PhysicsClient {
             let options = options.into().unwrap_or_default();
             let text = CString::new(text.into().as_bytes()).unwrap();
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
-                self.handle.as_ptr(),
+                self.handle,
                 text.as_ptr(),
                 text_position.into().coords.as_ptr(),
                 options.text_color_rgb.as_ptr(),
@@ -2229,7 +2195,7 @@ impl PhysicsClient {
                 ffi::b3UserDebugItemSetReplaceItemUniqueId(command_handle, replacement_id.0);
             }
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_USER_DEBUG_DRAW_COMPLETED as i32 {
                 let debug_item_id = ItemId(ffi::b3GetDebugItemUniqueId(status_handle));
@@ -2261,9 +2227,9 @@ impl PhysicsClient {
     /// ```
     pub fn remove_user_debug_item(&mut self, item: ItemId) {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugDrawRemove(self.handle.as_ptr(), item.0);
+            let command_handle = ffi::b3InitUserDebugDrawRemove(self.handle, item.0);
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let _status_type = ffi::b3GetStatusType(status_handle);
         }
     }
@@ -2287,9 +2253,9 @@ impl PhysicsClient {
     /// ```
     pub fn remove_all_user_debug_items(&mut self) {
         unsafe {
-            let command_handle = ffi::b3InitUserDebugDrawRemoveAll(self.handle.as_ptr());
+            let command_handle = ffi::b3InitUserDebugDrawRemoveAll(self.handle);
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let _status_type = ffi::b3GetStatusType(status_handle);
         }
     }
@@ -2311,14 +2277,14 @@ impl PhysicsClient {
                 None => -1,
                 Some(index) => index as i32,
             };
-            let command_handle = ffi::b3InitDebugDrawingCommand(self.handle.as_ptr());
+            let command_handle = ffi::b3InitDebugDrawingCommand(self.handle);
 
             if let Some(color) = object_debug_color.into() {
                 ffi::b3SetDebugObjectColor(command_handle, body.0, link_index, color.as_ptr());
             } else {
                 ffi::b3RemoveDebugObjectColor(command_handle, body.0, link_index);
             }
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
     /// You can receive all keyboard events that happened since the last time you called
@@ -2348,9 +2314,9 @@ impl PhysicsClient {
     pub fn get_keyboard_events(&mut self) -> Vec<KeyboardEvent> {
         unsafe {
             let mut keyboard_events = b3KeyboardEventsData::default();
-            let command_handle = ffi::b3RequestKeyboardEventsCommandInit(self.handle.as_ptr());
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
-            ffi::b3GetKeyboardEventsData(self.handle.as_ptr(), &mut keyboard_events);
+            let command_handle = ffi::b3RequestKeyboardEventsCommandInit(self.handle);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            ffi::b3GetKeyboardEventsData(self.handle, &mut keyboard_events);
             let mut events =
                 Vec::<KeyboardEvent>::with_capacity(keyboard_events.m_numKeyboardEvents as usize);
             let data = std::slice::from_raw_parts_mut(
@@ -2417,9 +2383,9 @@ impl PhysicsClient {
     pub fn get_mouse_events(&mut self) -> Vec<MouseEvent> {
         unsafe {
             let mut mouse_events = b3MouseEventsData::default();
-            let command_handle = ffi::b3RequestMouseEventsCommandInit(self.handle.as_ptr());
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
-            ffi::b3GetMouseEventsData(self.handle.as_ptr(), &mut mouse_events);
+            let command_handle = ffi::b3RequestMouseEventsCommandInit(self.handle);
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            ffi::b3GetMouseEventsData(self.handle, &mut mouse_events);
             let mut events =
                 Vec::<MouseEvent>::with_capacity(mouse_events.m_numMouseEvents as usize);
             let data = std::slice::from_raw_parts_mut(
@@ -2480,7 +2446,7 @@ impl PhysicsClient {
             Some(index) => index as i32,
         };
         unsafe {
-            let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
+            let command = ffi::b3ApplyExternalForceCommandInit(self.handle);
             ffi::b3ApplyExternalForce(
                 command,
                 body.0,
@@ -2489,8 +2455,7 @@ impl PhysicsClient {
                 position_object.into().coords.as_ptr(),
                 flags as i32,
             );
-            let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
     /// Applies a torque to a body.
@@ -2519,7 +2484,7 @@ impl PhysicsClient {
             Some(index) => index as i32,
         };
         unsafe {
-            let command = ffi::b3ApplyExternalForceCommandInit(self.handle.as_ptr());
+            let command = ffi::b3ApplyExternalForceCommandInit(self.handle);
             ffi::b3ApplyExternalTorque(
                 command,
                 body.0,
@@ -2527,8 +2492,7 @@ impl PhysicsClient {
                 torque_object.into().as_ptr(),
                 flags as i32,
             );
-            let _status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command);
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
     /// You can enable or disable a joint force/torque sensor in each joint.
@@ -2547,14 +2511,14 @@ impl PhysicsClient {
         enable_sensor: bool,
     ) -> Result<(), Error> {
         unsafe {
-            let command_handle = ffi::b3CreateSensorCommandInit(self.handle.as_ptr(), body.0);
+            let command_handle = ffi::b3CreateSensorCommandInit(self.handle, body.0);
             ffi::b3CreateSensorEnable6DofJointForceTorqueSensor(
                 command_handle,
                 joint_index as i32,
                 enable_sensor as i32,
             );
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_CLIENT_COMMAND_COMPLETED as i32 {
                 return Ok(());
@@ -2580,7 +2544,7 @@ impl PhysicsClient {
     ) -> Result<CollisionId, Error> {
         unsafe {
             let mut shape_index = -1;
-            let command_handle = ffi::b3CreateCollisionShapeCommandInit(self.handle.as_ptr());
+            let command_handle = ffi::b3CreateCollisionShapeCommandInit(self.handle);
 
             match shape {
                 GeometricCollisionShape::Sphere { radius } if radius > 0. => {
@@ -2634,7 +2598,7 @@ impl PhysicsClient {
                             num_heightfield_rows * num_heightfield_columns,
                         );
                         shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
-                            self.handle.as_ptr(),
+                            self.handle,
                             command_handle,
                             mesh_scaling
                                 .unwrap_or_else(|| Vector3::from_element(1.))
@@ -2684,7 +2648,7 @@ impl PhysicsClient {
                             return Err(Error::new("Number of indices exceeds the maximum."));
                         }
                         shape_index = ffi::b3CreateCollisionShapeAddConcaveMesh(
-                            self.handle.as_ptr(),
+                            self.handle,
                             command_handle,
                             mesh_scaling
                                 .unwrap_or_else(|| Vector3::from_element(1.))
@@ -2696,7 +2660,7 @@ impl PhysicsClient {
                         );
                     } else {
                         shape_index = ffi::b3CreateCollisionShapeAddConvexMesh(
-                            self.handle.as_ptr(),
+                            self.handle,
                             command_handle,
                             mesh_scaling
                                 .unwrap_or_else(|| Vector3::from_element(1.))
@@ -2729,7 +2693,7 @@ impl PhysicsClient {
                 );
             }
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_CREATE_COLLISION_SHAPE_COMPLETED as i32 {
                 let uid = ffi::b3GetStatusCollisionShapeUniqueId(status_handle);
@@ -2762,7 +2726,7 @@ impl PhysicsClient {
     ) -> Result<VisualId, Error> {
         unsafe {
             let mut shape_index = -1;
-            let command_handle = ffi::b3CreateVisualShapeCommandInit(self.handle.as_ptr());
+            let command_handle = ffi::b3CreateVisualShapeCommandInit(self.handle);
 
             match shape {
                 GeometricVisualShape::Sphere { radius } if radius > 0. => {
@@ -2834,7 +2798,7 @@ impl PhysicsClient {
                         }
                     }
                     shape_index = ffi::b3CreateVisualShapeAddMesh2(
-                        self.handle.as_ptr(),
+                        self.handle,
                         command_handle,
                         mesh_scaling
                             .unwrap_or_else(|| Vector3::from_element(1.))
@@ -2886,7 +2850,7 @@ impl PhysicsClient {
                 );
             }
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_CREATE_VISUAL_SHAPE_COMPLETED as i32 {
                 let uid = ffi::b3GetStatusVisualShapeUniqueId(status_handle);
@@ -2964,7 +2928,7 @@ impl PhysicsClient {
                 "All link arrays need to be same size."
             );
 
-            let command_handle = ffi::b3CreateMultiBodyCommandInit(self.handle.as_ptr());
+            let command_handle = ffi::b3CreateMultiBodyCommandInit(self.handle);
             let position_vector = &options.base_pose.translation.vector;
             let rotation = &options.base_pose.rotation;
             let base_position_array = [position_vector.x, position_vector.y, position_vector.z];
@@ -2991,7 +2955,7 @@ impl PhysicsClient {
                     new_batch_positions.extend_from_slice(pos.coords.as_slice());
                 }
                 ffi::b3CreateMultiBodySetBatchPositions(
-                    self.handle.as_ptr(),
+                    self.handle,
                     command_handle,
                     new_batch_positions.as_mut_slice().as_mut_ptr(),
                     batch_positions.len() as i32,
@@ -3038,8 +3002,7 @@ impl PhysicsClient {
             if let Some(flags) = options.flags {
                 ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
             }
-            let status_handle =
-                b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+            let status_handle = b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
                 let uid = ffi::b3GetStatusBodyIndex(status_handle);
@@ -3110,12 +3073,8 @@ impl PhysicsClient {
             Some(index) => index as i32,
         };
         unsafe {
-            let command_handle = ffi::b3InitUpdateVisualShape2(
-                self.handle.as_ptr(),
-                body.0,
-                link_index,
-                options.shape.0,
-            );
+            let command_handle =
+                ffi::b3InitUpdateVisualShape2(self.handle, body.0, link_index, options.shape.0);
             if let Some(texture_id) = options.texture_id {
                 ffi::b3UpdateVisualShapeTexture(command_handle, texture_id.0);
             }
@@ -3129,7 +3088,7 @@ impl PhysicsClient {
                 ffi::b3UpdateVisualShapeFlags(command_handle, flags);
             }
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
 
             if status_type != CMD_VISUAL_SHAPE_UPDATE_COMPLETED as i32 {
@@ -3146,14 +3105,13 @@ impl PhysicsClient {
         request_texture_id: bool,
     ) -> Result<Vec<VisualShapeData>, Error> {
         unsafe {
-            let command_handle =
-                ffi::b3InitRequestVisualShapeInformation(self.handle.as_ptr(), body.0);
+            let command_handle = ffi::b3InitRequestVisualShapeInformation(self.handle, body.0);
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_VISUAL_SHAPE_INFO_COMPLETED as i32 {
                 let mut visual_shape_info = ffi::b3VisualShapeInformation::default();
-                ffi::b3GetVisualShapeInformation(self.handle.as_ptr(), &mut visual_shape_info);
+                ffi::b3GetVisualShapeInformation(self.handle, &mut visual_shape_info);
                 let mut visual_shapes: Vec<VisualShapeData> =
                     Vec::with_capacity(visual_shape_info.m_numVisualShapes as usize);
                 let data = std::slice::from_raw_parts_mut(
@@ -3180,9 +3138,9 @@ impl PhysicsClient {
     pub fn load_texture<File: AsRef<Path>>(&mut self, file: File) -> Result<TextureId, Error> {
         unsafe {
             let cfilename = CString::new(file.as_ref().as_os_str().as_bytes()).unwrap();
-            let command_handle = ffi::b3InitLoadTexture(self.handle.as_ptr(), cfilename.as_ptr());
+            let command_handle = ffi::b3InitLoadTexture(self.handle, cfilename.as_ptr());
             let status_handle =
-                ffi::b3SubmitClientCommandAndWaitStatus(self.handle.as_ptr(), command_handle);
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let status_type = ffi::b3GetStatusType(status_handle);
             if status_type == CMD_LOAD_TEXTURE_COMPLETED as i32 {
                 let texture_id = TextureId(ffi::b3GetStatusTextureUniqueId(status_handle));
@@ -3200,8 +3158,8 @@ impl PhysicsClient {
                 "Internal Error: Can not submit command!",
             );
             let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(
-                self.handle.as_ptr(),
-                ffi::b3InitRemoveBodyCommand(self.handle.as_ptr(), body.0),
+                self.handle,
+                ffi::b3InitRemoveBodyCommand(self.handle, body.0),
             );
             let _status_type = ffi::b3GetStatusType(status_handle);
         }
@@ -3213,7 +3171,7 @@ impl PhysicsClient {
             m_bodyName: [0; 1024],
         };
         unsafe {
-            if ffi::b3GetBodyInfo(self.handle.as_ptr(), body.0, &mut body_info_c) != 0 {
+            if ffi::b3GetBodyInfo(self.handle, body.0, &mut body_info_c) != 0 {
                 return Ok(body_info_c.into());
             }
         }
@@ -3221,13 +3179,13 @@ impl PhysicsClient {
     }
     /// returns the total number of bodies in the physics server
     pub fn get_num_bodies(&mut self) -> usize {
-        unsafe { ffi::b3GetNumBodies(self.handle.as_ptr()) as usize }
+        unsafe { ffi::b3GetNumBodies(self.handle) as usize }
     }
 }
 
 impl Drop for PhysicsClient {
     fn drop(&mut self) {
-        unsafe { ffi::b3DisconnectSharedMemory(self.handle.as_ptr()) }
+        unsafe { ffi::b3DisconnectSharedMemory(self.handle) }
     }
 }
 

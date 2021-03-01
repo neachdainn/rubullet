@@ -1,12 +1,13 @@
 //! Foreign function interface for Bullet C API.
 #![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
 use std::os::raw::{c_char, c_int, c_uchar};
+use std::ptr::NonNull;
 
 #[repr(C)]
 pub struct b3PhysicsClientHandle__ {
     _unused: c_int,
 }
-pub type b3PhysicsClientHandle = *mut b3PhysicsClientHandle__;
+pub type b3PhysicsClientHandle = NonNull<b3PhysicsClientHandle__>;
 
 #[repr(C)]
 pub struct b3SharedMemoryCommandHandle__ {
@@ -21,15 +22,15 @@ pub struct b3SharedMemoryStatusHandle__ {
 pub type b3SharedMemoryStatusHandle = *mut b3SharedMemoryStatusHandle__;
 pub const MAX_SDF_BODIES: u32 = 512;
 extern "C" {
-    pub fn b3ConnectPhysicsDirect() -> b3PhysicsClientHandle;
+    pub fn b3ConnectPhysicsDirect() -> Option<b3PhysicsClientHandle>;
     pub fn b3CreateInProcessPhysicsServerAndConnect(
         argc: c_int,
         argv: *mut *mut c_char,
-    ) -> b3PhysicsClientHandle;
+    ) -> Option<b3PhysicsClientHandle>;
     pub fn b3CreateInProcessPhysicsServerAndConnectMainThread(
         argc: c_int,
         argv: *mut *mut c_char,
-    ) -> b3PhysicsClientHandle;
+    ) -> Option<b3PhysicsClientHandle>;
     pub fn b3DisconnectSharedMemory(physClient: b3PhysicsClientHandle);
 
     pub fn b3InitConfigureOpenGLVisualizer(
