@@ -2,9 +2,11 @@ fn main() {
     // PyBullet does not enable `BT_THREADSAFE`. I assume this is because of the GIL - PyBullet does
     // nothing without the GIL locked. We'll make the same guarantee by using Rust's ownership
     // model.
-    let dst = cmake::Config::new("bullet3")
-        //.very_verbose(true)
-        .build();
+    let mut config = &mut cmake::Config::new("bullet3");
+    if config.get_profile() != "Release" {
+        config = config.profile("RelWithDebInfo");
+    }
+    let dst = config.build();
 
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=BulletExampleBrowserLib");

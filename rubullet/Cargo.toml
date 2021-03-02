@@ -1,0 +1,55 @@
+[package]
+name = "rubullet"
+version = "0.1.0-alpha"
+authors = ["Nathan Kent <nkent2@cs.rochester.edu>", "Marco Boneberger <m.boneberger@tu-bs.de>"]
+edition = "2018"
+license = "MIT"
+repository = "https://github.com/neachdainn/rubullet"
+description = "Rust interface to the Bullet Physics SDK simmilar to PyBullet"
+categories =["science::robotics","simulation"]
+keywords =["pybullet","bullet","bullet3","physics","robotics"]
+readme = "../README.md"
+documentation = "https://docs.rs/rubullet/"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "rubullet"
+path = "src/lib.rs"
+
+[[example]]
+name = "panda_demo"
+path = "examples/panda_demo.rs"
+
+[[example]]
+name = "panda_camera_demo"
+path = "examples/panda_camera_demo.rs"
+
+[[example]]
+name = "heightfield"
+path = "examples/heightfield.rs"
+
+[[example]]
+name = "create_visual_shape"
+path = "examples/create_visual_shape.rs"
+
+[[example]]
+name = "create_multi_body_batch"
+path = "examples/create_multi_body_batch.rs"
+
+[[example]]
+name = "hello_rubullet"
+path = "examples/hello_rubullet.rs"
+
+[[example]]
+name = "inverse_dynamics"
+path = "examples/inverse_dynamics.rs"
+
+[dependencies]
+nalgebra = "0.23"
+image = "0.23.12"
+rubullet-sys = { path = "../rubullet-sys" }
+bitflags = "1.2.1"
+
+[dev-dependencies]
+anyhow = "1.0"
+rand = "0.8.2"
