@@ -1,5 +1,5 @@
-[workspace] 
+[workspace]
 members = [
     "rubullet",
     "rubullet-sys",
-    ]
+]

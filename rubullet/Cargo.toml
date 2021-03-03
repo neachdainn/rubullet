@@ -6,8 +6,8 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/neachdainn/rubullet"
 description = "Rust interface to the Bullet Physics SDK simmilar to PyBullet"
-categories =["science::robotics","simulation"]
-keywords =["pybullet","bullet","bullet3","physics","robotics"]
+categories = ["science::robotics", "simulation"]
+keywords = ["pybullet", "bullet", "bullet3", "physics", "robotics"]
 readme = "../README.md"
 documentation = "https://docs.rs/rubullet/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
