@@ -7,20 +7,21 @@ use std::os::unix::ffi::OsStrExt;
 use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 
 use nalgebra::{
-    DMatrix, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
-    Vector3,
+    DMatrix, DVector, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3,
+    UnitQuaternion, Vector3,
 };
 
 use self::gui_marker::GuiMarker;
 use crate::types::{
     AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
-    ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
-    InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions, SdfOptions,
-    TextureId, Velocity, VisualId, VisualShapeOptions,
+    ConstraintInfo, ControlModeArray, ExternalForceFrame, GeometricCollisionShape,
+    GeometricVisualShape, Images, InverseKinematicsParameters, ItemId, Jacobian, JointInfo,
+    JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent,
+    MultiBodyOptions, SdfOptions, TextureId, Velocity, VisualId, VisualShapeOptions,
 };
 use crate::{
-    BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
+    BodyInfo, ChangeConstraintOptions, ConstraintId, ControlMode, DebugVisualizerFlag, Error, Mode,
+    UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -29,8 +30,9 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
-    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
+    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
     b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
@@ -833,27 +835,7 @@ impl PhysicsClient {
 
     fn get_joint_info_intern(&mut self, body: BodyId, joint_index: usize) -> b3JointInfo {
         unsafe {
-            let mut joint_info = b3JointInfo {
-                m_link_name: [2; 1024],
-                m_joint_name: [2; 1024],
-                m_joint_type: 0,
-                m_q_index: 0,
-                m_u_index: 0,
-                m_joint_index: 0,
-                m_flags: 0,
-                m_joint_damping: 0.0,
-                m_joint_friction: 0.0,
-                m_joint_lower_limit: 0.0,
-                m_joint_upper_limit: 0.0,
-                m_joint_max_force: 0.0,
-                m_joint_max_velocity: 0.0,
-                m_parent_frame: [0.; 7],
-                m_child_frame: [0.; 7],
-                m_joint_axis: [0.; 3],
-                m_parent_index: 0,
-                m_q_size: 0,
-                m_u_size: 0,
-            };
+            let mut joint_info = b3JointInfo::default();
             ffi::b3GetJointInfo(self.handle, body.0, joint_index as i32, &mut joint_info);
             joint_info
         }
@@ -3180,6 +3162,293 @@ impl PhysicsClient {
     /// returns the total number of bodies in the physics server
     pub fn get_num_bodies(&mut self) -> usize {
         unsafe { ffi::b3GetNumBodies(self.handle) as usize }
+    }
+    /// URDF, SDF and MJCF specify articulated bodies as a tree-structures without loops.
+    /// Thhis method allows you to connect specific links of bodies to close those loops.
+    /// In addition, you can create arbitrary constraints between objects, and between an
+    /// object and a specific world frame.
+    ///
+    /// It can also be used to control the motion of physics objects, driven by animated frames,
+    /// such as a VR controller. It is better to use constraints, instead of setting the position
+    /// or velocity directly for such purpose, since those constraints are solved together with
+    /// other dynamics constraints.
+    ///
+    /// # Arguments
+    /// * `parent_body` - parent body unique id
+    /// * `parent_link_index` - parent link index (or `None` for the base)
+    /// * `child_body` - child body unique id, or `None` for no body
+    /// (specify a non-dynamic child frame in world coordinates)
+    /// * `child_link_index` - child link index (or `None` for the base)
+    /// * `joint_type` - a [`JointType`](`crate::types::JointType`) for the constraint
+    /// * `joint_axis` - joint axis in child link frame. Must be something that can be converted
+    /// into a Vector3
+    /// * `parent_frame_pose` - pose of the joint frame relative to parent center of mass frame.
+    /// * `child_frame_pose` - pose of the joint frame relative to a given child center of mass
+    /// frame (or world origin if no child specified)
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::ControlModeArray::Torques;
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     assert_eq!(0, physics_client.get_num_constraints());
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.set_gravity([0., 0., -10.])?;
+    ///     physics_client.set_real_time_simulation(true);
+    ///     let cid = physics_client.create_constraint(
+    ///         cube_id,
+    ///         None,
+    ///         None,
+    ///         None,
+    ///         JointType::Fixed,
+    ///         [0.; 3],
+    ///         Isometry3::identity(),
+    ///         Isometry3::translation(0., 0., 1.),
+    ///     )?;
+    ///     println!("{:?}", cid);
+    ///     println!("{:?}", physics_client.get_constraint(0)?);
+    ///     assert_eq!(1, physics_client.get_num_constraints());
+    ///     let constraint_info = physics_client.get_constraint_info(cid)?;
+    ///     println!("{:?}", constraint_info);
+    ///     let mut a = -PI;
+    ///     loop {
+    ///         a += 0.01;
+    ///         if a > PI {
+    ///             break;
+    ///         }
+    ///         std::thread::sleep(Duration::from_secs_f64(0.01));
+    ///         let change_constraint_options = ChangeConstraintOptions {
+    ///             joint_child_pivot: Some(Vector3::new(a, 0., 1.)),
+    ///             joint_child_frame_orientation: Some(UnitQuaternion::from_euler_angles(a, 0., 0.)),
+    ///             max_force: Some(50.),
+    ///             ..Default::default()
+    ///         };
+    ///         physics_client.change_constraint(cid, change_constraint_options);
+    ///         let constraint_info = physics_client.get_constraint_info(cid)?;
+    ///         assert!((constraint_info.joint_child_frame_pose.translation.x - a).abs() < 1e-7);
+    ///         assert!(
+    ///             (constraint_info
+    ///                 .joint_child_frame_pose
+    ///                 .rotation
+    ///                 .euler_angles()
+    ///                 .0
+    ///                 - a)
+    ///                 .abs()
+    ///                 < 1e-7
+    ///         );
+    ///     }
+    ///     let constraint_state = physics_client.get_constraint_state(cid)?;
+    ///     println!("{}", constraint_state);
+    ///     physics_client.remove_constraint(cid);
+    ///     assert_eq!(0, physics_client.get_num_constraints());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_constraint<
+        ChildBody: Into<Option<BodyId>>,
+        ParentLink: Into<Option<usize>>,
+        ChildLink: Into<Option<usize>>,
+        JointAxisVector: Into<Vector3<f64>>,
+    >(
+        &mut self,
+        parent_body: BodyId,
+        parent_link_index: ParentLink,
+        child_body: ChildBody,
+        child_link_index: ChildLink,
+        joint_type: JointType,
+        joint_axis: JointAxisVector,
+        parent_frame_pose: Isometry3<f64>,
+        child_frame_pose: Isometry3<f64>,
+    ) -> Result<ConstraintId, Error> {
+        let child_body = match child_body.into() {
+            None => -1,
+            Some(body) => body.0,
+        };
+        let parent_link_index: i32 = match parent_link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+
+        let child_link_index: i32 = match child_link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let mut joint_info = b3JointInfo::default();
+        let joint_axis = joint_axis.into();
+        joint_info.m_joint_type = joint_type as i32;
+        joint_info.m_parent_frame[0] = parent_frame_pose.translation.x;
+        joint_info.m_parent_frame[1] = parent_frame_pose.translation.y;
+        joint_info.m_parent_frame[2] = parent_frame_pose.translation.z;
+        joint_info.m_parent_frame[3] = parent_frame_pose.rotation.i;
+        joint_info.m_parent_frame[4] = parent_frame_pose.rotation.j;
+        joint_info.m_parent_frame[5] = parent_frame_pose.rotation.k;
+        joint_info.m_parent_frame[6] = parent_frame_pose.rotation.w;
+
+        joint_info.m_child_frame[0] = child_frame_pose.translation.x;
+        joint_info.m_child_frame[1] = child_frame_pose.translation.y;
+        joint_info.m_child_frame[2] = child_frame_pose.translation.z;
+        joint_info.m_child_frame[3] = child_frame_pose.rotation.i;
+        joint_info.m_child_frame[4] = child_frame_pose.rotation.j;
+        joint_info.m_child_frame[5] = child_frame_pose.rotation.k;
+        joint_info.m_child_frame[6] = child_frame_pose.rotation.w;
+
+        joint_info.m_joint_axis[0] = joint_axis[0];
+        joint_info.m_joint_axis[1] = joint_axis[1];
+        joint_info.m_joint_axis[2] = joint_axis[2];
+        unsafe {
+            let command_handle = ffi::b3InitCreateUserConstraintCommand(
+                self.handle,
+                parent_body.0,
+                parent_link_index,
+                child_body,
+                child_link_index,
+                &mut joint_info,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_CONSTRAINT_COMPLETED as i32 {
+                return Ok(ConstraintId(ffi::b3GetStatusUserConstraintUniqueId(
+                    status_handle,
+                )));
+            }
+        }
+        Err(Error::new("create_constraint failed"))
+    }
+    /// Allows you to change parameters of an existing constraint.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn change_constraint(
+        &mut self,
+        constraint: ConstraintId,
+        options: ChangeConstraintOptions,
+    ) {
+        unsafe {
+            let command_handle = ffi::b3InitChangeUserConstraintCommand(self.handle, constraint.0);
+            if let Some(pivot) = options.joint_child_pivot {
+                ffi::b3InitChangeUserConstraintSetPivotInB(command_handle, pivot.as_ptr());
+            }
+            if let Some(frame_orn) = options.joint_child_frame_orientation {
+                ffi::b3InitChangeUserConstraintSetFrameInB(
+                    command_handle,
+                    frame_orn.coords.as_ptr(),
+                );
+            }
+            if let Some(relative_position_target) = options.relative_position_target {
+                assert!(
+                    relative_position_target < 1e10,
+                    "relative position target must not exceed 1e10"
+                );
+                ffi::b3InitChangeUserConstraintSetRelativePositionTarget(
+                    command_handle,
+                    relative_position_target,
+                );
+            }
+            if let Some(erp) = options.erp {
+                assert!(erp.is_sign_positive(), "erp must be positive");
+                ffi::b3InitChangeUserConstraintSetERP(command_handle, erp);
+            }
+            if let Some(max_force) = options.max_force {
+                assert!(max_force.is_sign_positive(), "max_force must be positive");
+                ffi::b3InitChangeUserConstraintSetMaxForce(command_handle, max_force);
+            }
+            if let Some(gear_ratio) = options.gear_ratio {
+                ffi::b3InitChangeUserConstraintSetGearRatio(command_handle, gear_ratio);
+            }
+            if let Some(aux_link) = options.gear_aux_link {
+                ffi::b3InitChangeUserConstraintSetGearAuxLink(command_handle, aux_link as i32);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// removes a constraint
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn remove_constraint(&mut self, constraint: ConstraintId) {
+        unsafe {
+            let command_handle = ffi::b3InitRemoveUserConstraintCommand(self.handle, constraint.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// You can query for the total number of constraints, created using
+    /// [`create_constraint`](`Self::create_constraint`)
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_num_constraints(&mut self) -> usize {
+        unsafe { ffi::b3GetNumUserConstraints(self.handle) as usize }
+    }
+    /// will take a serial index in range 0..[`get_num_constraints`](`Self::get_num_constraints`),
+    /// and reports the constraint unique id.
+    /// Note that the constraint unique ids may not be contiguous, since you may remove constraints.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_constraint(&mut self, serial_index: usize) -> Result<ConstraintId, Error> {
+        unsafe {
+            let constraint_id = ffi::b3GetUserConstraintId(self.handle, serial_index as i32);
+            if constraint_id >= 0 {
+                return Ok(ConstraintId(constraint_id));
+            }
+        }
+        Err(Error::new("no constraint with this serial index"))
+    }
+    /// Get the user-created constraint info, given a ConstraintId.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_constraint_info(
+        &mut self,
+        constraint: ConstraintId,
+    ) -> Result<ConstraintInfo, Error> {
+        let mut b3_constraint_info = ffi::b3UserConstraint::default();
+        unsafe {
+            if ffi::b3GetUserConstraintInfo(self.handle, constraint.0, &mut b3_constraint_info) != 0
+            {
+                return Ok(b3_constraint_info.into());
+            }
+        }
+        Err(Error::new("Couldn't get user constraint info"))
+    }
+    /// Give a constraint unique id, you can query for the applied constraint forces in the most
+    /// recent simulation step. The input is a constraint unique id and the output is a vector of
+    /// constraint forces, its dimension is the degrees of freedom that are affected by the
+    /// constraint (a fixed constraint affects 6 DoF for example).
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    #[allow(clippy::collapsible_if)]
+    pub fn get_constraint_state(
+        &mut self,
+        constraint: ConstraintId,
+    ) -> Result<DVector<f64>, Error> {
+        let mut constraint_state = ffi::b3UserConstraintState::default();
+        unsafe {
+            if self.can_submit_command() {
+                let cmd_handle =
+                    ffi::b3InitGetUserConstraintStateCommand(self.handle, constraint.0);
+                let status_handle =
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+                let _status_type = ffi::b3GetStatusType(status_handle);
+                if ffi::b3GetStatusUserConstraintState(status_handle, &mut constraint_state) != 0 {
+                    if constraint_state.m_numDofs != 0 {
+                        return Ok(DVector::from_column_slice(
+                            &constraint_state.m_appliedConstraintForces
+                                [0..constraint_state.m_numDofs as usize],
+                        ));
+                    }
+                }
+            }
+            Err(Error::new("Could not get constraint state"))
+        }
     }
 }
 

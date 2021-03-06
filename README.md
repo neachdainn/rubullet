@@ -18,6 +18,7 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Change linear and angular damping of joints
 * Create GUI sliders, button or put debugging text or lines in the simulation
 * Get keyboard and mouse events 
+* Create and manage constraints
 
 Things which are not implemented yet:
 * Collision Detection Queries 
@@ -26,7 +27,6 @@ Things which are not implemented yet:
 * Plugins
 * Deformables and Cloth
 * Logging and saving states
-* Creating constraints
 * Set physics engine parameters
 * Change other dynamics parameters apart from linear and angular damping
 

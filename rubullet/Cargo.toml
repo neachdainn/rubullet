@@ -17,6 +17,14 @@ name = "rubullet"
 path = "src/lib.rs"
 
 [[example]]
+name = "jacobian"
+path = "examples/jacobian.rs"
+
+[[example]]
+name = "constraint"
+path = "examples/constraint.rs"
+
+[[example]]
 name = "panda_demo"
 path = "examples/panda_demo.rs"
 

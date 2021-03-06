@@ -5,7 +5,9 @@ use nalgebra::{
     DVector, Isometry3, Matrix3xX, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
     Vector3, Vector6, U3,
 };
-use rubullet_sys::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
+use rubullet_sys::{
+    b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3UserConstraint, b3VisualShapeData,
+};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 
@@ -40,6 +42,10 @@ pub struct TextureId(pub(crate) c_int);
 /// The unique ID for a User Debug Parameter Item
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ItemId(pub(crate) c_int);
+
+/// The unique ID for a constraint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct ConstraintId(pub(crate) c_int);
 
 /// An enum to represent different types of joints
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -1322,5 +1328,122 @@ bitflags::bitflags! {
 impl Default for JointInfoFlags {
     fn default() -> Self {
         JointInfoFlags::NONE
+    }
+}
+
+/// contains the parameters for [`change_constraint`](`crate::PhysicsClient::change_constraint`) method.
+#[derive(Default)]
+pub struct ChangeConstraintOptions {
+    /// updated child pivot, see [`create_constraint`](`crate::PhysicsClient::create_constraint`)
+    pub joint_child_pivot: Option<Vector3<f64>>,
+    /// updated child frame orientation as quaternion
+    pub joint_child_frame_orientation: Option<UnitQuaternion<f64>>,
+    /// maximum force that constraint can apply
+    pub max_force: Option<f64>,
+    /// the ratio between the rates at which the two gears rotate
+    pub gear_ratio: Option<f64>,
+    /// In some cases, such as a differential drive, a third (auxiliary) link is used as reference pose.
+    pub gear_aux_link: Option<usize>,
+    /// the relative position target offset between two gears
+    pub relative_position_target: Option<f64>,
+    /// constraint error reduction parameter
+    pub erp: Option<f64>,
+}
+
+/// contains the parameters for [`change_constraint`](`crate::PhysicsClient::change_constraint`) method.
+#[derive(Debug)]
+pub struct ConstraintInfo {
+    /// the constraint for which this info is generated
+    pub id: ConstraintId,
+    /// parent body unique id
+    pub parent_body: BodyId,
+    /// parent body link index or `None` for base link.
+    pub parent_link_index: Option<usize>,
+    /// child body unique id or `None`or no body (specify a non-dynamic child frame in world coordinates)
+    pub child_body: Option<BodyId>,
+    /// child body link index or `None` for base link.
+    pub child_link_index: Option<usize>,
+    /// The [`JointType`](`crate::types::JointType`) for the constraint
+    pub constraint_type: JointType,
+    /// joint axis, in child link frame
+    pub joint_axis: Vector3<f64>,
+    /// pose of the joint frame relative to parent center of mass frame.
+    pub joint_parent_frame_pose: Isometry3<f64>,
+    /// updated child pose, see [`create_constraint`](`crate::PhysicsClient::create_constraint`)
+    pub joint_child_frame_pose: Isometry3<f64>,
+    /// maximum force that constraint can apply
+    pub max_applied_force: f64,
+    /// the ratio between the rates at which the two gears rotate
+    pub gear_ratio: f64,
+    /// In some cases, such as a differential drive, a third (auxiliary) link is used as reference pose.
+    pub gear_aux_link: Option<usize>,
+    /// the relative position target offset between two gears
+    pub relative_position_target: f64,
+    /// constraint error reduction parameter
+    pub erp: f64,
+}
+impl From<b3UserConstraint> for ConstraintInfo {
+    fn from(b3: b3UserConstraint) -> Self {
+        #[allow(non_snake_case)]
+        let b3UserConstraint {
+            m_parentBodyIndex,
+            m_parentJointIndex,
+            m_childBodyIndex,
+            m_childJointIndex,
+            m_parentFrame,
+            m_childFrame,
+            m_jointAxis,
+            m_jointType,
+            m_maxAppliedForce,
+            m_userConstraintUniqueId,
+            m_gearRatio,
+            m_gearAuxLink,
+            m_relativePositionTarget,
+            m_erp,
+        } = b3;
+        let parent_joint_index = {
+            if m_parentJointIndex >= 0 {
+                Some(m_parentJointIndex as usize)
+            } else {
+                None
+            }
+        };
+        let child_link_index = {
+            if m_childJointIndex >= 0 {
+                Some(m_childJointIndex as usize)
+            } else {
+                None
+            }
+        };
+        let gear_aux_link = {
+            if m_gearAuxLink >= 0 {
+                Some(m_gearAuxLink as usize)
+            } else {
+                None
+            }
+        };
+        let child_body = {
+            if m_childBodyIndex >= 0 {
+                Some(BodyId(m_childBodyIndex))
+            } else {
+                None
+            }
+        };
+        ConstraintInfo {
+            id: ConstraintId(m_userConstraintUniqueId),
+            parent_body: BodyId(m_parentBodyIndex),
+            parent_link_index: parent_joint_index,
+            child_body,
+            child_link_index,
+            constraint_type: JointType::try_from(m_jointType).unwrap(),
+            joint_axis: m_jointAxis.into(),
+            joint_parent_frame_pose: combined_position_orientation_array_to_isometry(m_parentFrame),
+            joint_child_frame_pose: combined_position_orientation_array_to_isometry(m_childFrame),
+            max_applied_force: m_maxAppliedForce,
+            gear_ratio: m_gearRatio,
+            gear_aux_link,
+            relative_position_target: m_relativePositionTarget,
+            erp: m_erp,
+        }
     }
 }

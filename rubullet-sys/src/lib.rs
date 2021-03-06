@@ -917,6 +917,84 @@ extern "C" {
         commandHandle: b3SharedMemoryCommandHandle,
         globalScaling: f64,
     ) -> c_int;
+
+    pub fn b3InitCreateUserConstraintCommand(
+        physClient: b3PhysicsClientHandle,
+        parentBodyUniqueId: c_int,
+        parentJointIndex: c_int,
+        childBodyUniqueId: c_int,
+        childJointIndex: c_int,
+        info: *mut b3JointInfo,
+    ) -> b3SharedMemoryCommandHandle;
+
+    #[doc = "return a unique id for the user constraint, after successful creation, or -1 for an invalid constraint id"]
+    pub fn b3GetStatusUserConstraintUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    #[doc = "change parameters of an existing user constraint"]
+    pub fn b3InitChangeUserConstraintCommand(
+        physClient: b3PhysicsClientHandle,
+        userConstraintUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitChangeUserConstraintSetPivotInB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointChildPivot: *const f64,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetFrameInB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointChildFrameOrn: *const f64,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetMaxForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        maxAppliedForce: f64,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetGearRatio(
+        commandHandle: b3SharedMemoryCommandHandle,
+        gearRatio: f64,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetGearAuxLink(
+        commandHandle: b3SharedMemoryCommandHandle,
+        gearAuxLink: c_int,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetRelativePositionTarget(
+        commandHandle: b3SharedMemoryCommandHandle,
+        relativePositionTarget: f64,
+    ) -> c_int;
+
+    pub fn b3InitChangeUserConstraintSetERP(
+        commandHandle: b3SharedMemoryCommandHandle,
+        erp: f64,
+    ) -> c_int;
+
+    pub fn b3InitRemoveUserConstraintCommand(
+        physClient: b3PhysicsClientHandle,
+        userConstraintUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetNumUserConstraints(physClient: b3PhysicsClientHandle) -> c_int;
+
+    pub fn b3InitGetUserConstraintStateCommand(
+        physClient: b3PhysicsClientHandle,
+        constraintUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusUserConstraintState(
+        statusHandle: b3SharedMemoryStatusHandle,
+        constraintState: *mut b3UserConstraintState,
+    ) -> c_int;
+
+    pub fn b3GetUserConstraintInfo(
+        physClient: b3PhysicsClientHandle,
+        constraintUniqueId: c_int,
+        info: *mut b3UserConstraint,
+    ) -> c_int;
+    #[doc = " return the user constraint id, given the index in range [0 , b3GetNumUserConstraints() )"]
+    pub fn b3GetUserConstraintId(physClient: b3PhysicsClientHandle, serialIndex: c_int) -> c_int;
 }
 
 #[repr(C)]
@@ -1083,6 +1161,31 @@ pub struct b3JointInfo {
     pub m_parent_index: i32,
     pub m_q_size: i32,
     pub m_u_size: i32,
+}
+impl Default for b3JointInfo {
+    fn default() -> Self {
+        b3JointInfo {
+            m_link_name: [2; 1024],
+            m_joint_name: [2; 1024],
+            m_joint_type: 0,
+            m_q_index: 0,
+            m_u_index: 0,
+            m_joint_index: 0,
+            m_flags: 0,
+            m_joint_damping: 0.0,
+            m_joint_friction: 0.0,
+            m_joint_lower_limit: 0.0,
+            m_joint_upper_limit: 0.0,
+            m_joint_max_force: 0.0,
+            m_joint_max_velocity: 0.0,
+            m_parent_frame: [0.; 7],
+            m_child_frame: [0.; 7],
+            m_joint_axis: [0.; 3],
+            m_parent_index: 0,
+            m_q_size: 0,
+            m_u_size: 0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -1253,4 +1356,56 @@ pub struct b3VisualShapeData {
     pub m_tinyRendererTextureId: c_int,
     pub m_textureUniqueId: c_int,
     pub m_openglTextureId: c_int,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3UserConstraint {
+    pub m_parentBodyIndex: c_int,
+    pub m_parentJointIndex: c_int,
+    pub m_childBodyIndex: c_int,
+    pub m_childJointIndex: c_int,
+    pub m_parentFrame: [f64; 7usize],
+    pub m_childFrame: [f64; 7usize],
+    pub m_jointAxis: [f64; 3usize],
+    pub m_jointType: c_int,
+    pub m_maxAppliedForce: f64,
+    pub m_userConstraintUniqueId: c_int,
+    pub m_gearRatio: f64,
+    pub m_gearAuxLink: c_int,
+    pub m_relativePositionTarget: f64,
+    pub m_erp: f64,
+}
+impl Default for b3UserConstraint {
+    fn default() -> Self {
+        b3UserConstraint {
+            m_parentBodyIndex: 0,
+            m_parentJointIndex: 0,
+            m_childBodyIndex: 0,
+            m_childJointIndex: 0,
+            m_parentFrame: [0.; 7],
+            m_childFrame: [0.; 7],
+            m_jointAxis: [0.; 3],
+            m_jointType: 0,
+            m_maxAppliedForce: 0.0,
+            m_userConstraintUniqueId: 0,
+            m_gearRatio: 0.0,
+            m_gearAuxLink: 0,
+            m_relativePositionTarget: 0.0,
+            m_erp: 0.0,
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3UserConstraintState {
+    pub m_appliedConstraintForces: [f64; 6usize],
+    pub m_numDofs: c_int,
+}
+impl Default for b3UserConstraintState {
+    fn default() -> Self {
+        b3UserConstraintState {
+            m_appliedConstraintForces: [0.; 6],
+            m_numDofs: 0,
+        }
+    }
 }
