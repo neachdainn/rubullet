@@ -6,7 +6,8 @@ use nalgebra::{
     Vector3, Vector6, U3,
 };
 use rubullet_sys::{
-    b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3UserConstraint, b3VisualShapeData,
+    b3BodyInfo, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3UserConstraint,
+    b3VisualShapeData,
 };
 use std::convert::TryFrom;
 use std::ffi::CStr;
@@ -1444,6 +1445,166 @@ impl From<b3UserConstraint> for ConstraintInfo {
             gear_aux_link,
             relative_position_target: m_relativePositionTarget,
             erp: m_erp,
+        }
+    }
+}
+bitflags::bitflags! {
+    pub struct ActivationState : i32 {
+        const ENABLE_SLEEPING = 1;
+        const DISABLE_SLEEPING = 2;
+        const WAKE_UP = 4;
+        const SLEEP = 8;
+        const ENABLE_WAKEUP = 16;
+        const DISABLE_WAKEUP = 32;
+    }
+}
+/// Dynamics options for the [`change_dynamics`](`crate::PhysicsClient::`change_dynamics`) method.
+/// Some options do not depend on the given link and apply to the whole body. These options are:
+///
+/// * `linear_damping`
+/// * `angular_damping`
+/// * `activation_state`
+/// * `max_joint_velocity` - PyBullet claims that you can set it per joint, but that is not true
+/// * `collision_margin`
+#[derive(Default, Debug, Clone)]
+pub struct ChangeDynamicsOptions {
+    /// change the mass of the link
+    pub mass: Option<f64>,
+    /// lateral (linear) contact friction
+    pub lateral_friction: Option<f64>,
+    /// torsional friction around the contact normal
+    pub spinning_friction: Option<f64>,
+    /// torsional friction orthogonal to contact normal (keep this value very close to zero,
+    /// otherwise the simulation can become very unrealistic
+    pub rolling_friction: Option<f64>,
+    /// bouncyness of contact. Keep it a bit less than 1, preferably closer to 0.
+    pub restitution: Option<f64>,
+    /// linear damping of the link (0.04 by default)
+    pub linear_damping: Option<f64>,
+    /// angular damping of the link (0.04 by default)
+    pub angular_damping: Option<f64>,
+    /// The contact stiffness and contact damping of the link encoded as tuple (contact_stiffness, contact_damping)
+    /// This overrides the value if it was specified in the URDF file in the contact section.
+    pub contact_stiffness_and_damping: Option<(f64, f64)>,
+    /// enable or disable a friction anchor: friction drift correction
+    /// (disabled by default, unless set in the URDF contact section)
+    pub friction_anchor: Option<bool>,
+    /// diagonal elements of the inertia tensor. Note that the base and links are centered around
+    /// the center of mass and aligned with the principal axes of inertia
+    /// so there are no off-diagonal elements in the inertia tensor.
+    pub local_inertia_diagonal: Option<Vector3<f64>>,
+    /// radius of the sphere to perform continuous collision detection.
+    pub ccd_swept_sphere_radius: Option<f64>,
+    /// contacts with a distance below this threshold will be processed by the constraint solver.
+    /// For example, if 0, then contacts with distance 0.01 will not be processed as a constraint
+    pub contact_processing_threshold: Option<f64>,
+    /// When sleeping is enabled, objects that don't move (below a threshold) will be disabled
+    /// as sleeping, if all other objects that influence it are also ready to sleep.
+    pub activation_state: Option<ActivationState>,
+    /// Joint damping coefficient applied at each joint. This coefficient is read from URDF joint damping field.
+    /// Keep the value close to 0.
+    /// Joint damping force = -damping_coefficient * joint_velocity
+    pub joint_damping: Option<f64>,
+    /// coefficient to allow scaling of friction in different directions.
+    pub anisotropic_friction: Option<f64>,
+    /// maximum joint velocity for the whole robot, if it is exceeded during constraint solving,
+    /// it is clamped. Default maximum joint velocity is 100 units.
+    pub max_joint_velocity: Option<f64>,
+    /// change the collision margin. dependent on the shape type, it may or may not add some padding to the collision shape.
+    pub collision_margin: Option<f64>,
+    /// changes the lower and upper limits of a joint. (lower_limit, upper_limit)
+    ///
+    /// NOTE that at the moment, the joint limits are not updated in [`get_joint_info`](`crate::PhysicsClient::get_joint_info`)!
+    pub joint_limits: Option<(f64, f64)>,
+    /// change the maximum force applied to satisfy a joint limit.
+    pub joint_limit_force: Option<f64>,
+}
+
+/// Contains information about the mass, center of mass, friction and other properties of the base and links.
+/// Is returned by [`get_dynamics_info`](`crate::PhysicsClient::get_dynamics_info`).
+#[derive(Debug)]
+pub struct DynamicsInfo {
+    /// mass in kg
+    pub mass: f64,
+    /// lateral (linear) contact friction
+    pub lateral_friction: f64,
+    /// spinning friction coefficient around contact normal
+    pub spinning_friction: f64,
+    /// rolling friction coefficient orthogonal to contact normal
+    pub rolling_friction: f64,
+    /// coefficient of restitution (bouncyness of contact).
+    pub restitution: f64,
+
+    /// The contact stiffness and contact damping of the link encoded as tuple (contact_stiffness, contact_damping).
+    /// Is `None` if not available
+    pub contact_stiffness_and_damping: Option<(f64, f64)>,
+
+    /// diagonal elements of the inertia tensor. Note that the base and links are centered around
+    /// the center of mass and aligned with the principal axes of inertia
+    /// so there are no off-diagonal elements in the inertia tensor.
+    pub local_inertia_diagonal: Vector3<f64>,
+    ///  of inertial frame in local coordinates of the joint frame
+    pub local_inertial_pose: Isometry3<f64>,
+    /// body type of the object
+    pub body_type: BodyType,
+    ///  collision margin of the collision shape. collision margins depend on the shape type, it is not consistent.
+    pub collision_margin: f64,
+}
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum BodyType {
+    RigidBody = 1,
+    MultiBody = 2,
+    SoftBody = 3,
+}
+
+impl From<b3DynamicsInfo> for DynamicsInfo {
+    fn from(b3: b3DynamicsInfo) -> Self {
+        #[allow(unused, non_snake_case)]
+        let b3DynamicsInfo {
+            m_mass,
+            m_localInertialDiagonal,
+            m_localInertialFrame,
+            m_lateralFrictionCoeff,
+            m_rollingFrictionCoeff,
+            m_spinningFrictionCoeff,
+            m_restitution,
+            m_contactStiffness,
+            m_contactDamping,
+            m_activationState,
+            m_bodyType,
+            m_angularDamping,
+            m_linearDamping,
+            m_ccdSweptSphereRadius,
+            m_contactProcessingThreshold,
+            m_frictionAnchor,
+            m_collisionMargin,
+            m_dynamicType,
+        } = b3;
+        let contact_stiffness_and_damping = {
+            if m_contactStiffness <= 0. || m_contactDamping <= 0. {
+                None
+            } else {
+                Some((m_contactStiffness, m_contactDamping))
+            }
+        };
+        DynamicsInfo {
+            mass: m_mass,
+            lateral_friction: m_lateralFrictionCoeff,
+            spinning_friction: m_spinningFrictionCoeff,
+            rolling_friction: m_rollingFrictionCoeff,
+            restitution: m_restitution,
+            contact_stiffness_and_damping,
+            local_inertia_diagonal: m_localInertialDiagonal.into(),
+            local_inertial_pose: combined_position_orientation_array_to_isometry(
+                m_localInertialFrame,
+            ),
+            body_type: match m_bodyType {
+                1 => BodyType::RigidBody,
+                2 => BodyType::MultiBody,
+                3 => BodyType::SoftBody,
+                _ => panic!("internal error: Unknown BodyType ({})", m_bodyType),
+            },
+            collision_margin: m_collisionMargin,
         }
     }
 }

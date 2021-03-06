@@ -178,18 +178,155 @@ extern "C" {
         linkIndex: c_int,
         state: *mut b3LinkState,
     ) -> c_int;
+    pub fn b3GetDynamicsInfoCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    #[doc = "given a body unique id and link index, return the dynamics information. See b3DynamicsInfo in SharedMemoryPublic.h"]
+    pub fn b3GetDynamicsInfo(
+        statusHandle: b3SharedMemoryStatusHandle,
+        info: *mut b3DynamicsInfo,
+    ) -> c_int;
     pub fn b3InitChangeDynamicsInfo(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
+    pub fn b3ChangeDynamicsInfoSetMass(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        mass: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetLocalInertiaDiagonal(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        localInertiaDiagonal: *const f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetAnisotropicFriction(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        anisotropicFriction: *const f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetJointLimit(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        jointLowerLimit: f64,
+        jointUpperLimit: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetJointLimitForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        jointLimitForce: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetDynamicType(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        dynamicType: c_int,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetLateralFriction(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        lateralFriction: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetSpinningFriction(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        friction: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetRollingFriction(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        friction: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetRestitution(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        restitution: f64,
+    ) -> c_int;
+
     pub fn b3ChangeDynamicsInfoSetLinearDamping(
         commandHandle: b3SharedMemoryCommandHandle,
         bodyUniqueId: c_int,
-        linear_damping: f64,
+        linearDamping: f64,
     ) -> c_int;
+
     pub fn b3ChangeDynamicsInfoSetAngularDamping(
         commandHandle: b3SharedMemoryCommandHandle,
         bodyUniqueId: c_int,
-        linear_damping: f64,
+        angularDamping: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetJointDamping(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        jointDamping: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetContactStiffnessAndDamping(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        contactStiffness: f64,
+        contactDamping: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetFrictionAnchor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        frictionAnchor: c_int,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetCcdSweptSphereRadius(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        ccdSweptSphereRadius: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetContactProcessingThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        contactProcessingThreshold: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetActivationState(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        activationState: c_int,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetMaxJointVelocity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        maxJointVelocity: f64,
+    ) -> c_int;
+
+    pub fn b3ChangeDynamicsInfoSetCollisionMargin(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueId: c_int,
+        collisionMargin: f64,
     ) -> c_int;
 
     pub fn b3InitRemoveBodyCommand(
@@ -1408,4 +1545,26 @@ impl Default for b3UserConstraintState {
             m_numDofs: 0,
         }
     }
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3DynamicsInfo {
+    pub m_mass: f64,
+    pub m_localInertialDiagonal: [f64; 3usize],
+    pub m_localInertialFrame: [f64; 7usize],
+    pub m_lateralFrictionCoeff: f64,
+    pub m_rollingFrictionCoeff: f64,
+    pub m_spinningFrictionCoeff: f64,
+    pub m_restitution: f64,
+    pub m_contactStiffness: f64,
+    pub m_contactDamping: f64,
+    pub m_activationState: c_int,
+    pub m_bodyType: c_int,
+    pub m_angularDamping: f64,
+    pub m_linearDamping: f64,
+    pub m_ccdSweptSphereRadius: f64,
+    pub m_contactProcessingThreshold: f64,
+    pub m_frictionAnchor: c_int,
+    pub m_collisionMargin: f64,
+    pub m_dynamicType: c_int,
 }

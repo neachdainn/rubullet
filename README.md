@@ -15,7 +15,7 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Calculate inverse dynamics, inverse kinematics, jacobians and mass matrices
 * Render camera images
 * Read information about links and joints
-* Change linear and angular damping of joints
+* Change dynamics of a body
 * Create GUI sliders, button or put debugging text or lines in the simulation
 * Get keyboard and mouse events 
 * Create and manage constraints
@@ -28,7 +28,6 @@ Things which are not implemented yet:
 * Deformables and Cloth
 * Logging and saving states
 * Set physics engine parameters
-* Change other dynamics parameters apart from linear and angular damping
 
 The API is unstable and subject to change.
 

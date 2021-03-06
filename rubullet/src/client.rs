@@ -20,8 +20,8 @@ use crate::types::{
     MultiBodyOptions, SdfOptions, TextureId, Velocity, VisualId, VisualShapeOptions,
 };
 use crate::{
-    BodyInfo, ChangeConstraintOptions, ConstraintId, ControlMode, DebugVisualizerFlag, Error, Mode,
-    UrdfOptions, VisualShapeData,
+    BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ControlMode,
+    DebugVisualizerFlag, DynamicsInfo, Error, Mode, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -29,15 +29,15 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
     CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
-    CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
-    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
-    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
+    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
+    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
+    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
-    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
-    b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES,
-    MAX_SDF_BODIES,
+    b3CameraImageData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3KeyboardEventsData,
+    b3LinkState, b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
+    B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -799,22 +799,248 @@ impl PhysicsClient {
     fn can_submit_command(&mut self) -> bool {
         unsafe { ffi::b3CanSubmitCommand(self.handle) != 0 }
     }
-
-    pub fn change_dynamics_linear_damping(&mut self, body: BodyId, linear_damping: f64) {
+    /// You can change the properties such as mass, friction and restitution coefficients using this
+    /// method.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base. Note that not all options require a link index.
+    /// In those cases where you only want to set these kind of parameters you can just set the link_index to `None`.
+    /// * options - Various options to the change the dynamics.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::Isometry3;
+    ///# use rubullet::*;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.change_dynamics(
+    ///         cube_id,
+    ///         None,
+    ///         ChangeDynamicsOptions {
+    ///             mass: Some(38.),
+    ///             lateral_friction: Some(0.1),
+    ///             ..Default::default()
+    ///         },
+    ///     );
+    ///     let dynamics_info = physics_client.get_dynamics_info(cube_id, None)?;
+    ///     println!("{:?}", dynamics_info);
+    ///     assert!((dynamics_info.mass - 38.).abs() < 1e-7);
+    ///     assert!((dynamics_info.lateral_friction - 0.1).abs() < 1e-7);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn change_dynamics<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        options: ChangeDynamicsOptions,
+    ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
             let command = ffi::b3InitChangeDynamicsInfo(self.handle);
-            assert!(linear_damping >= 0.);
-            ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
+            if let Some(joint_limit_force) = options.joint_limit_force {
+                assert!(joint_limit_force >= 0.);
+                ffi::b3ChangeDynamicsInfoSetJointLimitForce(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_limit_force,
+                );
+            }
+            if let Some(joint_limits) = options.joint_limits {
+                assert!(joint_limits.0 <= joint_limits.1);
+                ffi::b3ChangeDynamicsInfoSetJointLimit(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_limits.0,
+                    joint_limits.1,
+                );
+            }
+            if let Some(mass) = options.mass {
+                assert!(mass >= 0.);
+                ffi::b3ChangeDynamicsInfoSetMass(command, body.0, link_index, mass);
+            }
+            if let Some(anisotropic_friction) = options.anisotropic_friction {
+                let friction = [anisotropic_friction; 3];
+                ffi::b3ChangeDynamicsInfoSetAnisotropicFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    friction.as_ptr(),
+                );
+            }
+            if let Some(lateral_friction) = options.lateral_friction {
+                assert!(lateral_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetLateralFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    lateral_friction,
+                );
+            }
+            if let Some(spinning_friction) = options.spinning_friction {
+                assert!(spinning_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetSpinningFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    spinning_friction,
+                );
+            }
+            if let Some(rolling_friction) = options.rolling_friction {
+                assert!(rolling_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetRollingFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    rolling_friction,
+                );
+            }
+            if let Some(linear_damping) = options.linear_damping {
+                assert!(linear_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
+            }
+            if let Some(angular_damping) = options.angular_damping {
+                assert!(angular_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
+            }
+            if let Some(joint_damping) = options.joint_damping {
+                assert!(joint_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetJointDamping(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_damping,
+                );
+            }
+            if let Some(restitution) = options.restitution {
+                assert!(restitution >= 0.);
+                ffi::b3ChangeDynamicsInfoSetRestitution(command, body.0, link_index, restitution);
+            }
+            if let Some(contact_stiffness_and_damping) = options.contact_stiffness_and_damping {
+                assert!(contact_stiffness_and_damping.0 >= 0.);
+                assert!(contact_stiffness_and_damping.1 >= 0.);
+                ffi::b3ChangeDynamicsInfoSetContactStiffnessAndDamping(
+                    command,
+                    body.0,
+                    link_index,
+                    contact_stiffness_and_damping.0,
+                    contact_stiffness_and_damping.1,
+                );
+            }
+            if let Some(friction_anchor) = options.friction_anchor {
+                match friction_anchor {
+                    true => {
+                        ffi::b3ChangeDynamicsInfoSetFrictionAnchor(command, body.0, link_index, 1);
+                    }
+                    false => {
+                        ffi::b3ChangeDynamicsInfoSetFrictionAnchor(command, body.0, link_index, 0);
+                    }
+                }
+            }
+            if let Some(ccd_swept_sphere_radius) = options.ccd_swept_sphere_radius {
+                assert!(ccd_swept_sphere_radius >= 0.);
+                ffi::b3ChangeDynamicsInfoSetCcdSweptSphereRadius(
+                    command,
+                    body.0,
+                    link_index,
+                    ccd_swept_sphere_radius,
+                );
+            }
+            if let Some(activation_state) = options.activation_state {
+                ffi::b3ChangeDynamicsInfoSetActivationState(
+                    command,
+                    body.0,
+                    activation_state.bits(),
+                );
+            }
+            if let Some(contact_processing_threshold) = options.contact_processing_threshold {
+                assert!(contact_processing_threshold >= 0.);
+                ffi::b3ChangeDynamicsInfoSetContactProcessingThreshold(
+                    command,
+                    body.0,
+                    link_index,
+                    contact_processing_threshold,
+                );
+            }
+            if let Some(max_joint_velocity) = options.max_joint_velocity {
+                assert!(max_joint_velocity >= 0.);
+                ffi::b3ChangeDynamicsInfoSetMaxJointVelocity(command, body.0, max_joint_velocity);
+            }
+            if let Some(collision_margin) = options.collision_margin {
+                assert!(collision_margin >= 0.);
+                ffi::b3ChangeDynamicsInfoSetCollisionMargin(command, body.0, collision_margin);
+            }
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
-
-    pub fn change_dynamics_angular_damping(&mut self, body: BodyId, angular_damping: f64) {
+    /// With this method you can get information about the mass, center of mass,
+    /// friction and other properties of the base and links.
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base.
+    ///
+    /// See [`change_dynamics`](`Self::change_dynamics`) for an example
+    pub fn get_dynamics_info<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+    ) -> Result<DynamicsInfo, Error> {
+        assert!(body.0 >= 0);
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
-            let command = ffi::b3InitChangeDynamicsInfo(self.handle);
-            assert!(angular_damping >= 0.);
-            ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let cmd_handle = ffi::b3GetDynamicsInfoCommandInit(self.handle, body.0, link_index);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_GET_DYNAMICS_INFO_COMPLETED as i32 {
+                return Err(Error::new(
+                    "get_dynamics_info failed; invalid return status",
+                ));
+            }
+            let mut dynamics_info = b3DynamicsInfo {
+                m_mass: 0.0,
+                m_localInertialDiagonal: [0.; 3],
+                m_localInertialFrame: [0.; 7],
+                m_lateralFrictionCoeff: 0.0,
+                m_rollingFrictionCoeff: 0.0,
+                m_spinningFrictionCoeff: 0.0,
+                m_restitution: 0.0,
+                m_contactStiffness: 0.0,
+                m_contactDamping: 0.0,
+                m_activationState: 0,
+                m_bodyType: 0,
+                m_angularDamping: 0.0,
+                m_linearDamping: 0.0,
+                m_ccdSweptSphereRadius: 0.0,
+                m_contactProcessingThreshold: 0.0,
+                m_frictionAnchor: 0,
+                m_collisionMargin: 0.0,
+                m_dynamicType: 0,
+            };
+            if ffi::b3GetDynamicsInfo(status_handle, &mut dynamics_info) != 0 {
+                Ok(dynamics_info.into())
+            } else {
+                Err(Error::new("Couldn't get dynamics info"))
+            }
         }
     }
     /// returns the number of joints of a body
@@ -1199,8 +1425,18 @@ impl PhysicsClient {
     /// the joint/link damping, while forward dynamics (in stepSimulation) includes those damping
     /// terms. So if you want to compare the inverse dynamics and forward dynamics,
     /// make sure to set those damping terms to zero using
-    /// [change_dynamics_linear_damping](`Self::change_dynamics_linear_damping`) and
-    /// [change_dynamics_angular_damping](`Self::change_dynamics_angular_damping`).
+    /// [change_dynamics](`Self::change_dynamics`) with
+    /// ```rust
+    /// use rubullet::ChangeDynamicsOptions;
+    /// ChangeDynamicsOptions {
+    ///     joint_damping: Some(0.),
+    ///     linear_damping: Some(0.),
+    ///     angular_damping: Some(0.),
+    ///     ..Default::default()
+    /// };
+    /// ```
+    ///
+    /// See also the `inverse_dynamics` example in the example folder.
     pub fn calculate_inverse_dynamics(
         &mut self,
         body: BodyId,

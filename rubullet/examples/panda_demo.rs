@@ -118,8 +118,15 @@ impl PandaSim {
             ..Default::default()
         };
         let panda_id = client.load_urdf("franka_panda/panda.urdf", urdf_options)?;
-        client.change_dynamics_linear_damping(panda_id, 0.);
-        client.change_dynamics_angular_damping(panda_id, 0.);
+        client.change_dynamics(
+            panda_id,
+            None,
+            ChangeDynamicsOptions {
+                linear_damping: Some(0.),
+                angular_damping: Some(0.),
+                ..Default::default()
+            },
+        );
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);

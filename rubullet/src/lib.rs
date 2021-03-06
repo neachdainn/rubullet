@@ -41,14 +41,15 @@ pub use crate::{
     error::Error,
     mode::Mode,
     types::{
-        AddDebugLineOptions, AddDebugTextOptions, BodyId, BodyInfo, ChangeConstraintOptions,
-        ChangeVisualShapeOptions, CollisionId, ConstraintId, ConstraintInfo, ControlMode,
-        ControlModeArray, DebugVisualizerFlag, ExternalForceFrame, GeometricCollisionShape,
-        GeometricVisualShape, IkSolver, Images, InverseKinematicsNullSpaceParameters,
-        InverseKinematicsParameters, InverseKinematicsParametersBuilder, ItemId, Jacobian,
-        JointInfo, JointInfoFlags, JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags,
-        MouseButtonState, MouseEvent, MultiBodyOptions, SdfOptions, TextureId, UrdfOptions,
-        Velocity, VisualId, VisualShapeData, VisualShapeOptions,
+        ActivationState, AddDebugLineOptions, AddDebugTextOptions, BodyId, BodyInfo, BodyType,
+        ChangeConstraintOptions, ChangeDynamicsOptions, ChangeVisualShapeOptions, CollisionId,
+        ConstraintId, ConstraintInfo, ControlMode, ControlModeArray, DebugVisualizerFlag,
+        DynamicsInfo, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, IkSolver,
+        Images, InverseKinematicsNullSpaceParameters, InverseKinematicsParameters,
+        InverseKinematicsParametersBuilder, ItemId, Jacobian, JointInfo, JointInfoFlags,
+        JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState,
+        MouseEvent, MultiBodyOptions, SdfOptions, TextureId, UrdfOptions, Velocity, VisualId,
+        VisualShapeData, VisualShapeOptions,
     },
 };
 pub use image;

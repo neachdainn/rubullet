@@ -19,8 +19,15 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )?;
-    physics_client.change_dynamics_angular_damping(id_robot, 0.);
-    physics_client.change_dynamics_linear_damping(id_robot, 0.);
+    physics_client.change_dynamics(
+        id_robot,
+        None,
+        ChangeDynamicsOptions {
+            linear_damping: Some(0.),
+            angular_damping: Some(0.),
+            ..Default::default()
+        },
+    );
     physics_client.set_joint_motor_control_array(
         id_robot,
         &id_revolute_joints,
