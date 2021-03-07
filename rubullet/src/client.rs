@@ -13,30 +13,34 @@ use nalgebra::{
 
 use self::gui_marker::GuiMarker;
 use crate::types::{
-    AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
+    Aabb, AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ConstraintInfo, ControlModeArray, ExternalForceFrame, GeometricCollisionShape,
     GeometricVisualShape, Images, InverseKinematicsParameters, ItemId, Jacobian, JointInfo,
     JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent,
-    MultiBodyOptions, SdfOptions, TextureId, Velocity, VisualId, VisualShapeOptions,
+    MultiBodyOptions, OverlappingObject, SdfOptions, TextureId, Velocity, VisualId,
+    VisualShapeOptions,
 };
 use crate::{
-    BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ControlMode,
-    DebugVisualizerFlag, DynamicsInfo, Error, Mode, UrdfOptions, VisualShapeData,
+    BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
+    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, Mode, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
 use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
     CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
+    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED,
+    CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
-    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
+    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
+    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
     CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
     CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
-    b3CameraImageData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3KeyboardEventsData,
-    b3LinkState, b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
+    b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
+    b3JointSensorState, b3KeyboardEventsData, b3LinkState, b3MouseEventsData,
+    b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
     B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
 };
 use std::time::Duration;
@@ -3461,7 +3465,7 @@ impl PhysicsClient {
     ///     println!("{:?}", constraint_info);
     ///     let mut a = -PI;
     ///     loop {
-    ///         a += 0.01;
+    ///         a += 0.05;
     ///         if a > PI {
     ///             break;
     ///         }
@@ -3685,6 +3689,347 @@ impl PhysicsClient {
             }
             Err(Error::new("Could not get constraint state"))
         }
+    }
+    /// queriers the axis aligned bounding box (in world space) given an object unique id,
+    /// and optionally a link index. (when you pass `None`, you get the AABB of the base).
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base.
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let r2d2 = physics_client.load_urdf("r2d2.urdf", None)?;
+    ///     let aabb = physics_client.get_aabb(r2d2, None)?;
+    ///     println!("{:?}", aabb);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also the get_aabb.rs example in the example folder
+    pub fn get_aabb<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+    ) -> Result<Aabb, Error> {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        assert!(body.0 >= 0);
+        unsafe {
+            let cmd_handle = ffi::b3RequestCollisionInfoCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_REQUEST_COLLISION_INFO_COMPLETED as i32 {
+                return Err(Error::new("get_aabb failed"));
+            }
+            let mut aabb_min = [0.; 3];
+            let mut aabb_max = [0.; 3];
+            if ffi::b3GetStatusAABB(
+                status_handle,
+                link_index,
+                aabb_min.as_mut_ptr(),
+                aabb_max.as_mut_ptr(),
+            ) != 0
+            {
+                return Ok(Aabb {
+                    min: aabb_min.into(),
+                    max: aabb_max.into(),
+                });
+            }
+            Err(Error::new("get_aabb failed"))
+        }
+    }
+    /// This query will return all the unique ids of objects that have axis aligned bounding
+    /// box overlap with a given axis aligned bounding box. Note that the query is conservative
+    /// and may return additional objects that don't have actual AABB overlap. This happens because
+    /// the acceleration structures have some heuristic that enlarges the AABBs a bit
+    /// (extra margin and extruded along the velocity vector).
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let overlapping_object = physics_client.get_overlapping_objects(Aabb{
+    ///         min: [-1.;3].into(),
+    ///         max:[1.;3].into(),
+    ///     });
+    ///     assert_eq!(2,overlapping_object.len());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn get_overlapping_objects(&mut self, aabb: Aabb) -> Vec<OverlappingObject> {
+        unsafe {
+            let Aabb { min, max } = aabb;
+            let command_handle =
+                ffi::b3InitAABBOverlapQuery(self.handle, min.as_ptr(), max.as_ptr());
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let mut overlap_data = b3AABBOverlapData {
+                m_numOverlappingObjects: 0,
+                m_overlappingObjects: [].as_mut_ptr(),
+            };
+            ffi::b3GetAABBOverlapResults(self.handle, &mut overlap_data);
+            let mut objects = Vec::with_capacity(overlap_data.m_numOverlappingObjects as usize);
+            let data = std::slice::from_raw_parts_mut(
+                overlap_data.m_overlappingObjects,
+                overlap_data.m_numOverlappingObjects as usize,
+            );
+            for object in data.iter() {
+                let link_index = {
+                    assert!(object.m_linkIndex >= -1);
+                    if object.m_linkIndex == -1 {
+                        None
+                    } else {
+                        Some(object.m_linkIndex as usize)
+                    }
+                };
+                let object = OverlappingObject {
+                    body: BodyId(object.m_objectUniqueId),
+                    link_index,
+                };
+                objects.push(object);
+            }
+            objects
+        }
+    }
+
+    // pub fn get_contact_points<BodyA: Into<Option<BodyId>>,BodyB: Into<Option<BodyId>>,LinkA: Into<Option<usize>>,LinkB: Into<Option<usize>>>(&mut self, body_a: BodyA, body_b:BodyB,link_a:LinkA,link_b:LinkB) -> c
+
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * `get_closest_points_body_body` - calculates the closest points between two bodies.
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`) - calculates the closest points between a body and a collision shape
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`) - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `body_a` - BodyId for the first object
+    /// * `link_index_a` - link index for object A or `None` for the base.
+    /// * `body_b` - BodyId for the second object
+    /// * `link_index_b` - link index for object B or `None` for the base.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let points = physics_client.get_closest_points_body_body(cube_a, None, cube_b, None, 1.)?;
+    ///     assert!((points[0].contact_distance - 0.45).abs() < 1e-5);
+    ///     assert_eq!(points[0].body_a, Some(cube_a));
+    ///     assert_eq!(points[0].body_b, Some(cube_b));
+    ///     assert_eq!(points[0].link_index_a, None);
+    ///     assert_eq!(points[0].link_index_b, None);
+    ///     assert!((points[0].position_on_a.z - 0.025).abs() < 1e-5);
+    ///     assert!((points[0].position_on_b.z - 0.475).abs() < 1e-5);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an other example
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`)
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`)
+    pub fn get_closest_points_body_body<LinkA: Into<Option<usize>>, LinkB: Into<Option<usize>>>(
+        &mut self,
+        body_a: BodyId,
+        link_index_a: LinkA,
+        body_b: BodyId,
+        link_index_b: LinkB,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let link_index_a = match link_index_a.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let link_index_b = match link_index_b.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(body_a.0 >= 0);
+            assert!(body_b.0 >= 0);
+            ffi::b3SetClosestDistanceFilterBodyA(command_handle, body_a.0);
+            ffi::b3SetClosestDistanceFilterBodyB(command_handle, body_b.0);
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index_a);
+            ffi::b3SetClosestDistanceFilterLinkB(command_handle, link_index_b);
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`) - calculates the closest points between two bodies.
+    /// * `get_closest_points_body_shape` - calculates the closest points between a body and a collision shape
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`) - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `body` - BodyId for the body object
+    /// * `link_index` - link index for object A or `None` for the base.
+    /// * `collision_shape` - Collision shape of the other object
+    /// * `shape_pose` - pose of the collision shape in world coordinates.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an example
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`)
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`)
+    pub fn get_closest_points_body_shape<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        collision_shape: CollisionId,
+        shape_pose: Isometry3<f64>,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(body.0 >= 0);
+            assert!(collision_shape.0 >= 0);
+            ffi::b3SetClosestDistanceFilterBodyA(command_handle, body.0);
+            ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index);
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterCollisionShapeB(command_handle, collision_shape.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionB(
+                command_handle,
+                shape_pose.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationB(
+                command_handle,
+                shape_pose.rotation.coords.as_ptr(),
+            );
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`) - calculates the closest points between two bodies.
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`) - calculates the closest points between a body and a collision shape
+    /// * `get_closest_points_shape_shape` - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `collision_shape_a` - CollisionId of the first shape
+    /// * `shape_pose_a` - pose of the first collision shape in world coordinates.
+    /// * `collision_shape_b` - CollisionId of the second shape
+    /// * `shape_pose_b` - pose of the second collision shape in world coordinates.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an example
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`)
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`)
+    pub fn get_closest_points_shape_shape(
+        &mut self,
+        collision_shape_a: CollisionId,
+        shape_pose_a: Isometry3<f64>,
+        collision_shape_b: CollisionId,
+        shape_pose_b: Isometry3<f64>,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(collision_shape_a.0 >= 0);
+            assert!(collision_shape_b.0 >= 0);
+
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterCollisionShapeA(command_handle, collision_shape_a.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapeB(command_handle, collision_shape_b.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionA(
+                command_handle,
+                shape_pose_a.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionB(
+                command_handle,
+                shape_pose_b.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationA(
+                command_handle,
+                shape_pose_a.rotation.coords.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationB(
+                command_handle,
+                shape_pose_b.rotation.coords.as_ptr(),
+            );
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+
+    unsafe fn intern_get_closest_points(
+        &mut self,
+        command_handle: b3SharedMemoryCommandHandle,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let mut contact_information = b3ContactInformation {
+            m_numContactPoints: 0,
+            m_contactPointData: [].as_mut_ptr(),
+        };
+        let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+        let status_type = ffi::b3GetStatusType(status_handle);
+        if status_type == CMD_CONTACT_POINT_INFORMATION_COMPLETED as i32 {
+            ffi::b3GetContactPointInformation(self.handle, &mut contact_information);
+            let mut objects = Vec::with_capacity(contact_information.m_numContactPoints as usize);
+            let data = std::slice::from_raw_parts_mut(
+                contact_information.m_contactPointData,
+                contact_information.m_numContactPoints as usize,
+            );
+            for &object in data.iter() {
+                let mut contact_point: ContactPoint = object.into();
+                contact_point.normal_force = None;
+                objects.push(contact_point);
+            }
+            return Ok(objects);
+        }
+        Err(Error::new("get_closes_points failed"))
     }
 }
 

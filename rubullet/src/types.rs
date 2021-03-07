@@ -6,8 +6,8 @@ use nalgebra::{
     Vector3, Vector6, U3,
 };
 use rubullet_sys::{
-    b3BodyInfo, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3UserConstraint,
-    b3VisualShapeData,
+    b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
+    b3UserConstraint, b3VisualShapeData,
 };
 use std::convert::TryFrom;
 use std::ffi::CStr;
@@ -403,7 +403,7 @@ pub struct AddDebugLineOptions {
     /// By default it is the base frame (-1)
     pub parent_link_index: Option<usize>,
     /// replace an existing line (to improve performance and to avoid flickering of remove/add)
-    pub replace_item_id: Option<BodyId>,
+    pub replace_item_id: Option<ItemId>,
 }
 
 impl Default for AddDebugLineOptions {
@@ -1605,6 +1605,123 @@ impl From<b3DynamicsInfo> for DynamicsInfo {
                 _ => panic!("internal error: Unknown BodyType ({})", m_bodyType),
             },
             collision_margin: m_collisionMargin,
+        }
+    }
+}
+/// axis-aligned minimum bounding box
+#[derive(Debug)]
+pub struct Aabb {
+    /// minimum coordinates of the aabb
+    pub min: Vector3<f64>,
+    /// maximum coordinates of the aabb
+    pub max: Vector3<f64>,
+}
+
+/// Is the result of [`get_overlapping_objects`](`crate::PhysicsClient::get_overlapping_objects`).
+/// Each object specifies a link of a body.
+#[derive(Debug, Copy, Clone)]
+pub struct OverlappingObject {
+    /// BodyID of the overlapping object
+    pub body: BodyId,
+    /// the index of the link which is overlapping. Is `None` for the base.
+    pub link_index: Option<usize>,
+}
+
+/// Is the result of the get_closest_points and get_contact_points methods.
+#[derive(Debug, Copy, Clone)]
+pub struct ContactPoint {
+    /// reserved
+    #[doc(hidden)]
+    pub contact_flag: i32,
+    /// body unique id of body A. Is `None` When a collision shape was used instead
+    pub body_a: Option<BodyId>,
+    /// body unique id of body B. Is `None` When a collision shape was used instead
+    pub body_b: Option<BodyId>,
+    /// link index of body A, `None` for base
+    pub link_index_a: Option<usize>,
+    /// link index of body A, `None` for base
+    pub link_index_b: Option<usize>,
+    /// contact position on A, in Cartesian world coordinates
+    pub position_on_a: Vector3<f64>,
+    /// contact position on B, in Cartesian world coordinates
+    pub position_on_b: Vector3<f64>,
+    /// contact normal on B, pointing towards A
+    pub contact_normal_on_b: Vector3<f64>,
+    /// contact distance, positive for separation, negative for penetration
+    pub contact_distance: f64,
+    /// normal force applied during the last 'stepSimulation'. Is `None` when used with one of the
+    /// get_closes_points methods
+    pub normal_force: Option<f64>,
+    /// first lateral friction
+    pub lateral_friction_1: Vector3<f64>,
+    /// second lateral friction
+    pub lateral_friction_2: Vector3<f64>,
+}
+
+impl From<b3ContactPointData> for ContactPoint {
+    fn from(b3: b3ContactPointData) -> Self {
+        #[allow(non_snake_case)]
+        let b3ContactPointData {
+            m_contactFlags,
+            m_bodyUniqueIdA,
+            m_bodyUniqueIdB,
+            m_linkIndexA,
+            m_linkIndexB,
+            m_positionOnAInWS,
+            m_positionOnBInWS,
+            m_contactNormalOnBInWS,
+            m_contactDistance,
+            m_normalForce,
+            m_linearFrictionForce1,
+            m_linearFrictionForce2,
+            m_linearFrictionDirection1,
+            m_linearFrictionDirection2,
+        } = b3;
+        let mut lateral_friction_1: Vector3<f64> = m_linearFrictionDirection1.into();
+        lateral_friction_1 *= m_linearFrictionForce1;
+        let mut lateral_friction_2: Vector3<f64> = m_linearFrictionDirection2.into();
+        lateral_friction_2 *= m_linearFrictionForce2;
+        let link_index_a = {
+            if m_linkIndexA.is_negative() {
+                None
+            } else {
+                Some(m_linkIndexA as usize)
+            }
+        };
+        let link_index_b = {
+            if m_linkIndexB.is_negative() {
+                None
+            } else {
+                Some(m_linkIndexB as usize)
+            }
+        };
+        let body_a = {
+            if m_bodyUniqueIdA < 0 {
+                None
+            } else {
+                Some(BodyId(m_bodyUniqueIdA))
+            }
+        };
+        let body_b = {
+            if m_bodyUniqueIdB < 0 {
+                None
+            } else {
+                Some(BodyId(m_bodyUniqueIdB))
+            }
+        };
+        ContactPoint {
+            contact_flag: m_contactFlags,
+            body_a,
+            body_b,
+            link_index_a,
+            link_index_b,
+            position_on_a: m_positionOnAInWS.into(),
+            position_on_b: m_positionOnBInWS.into(),
+            contact_normal_on_b: m_contactNormalOnBInWS.into(),
+            contact_distance: m_contactDistance,
+            normal_force: Some(m_normalForce),
+            lateral_friction_1,
+            lateral_friction_2,
         }
     }
 }

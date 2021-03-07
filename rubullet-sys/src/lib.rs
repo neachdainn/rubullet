@@ -68,6 +68,18 @@ extern "C" {
 
     pub fn b3GetStatusBodyIndex(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
 
+    pub fn b3RequestCollisionInfoCommandInit(
+        physClient: b3PhysicsClientHandle,
+        bodyUniqueId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusAABB(
+        statusHandle: b3SharedMemoryStatusHandle,
+        linkIndex: c_int,
+        aabbMin: *mut f64,
+        aabbMax: *mut f64,
+    ) -> c_int;
+
     pub fn b3InitSyncBodyInfoCommand(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
@@ -972,6 +984,100 @@ extern "C" {
 
     pub fn b3CreateMultiBodySetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
 
+    #[doc = "request an contact point information"]
+    pub fn b3InitRequestContactPointInformation(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SetContactFilterBodyA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdA: c_int,
+    );
+
+    pub fn b3SetContactFilterBodyB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdB: c_int,
+    );
+
+    pub fn b3SetContactFilterLinkA(commandHandle: b3SharedMemoryCommandHandle, linkIndexA: c_int);
+
+    pub fn b3SetContactFilterLinkB(commandHandle: b3SharedMemoryCommandHandle, linkIndexB: c_int);
+
+    pub fn b3GetContactPointInformation(
+        physClient: b3PhysicsClientHandle,
+        contactPointData: *mut b3ContactInformation,
+    );
+
+    #[doc = "compute the closest points between two bodies"]
+    pub fn b3InitClosestDistanceQuery(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SetClosestDistanceFilterBodyA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdA: c_int,
+    );
+
+    pub fn b3SetClosestDistanceFilterLinkA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linkIndexA: c_int,
+    );
+
+    pub fn b3SetClosestDistanceFilterBodyB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdB: c_int,
+    );
+
+    pub fn b3SetClosestDistanceFilterLinkB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linkIndexB: c_int,
+    );
+
+    pub fn b3SetClosestDistanceThreshold(commandHandle: b3SharedMemoryCommandHandle, distance: f64);
+
+    pub fn b3SetClosestDistanceFilterCollisionShapeA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapeA: c_int,
+    );
+
+    pub fn b3SetClosestDistanceFilterCollisionShapeB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapeB: c_int,
+    );
+
+    pub fn b3SetClosestDistanceFilterCollisionShapePositionA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapePositionA: *const f64,
+    );
+
+    pub fn b3SetClosestDistanceFilterCollisionShapePositionB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapePositionB: *const f64,
+    );
+
+    pub fn b3SetClosestDistanceFilterCollisionShapeOrientationA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapeOrientationA: *const f64,
+    );
+
+    pub fn b3SetClosestDistanceFilterCollisionShapeOrientationB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionShapeOrientationB: *const f64,
+    );
+
+    pub fn b3GetClosestPointInformation(
+        physClient: b3PhysicsClientHandle,
+        contactPointInfo: *mut b3ContactInformation,
+    );
+
+    #[doc = "get all the bodies that touch a given axis aligned bounding box specified in world space (min and max coordinates)"]
+    pub fn b3InitAABBOverlapQuery(
+        physClient: b3PhysicsClientHandle,
+        aabbMin: *const f64,
+        aabbMax: *const f64,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetAABBOverlapResults(physClient: b3PhysicsClientHandle, data: *mut b3AABBOverlapData);
     pub fn b3InitRequestVisualShapeInformation(
         physClient: b3PhysicsClientHandle,
         bodyUniqueIdA: c_int,
@@ -1567,4 +1673,40 @@ pub struct b3DynamicsInfo {
     pub m_frictionAnchor: c_int,
     pub m_collisionMargin: f64,
     pub m_dynamicType: c_int,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3AABBOverlapData {
+    pub m_numOverlappingObjects: c_int,
+    pub m_overlappingObjects: *mut b3OverlappingObject,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3OverlappingObject {
+    pub m_objectUniqueId: c_int,
+    pub m_linkIndex: c_int,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3ContactInformation {
+    pub m_numContactPoints: c_int,
+    pub m_contactPointData: *mut b3ContactPointData,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3ContactPointData {
+    pub m_contactFlags: c_int,
+    pub m_bodyUniqueIdA: c_int,
+    pub m_bodyUniqueIdB: c_int,
+    pub m_linkIndexA: c_int,
+    pub m_linkIndexB: c_int,
+    pub m_positionOnAInWS: [f64; 3usize],
+    pub m_positionOnBInWS: [f64; 3usize],
+    pub m_contactNormalOnBInWS: [f64; 3usize],
+    pub m_contactDistance: f64,
+    pub m_normalForce: f64,
+    pub m_linearFrictionForce1: f64,
+    pub m_linearFrictionForce2: f64,
+    pub m_linearFrictionDirection1: [f64; 3usize],
+    pub m_linearFrictionDirection2: [f64; 3usize],
 }
