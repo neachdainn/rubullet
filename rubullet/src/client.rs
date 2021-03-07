@@ -3813,8 +3813,117 @@ impl PhysicsClient {
             objects
         }
     }
+    /// The getContactPoints API returns the contact points computed during the most recent call to
+    /// [`step_simulation`](`Self::step_simulation`). Note that if you change the state of the
+    /// simulation after [`step_simulation`](`Self::step_simulation`),
+    /// the 'get_contact_points()' is not updated and potentially invalid
+    ///
+    /// # Arguments
+    /// * `body_a` - only report contact points that involve body A
+    /// * `body_b` - only report contact points that involve body B. Important: you need to have a
+    ///  body A if you provide body B.
+    /// * `link_a` - Only report contact points that involve link_index_a of body_a. See note on usage of this option.
+    /// * `link_b` - Only report contact points that involve link_index_b of body_b. See note on usage of this option.
+    ///
+    /// # Note on usage of the link_indices:
+    /// You can either provide:
+    /// * `None` - if you want to have all the links.
+    /// * `Some(None)` - if you want to specify the Base link
+    /// * `Some(Some(2))` - if you want to specify link `2`.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let _cube_a = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let _cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.step_simulation()?;
+    ///     let points = physics_client.get_contact_points(None, None, None, None)?;
+    ///     assert_eq!(4, points.len());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also the `contact_friction.rs` example in the example folder.
+    pub fn get_contact_points<BodyA: Into<Option<BodyId>>, BodyB: Into<Option<BodyId>>>(
+        &mut self,
+        body_a: BodyA,
+        body_b: BodyB,
+        link_a: Option<Option<usize>>,
+        link_b: Option<Option<usize>>,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let body_a = body_a.into();
+        let body_b = body_b.into();
+        unsafe {
+            let command_handle = ffi::b3InitRequestContactPointInformation(self.handle);
+            if let Some(body_1) = body_a {
+                ffi::b3SetContactFilterBodyA(command_handle, body_1.0);
+                match link_a {
+                    None => {}
+                    Some(link) => {
+                        let link_index_a = match link {
+                            None => -1,
+                            Some(index) => index as i32,
+                        };
+                        ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index_a);
+                    }
+                }
 
-    // pub fn get_contact_points<BodyA: Into<Option<BodyId>>,BodyB: Into<Option<BodyId>>,LinkA: Into<Option<usize>>,LinkB: Into<Option<usize>>>(&mut self, body_a: BodyA, body_b:BodyB,link_a:LinkA,link_b:LinkB) -> c
+                if let Some(body_2) = body_b {
+                    ffi::b3SetContactFilterBodyB(command_handle, body_2.0);
+                    match link_b {
+                        None => {}
+                        Some(link) => {
+                            let link_index_b = match link {
+                                None => -1,
+                                Some(index) => index as i32,
+                            };
+                            ffi::b3SetClosestDistanceFilterLinkB(command_handle, link_index_b);
+                        }
+                    }
+                }
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CONTACT_POINT_INFORMATION_COMPLETED as i32 {
+                let mut contact_information = b3ContactInformation {
+                    m_numContactPoints: 0,
+                    m_contactPointData: [].as_mut_ptr(),
+                };
+                ffi::b3GetContactPointInformation(self.handle, &mut contact_information);
+                let mut objects =
+                    Vec::with_capacity(contact_information.m_numContactPoints as usize);
+                let data = std::slice::from_raw_parts_mut(
+                    contact_information.m_contactPointData,
+                    contact_information.m_numContactPoints as usize,
+                );
+                for &object in data.iter() {
+                    objects.push(object.into());
+                }
+                return Ok(objects);
+            }
+        }
+        Err(Error::new("could not get contact points"))
+    }
 
     /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
     /// It also lets you compute closest points of objects with an arbitrary separating distance.
