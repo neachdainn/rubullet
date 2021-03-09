@@ -34,10 +34,10 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
     CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED,
-    CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
-    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
-    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_SAVE_WORLD_COMPLETED,
+    CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
+    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
+    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
     b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
@@ -4327,6 +4327,57 @@ impl PhysicsClient {
                         ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
                 }
             };
+        }
+    }
+    /// You can create an approximate snapshot of the current world as a PyBullet Python file
+    /// (Yes, a Python file and not a Rust file),
+    /// stored on the server. save_world can be useful as a basic editing feature, setting
+    /// up the robot, joint angles, object positions and environment for example in VR.
+    /// Later you can just load the PyBullet Python file to re-create the world. You could also
+    /// use it to create a Python version of your awesome world to
+    /// show it to your friends who are not using RuBullet yet!
+    /// The python snapshot contains loadURDF commands together with initialization of joint angles
+    /// and object transforms. Note that not all settings are stored in the world file.
+    ///
+    /// # Arguments
+    /// * `filename` - location where to save the python file.
+    ///
+    /// # Example
+    /// ```no_run
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let points = physics_client.save_world("my_world.py")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn save_world<P: AsRef<Path>>(&mut self, filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command_handle = ffi::b3SaveWorldCommandInit(self.handle, file.as_ptr());
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SAVE_WORLD_COMPLETED as i32 {
+                return Err(Error::new("save_world command execution failed"));
+            }
+            Ok(())
         }
     }
 }

@@ -1237,6 +1237,11 @@ extern "C" {
         globalScaling: f64,
     ) -> c_int;
 
+    pub fn b3SaveWorldCommandInit(
+        physClient: b3PhysicsClientHandle,
+        sdfFileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
     pub fn b3InitCreateUserConstraintCommand(
         physClient: b3PhysicsClientHandle,
         parentBodyUniqueId: c_int,
