@@ -745,6 +745,82 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
         mouseEventsData: *mut b3MouseEventsData,
     );
+    pub fn b3StateLoggingCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3StateLoggingStart(
+        commandHandle: b3SharedMemoryCommandHandle,
+        loggingType: c_int,
+        fileName: *const c_char,
+    ) -> c_int;
+
+    pub fn b3StateLoggingAddLoggingObjectUniqueId(
+        commandHandle: b3SharedMemoryCommandHandle,
+        objectUniqueId: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetMaxLogDof(
+        commandHandle: b3SharedMemoryCommandHandle,
+        maxLogDof: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetLinkIndexA(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linkIndexA: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetLinkIndexB(
+        commandHandle: b3SharedMemoryCommandHandle,
+        linkIndexB: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetBodyAUniqueId(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyAUniqueId: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetBodyBUniqueId(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyBUniqueId: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetDeviceTypeFilter(
+        commandHandle: b3SharedMemoryCommandHandle,
+        deviceTypeFilter: c_int,
+    ) -> c_int;
+
+    pub fn b3StateLoggingSetLogFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        logFlags: c_int,
+    ) -> c_int;
+
+    pub fn b3GetStatusLoggingUniqueId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    pub fn b3StateLoggingStop(
+        commandHandle: b3SharedMemoryCommandHandle,
+        loggingUid: c_int,
+    ) -> c_int;
+
+    pub fn b3ProfileTimingCommandInit(
+        physClient: b3PhysicsClientHandle,
+        name: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SetProfileTimingDuractionInMicroSeconds(
+        commandHandle: b3SharedMemoryCommandHandle,
+        duration: c_int,
+    );
+
+    pub fn b3SetProfileTimingType(commandHandle: b3SharedMemoryCommandHandle, type_: c_int);
+
+    pub fn b3PushProfileTiming(physClient: b3PhysicsClientHandle, timingName: *const c_char);
+
+    pub fn b3PopProfileTiming(physClient: b3PhysicsClientHandle);
+
+    pub fn b3SetTimeOut(physClient: b3PhysicsClientHandle, timeOutInSeconds: f64);
+
+    pub fn b3GetTimeOut(physClient: b3PhysicsClientHandle) -> f64;
     #[doc = "We are currently not reading the sensor information from the URDF file, and programmatically assign sensors."]
     #[doc = "This is rather inconsistent, to mix programmatical creation with loading from file."]
     pub fn b3CreateSensorCommandInit(

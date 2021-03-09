@@ -48,13 +48,15 @@ pub use crate::{
         GeometricVisualShape, IkSolver, Images, InverseKinematicsNullSpaceParameters,
         InverseKinematicsParameters, InverseKinematicsParametersBuilder, ItemId, Jacobian,
         JointInfo, JointInfoFlags, JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags,
-        MouseButtonState, MouseEvent, MultiBodyOptions, OverlappingObject, SdfOptions, TextureId,
-        UrdfOptions, Velocity, VisualId, VisualShapeData, VisualShapeOptions,
+        LogFlags, LogId, LoggingType, MouseButtonState, MouseEvent, MultiBodyOptions,
+        OverlappingObject, SdfOptions, StateLoggingOptions, TextureId, UrdfOptions, Velocity,
+        VisualId, VisualShapeData, VisualShapeOptions,
     },
 };
 pub use image;
 pub use nalgebra;
 mod client;
 mod error;
+pub mod logging_utils;
 mod mode;
 mod types;

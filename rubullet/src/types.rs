@@ -48,6 +48,10 @@ pub struct ItemId(pub(crate) c_int);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ConstraintId(pub(crate) c_int);
 
+/// The unique ID for a Logging Object.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct LogId(pub(crate) c_int);
+
 /// An enum to represent different types of joints
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum JointType {
@@ -869,7 +873,10 @@ impl From<(b3LinkState, bool)> for LinkState {
     }
 }
 
-fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -> Isometry3<f64> {
+pub(crate) fn position_orientation_to_isometry(
+    position: [f64; 3],
+    orientation: [f64; 4],
+) -> Isometry3<f64> {
     Isometry3::<f64>::from_parts(
         Translation3::from(Vector3::from_column_slice(&position)),
         UnitQuaternion::from_quaternion(Quaternion::from_parts(
@@ -878,7 +885,9 @@ fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -
         )),
     )
 }
-fn combined_position_orientation_array_to_isometry(combined: [f64; 7]) -> Isometry3<f64> {
+pub(crate) fn combined_position_orientation_array_to_isometry(
+    combined: [f64; 7],
+) -> Isometry3<f64> {
     let position = [combined[0], combined[1], combined[2]];
     let orientation = [combined[3], combined[4], combined[5], combined[6]];
     position_orientation_to_isometry(position, orientation)
@@ -1723,5 +1732,63 @@ impl From<b3ContactPointData> for ContactPoint {
             lateral_friction_1,
             lateral_friction_2,
         }
+    }
+}
+pub enum LoggingType {
+    /// This will require to load the quadruped/quadruped.urdf and object unique
+    /// id from the quadruped. It logs the timestamp, IMU roll/pitch/yaw, 8 leg
+    /// motor positions (q0-q7), 8 leg motor torques (u0-u7), the forward speed of the
+    /// torso and mode (unused in simulation).
+    Minitaur = 0,
+    /// This will log a log of the data of either all objects or selected ones
+    /// (if [`object_ids`](`crate::types::StateLoggingOptions::object_ids`) in the
+    /// [`StateLoggingOptions`](`crate::types::StateLoggingOptions`) is not empty).
+    GenericRobot,
+    VrControllers,
+    /// this will open an MP4 file and start streaming the OpenGL 3D visualizer pixels to the file
+    /// using an ffmpeg pipe. It will require ffmpeg installed. You can also use
+    /// avconv (default on Ubuntu), just create a symbolic link so that ffmpeg points to avconv.
+    /// On Windows, ffmpeg has some issues that cause tearing/color artifacts in some cases.
+    VideoMp4,
+    Commands,
+    ContactPoints,
+    /// This will dump a timings file in JSON format that can be opened using Google Chrome about://tracing LOAD.
+    ProfileTimings,
+    AllCommands,
+    ReplayAllCommands,
+    CustomTimer,
+}
+#[derive(Debug, Default)]
+pub struct StateLoggingOptions {
+    /// If left empty, the logger may log every object, otherwise the logger just logs the objects in the list.
+    pub object_ids: Vec<BodyId>,
+    /// Maximum number of joint degrees of freedom to log (excluding the base dofs).#
+    /// This applies to [`GenericRobot`](`crate::types::LoggingType::GenericRobot`)
+    /// Default value is 12. If a robot exceeds the number of dofs, it won't get logged at all.
+    pub max_log_dof: Option<usize>,
+    /// Applies to [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving body_a.
+    pub body_a: Option<BodyId>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving link_index_a for body_a. Use `Some(None)` to
+    /// specify the base.
+    pub link_index_a: Option<Option<usize>>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided,only log contact points involving bodyUniqueIdB.
+    pub body_b: Option<BodyId>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving link_index_b for body_b. Use `Some(None)` to
+    /// specify the base.
+    pub link_index_b: Option<Option<usize>>,
+    #[doc(hidden)]
+    pub device_type_filter: Option<i32>,
+    /// Use JOINT_TORQUES to also log joint torques due to joint motors.
+    pub log_flags: Option<LogFlags>,
+}
+bitflags::bitflags! {
+    pub struct LogFlags : i32 {
+        const JOINT_MOTOR_TORQUES = 1;
+        const JOINT_USER_TORQUES = 2;
+        const JOINT_TORQUES = 3;
     }
 }
