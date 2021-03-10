@@ -407,6 +407,38 @@ extern "C" {
     ) -> c_int;
 
     pub fn b3ComputeDofCount(physClient: b3PhysicsClientHandle, bodyUniqueId: c_int) -> c_int;
+    pub fn b3SaveStateCommandInit(physClient: b3PhysicsClientHandle)
+        -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitRemoveStateCommand(
+        physClient: b3PhysicsClientHandle,
+        stateId: c_int,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusGetStateId(statusHandle: b3SharedMemoryStatusHandle) -> c_int;
+
+    pub fn b3LoadStateCommandInit(physClient: b3PhysicsClientHandle)
+        -> b3SharedMemoryCommandHandle;
+
+    pub fn b3LoadStateSetStateId(
+        commandHandle: b3SharedMemoryCommandHandle,
+        stateId: c_int,
+    ) -> c_int;
+
+    pub fn b3LoadStateSetFileName(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fileName: *const c_char,
+    ) -> c_int;
+
+    pub fn b3LoadBulletCommandInit(
+        physClient: b3PhysicsClientHandle,
+        fileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SaveBulletCommandInit(
+        physClient: b3PhysicsClientHandle,
+        fileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
 
     pub fn b3LoadMJCFCommandInit(
         physClient: b3PhysicsClientHandle,

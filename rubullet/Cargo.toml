@@ -49,6 +49,10 @@ name = "profile_timing"
 path = "examples/profile_timing.rs"
 
 [[example]]
+name = "save_and_restore_states"
+path = "examples/save_and_restore_states.rs"
+
+[[example]]
 name = "jacobian"
 path = "examples/jacobian.rs"
 

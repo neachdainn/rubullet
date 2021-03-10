@@ -22,20 +22,20 @@ use crate::types::{
 };
 use crate::{
     BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
-    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, LogId, LoggingType, Mode,
+    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, LogId, LoggingType, Mode, StateId,
     StateLoggingOptions, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
 use rubullet_sys::EnumSharedMemoryServerStatus::{
-    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
-    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED,
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_BULLET_LOADING_COMPLETED, CMD_BULLET_SAVING_COMPLETED,
+    CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED,
+    CMD_CALCULATED_MASS_MATRIX_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED,
     CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
     CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_SAVE_WORLD_COMPLETED,
-    CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
+    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_RESTORE_STATE_COMPLETED, CMD_SAVE_STATE_COMPLETED,
+    CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
     CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
     CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
@@ -4378,6 +4378,160 @@ impl PhysicsClient {
                 return Err(Error::new("save_world command execution failed"));
             }
             Ok(())
+        }
+    }
+    /// Loads Bodies from a `.bullet` file. These can be created with [`save_bullet`](`Self::save_bullet`).
+    ///
+    /// Returns a list of BodyId's.
+    /// # Arguments
+    /// * `bullet_filename` - location of the `.bullet`
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let points = physics_client.load_bullet("spider.bullet")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also `save_and_restore.rs` example.
+    pub fn load_bullet<P: AsRef<Path>>(
+        &mut self,
+        bullet_filename: P,
+    ) -> Result<Vec<BodyId>, Error> {
+        unsafe {
+            let file = CString::new(bullet_filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadBulletCommandInit(self.handle, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_BULLET_LOADING_COMPLETED as i32 {
+                return Err(Error::new("Couldn't load .bullet file."));
+            }
+            let mut body_indices_out = [0; MAX_SDF_BODIES as usize];
+            let num_bodies = ffi::b3GetStatusBodyIndices(
+                status_handle,
+                body_indices_out.as_mut_ptr(),
+                MAX_SDF_BODIES as i32,
+            );
+            if num_bodies > MAX_SDF_BODIES as i32 {
+                return Err(Error::new("load_bullet exceeds body capacity"));
+            }
+            assert!(num_bodies >= 0);
+            let mut bodies = Vec::with_capacity(num_bodies as usize);
+            for &body in body_indices_out.iter().take(num_bodies as usize) {
+                assert!(body >= 0);
+                bodies.push(BodyId(body));
+            }
+            Ok(bodies)
+        }
+    }
+    /// Saves all bodies and the current state into a `.bullet` file which can then be read by
+    /// [`load_bullet`](`Self::load_bullet`) or [`restore_state_from_file`](`Self::restore_state_from_file`).
+    /// # Example
+    /// ```no_run
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///    physics_client.set_gravity([0.;3])?;
+    ///     physics_client.step_simulation()?;
+    ///     physics_client.save_bullet("cubes.bullet")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also `save_and_restore.rs` example.
+    pub fn save_bullet<P: AsRef<Path>>(&mut self, bullet_filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(bullet_filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3SaveBulletCommandInit(self.handle, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_BULLET_SAVING_COMPLETED as i32 {
+                return Err(Error::new("Couldn't save .bullet file."));
+            }
+            Ok(())
+        }
+    }
+    /// restores a state from memory using a state id which was created with [`save_state`](`Self::save_state`).
+    /// See `save_and_restore.rs` example.
+    pub fn restore_state(&mut self, state: StateId) -> Result<(), Error> {
+        unsafe {
+            let command = ffi::b3LoadStateCommandInit(self.handle);
+            assert!(state.0 >= 0);
+            ffi::b3LoadStateSetStateId(command, state.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_RESTORE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't restore state."));
+            }
+            Ok(())
+        }
+    }
+    /// restores a state from a `.bullet` file. It is necessary that the correct bodies are already
+    /// loaded. If this is not the case use [`load_bullet`](`Self::load_bullet`) instead.
+    /// See `save_and_restore.rs` example.
+    pub fn restore_state_from_file<P: AsRef<Path>>(&mut self, filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadStateCommandInit(self.handle);
+            ffi::b3LoadStateSetFileName(command, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_RESTORE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't restore state."));
+            }
+            Ok(())
+        }
+    }
+    /// Saves the current state in memory and returns a StateId which can be used by [`restore_state`](`Self::restore_state`)
+    /// to restore this state.  Use [`save_bullet`](`Self::save_bullet`) if you want to save a state
+    /// to a file.
+    /// See `save_and_restore.rs` example.
+    pub fn save_state(&mut self) -> Result<StateId, Error> {
+        unsafe {
+            let command = ffi::b3SaveStateCommandInit(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SAVE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't save state."));
+            }
+            let state_id = ffi::b3GetStatusGetStateId(status_handle);
+            assert!(state_id >= 0);
+            Ok(StateId(state_id))
+        }
+    }
+    /// Removes a state from memory.
+    pub fn remove_state(&mut self, state: StateId) {
+        unsafe {
+            assert!(state.0 >= 0);
+            if self.can_submit_command() {
+                let command = ffi::b3InitRemoveStateCommand(self.handle, state.0);
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+                let _status_type = ffi::b3GetStatusType(status_handle);
+            }
         }
     }
 }

@@ -19,7 +19,7 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Create GUI sliders, button or put debugging text or lines in the simulation
 * Get keyboard and mouse events 
 * Create and manage constraints
-* Logging
+* Logging and saving states
 
 Things which are not implemented yet:
 * Collision Detection Queries 
@@ -27,7 +27,6 @@ Things which are not implemented yet:
 * Connect via SHARED_MEMORY, UDP or TCP
 * Plugins
 * Deformables and Cloth
-* Saving states
 * Set physics engine parameters
 
 The API is unstable and subject to change.

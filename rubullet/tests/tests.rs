@@ -464,28 +464,28 @@ fn test_get_link_state() {
 pub fn inverse_dynamics_test() {
     let target_torque = [
         [
-            2.789039373397827,
-            -4.350228309631348,
-            -9.806090354919434,
-            -11.364048957824707,
-            -8.452873229980469,
-            -2.4533324241638184,
-            4.292827606201172,
-            9.478754043579102,
-            11.22978687286377,
-            8.697705268859863,
+            2.7890393556850084,
+            -4.35022826384923,
+            -9.806091463156854,
+            -11.36404798189885,
+            -8.452873740133834,
+            -2.4533327096931083,
+            4.292827558364013,
+            9.478755361855157,
+            11.229787344270306,
+            8.697705289653415,
         ],
         [
-            1.5324022769927979,
-            -0.3981592059135437,
-            -2.1556396484375,
-            -3.0122971534729004,
-            -2.61287522315979,
-            -1.1830209493637085,
-            0.663445770740509,
-            2.273959159851074,
-            3.1140832901000977,
-            2.8513741493225098,
+            1.5324022942490911,
+            -0.3981591800958851,
+            -2.1556396779135447,
+            -3.0122972444815823,
+            -2.612875295201555,
+            -1.1830210438812325,
+            0.6634457473498473,
+            2.2739591995615016,
+            3.11408342881574,
+            2.85137408903459,
         ],
     ];
     let delta_t = Duration::from_secs_f64(0.1);
@@ -876,4 +876,114 @@ fn compute_projection_matrix_test() {
         0.0,
     ];
     slice_compare_f32(projection_matrix.as_slice(), &desired_matrix, 1e-7);
+}
+#[test]
+fn save_and_restore_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let cube = client.load_urdf("cube.urdf", None).unwrap();
+    let cube_pose_start = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_start.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_start.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+    let start_state = client.save_state().unwrap();
+    let transform = Isometry3::translation(1., 1., 1.);
+    client.reset_base_transform(cube, &transform);
+    let cube_pose_end = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_end.translation.vector.as_slice(),
+        transform.translation.vector.as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_end.rotation.coords.as_slice(),
+        transform.rotation.coords.as_slice(),
+        1e-10,
+    );
+
+    client.restore_state(start_state).unwrap();
+    let cube_pose_restored = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_restored.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_restored.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+
+    client.remove_state(start_state);
+}
+#[test]
+fn save_and_restore_from_file_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let cube = client.load_urdf("cube.urdf", None).unwrap();
+    let cube_pose_start = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_start.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_start.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+    client
+        .save_bullet("save_and_restore_from_file_test.bullet")
+        .unwrap();
+    let transform = Isometry3::translation(1., 1., 1.);
+    client.reset_base_transform(cube, &transform);
+    let cube_pose_end = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_end.translation.vector.as_slice(),
+        transform.translation.vector.as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_end.rotation.coords.as_slice(),
+        transform.rotation.coords.as_slice(),
+        1e-10,
+    );
+
+    client
+        .restore_state_from_file("save_and_restore_from_file_test.bullet")
+        .unwrap();
+    let cube_pose_restored = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_restored.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_restored.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+
+    std::fs::remove_file("save_and_restore_from_file_test.bullet").unwrap();
+}
+
+#[test]
+fn load_bullet_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let bodies = client.load_bullet("spider.bullet").unwrap();
+    assert_eq!(bodies.len(), 27);
 }

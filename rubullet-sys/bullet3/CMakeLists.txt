@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.0.0)
 project(cbullet CXX)
 SET(BUILD_UNIT_TESTS OFF CACHE BOOL "Build Unit Tests" FORCE)
+SET(USE_DOUBLE_PRECISION ON CACHE BOOL "Use double precision" FORCE)
+ADD_DEFINITIONS( -DBT_USE_DOUBLE_PRECISION)
+SET(BULLET_DOUBLE_DEF "-DBT_USE_DOUBLE_PRECISION")
 # Add the Bullet libraries.
 add_subdirectory(libbullet3)
 

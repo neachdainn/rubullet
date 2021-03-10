@@ -52,6 +52,10 @@ pub struct ConstraintId(pub(crate) c_int);
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct LogId(pub(crate) c_int);
 
+/// The unique ID for a State Object.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct StateId(pub(crate) c_int);
+
 /// An enum to represent different types of joints
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum JointType {

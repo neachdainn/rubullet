@@ -49,8 +49,8 @@ pub use crate::{
         InverseKinematicsParameters, InverseKinematicsParametersBuilder, ItemId, Jacobian,
         JointInfo, JointInfoFlags, JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags,
         LogFlags, LogId, LoggingType, MouseButtonState, MouseEvent, MultiBodyOptions,
-        OverlappingObject, SdfOptions, StateLoggingOptions, TextureId, UrdfOptions, Velocity,
-        VisualId, VisualShapeData, VisualShapeOptions,
+        OverlappingObject, SdfOptions, StateId, StateLoggingOptions, TextureId, UrdfOptions,
+        Velocity, VisualId, VisualShapeData, VisualShapeOptions,
     },
 };
 pub use image;
