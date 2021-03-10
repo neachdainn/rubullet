@@ -75,7 +75,7 @@ fn test_get_and_reset_base_transformation() {
         Translation3::new(0.2, 0.3, 0.4),
         UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
     );
-    physics_client.reset_base_transform(r2d2, &desired_transform);
+    physics_client.reset_base_transform(r2d2, desired_transform);
     let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
     slice_compare(
         desired_transform.translation.vector.as_slice(),
@@ -92,7 +92,7 @@ fn test_get_and_reset_base_transformation() {
         Translation3::new(3.7, -0.23, 10.4),
         UnitQuaternion::from_euler_angles(1.1, -0.2, 2.3),
     );
-    physics_client.reset_base_transform(r2d2, &desired_transform);
+    physics_client.reset_base_transform(r2d2, desired_transform);
     let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
     slice_compare(
         desired_transform.translation.vector.as_slice(),
@@ -897,7 +897,7 @@ fn save_and_restore_test() {
     );
     let start_state = client.save_state().unwrap();
     let transform = Isometry3::translation(1., 1., 1.);
-    client.reset_base_transform(cube, &transform);
+    client.reset_base_transform(cube, transform);
     let cube_pose_end = client.get_base_transform(cube).unwrap();
     slice_compare(
         cube_pose_end.translation.vector.as_slice(),
@@ -947,7 +947,7 @@ fn save_and_restore_from_file_test() {
         .save_bullet("save_and_restore_from_file_test.bullet")
         .unwrap();
     let transform = Isometry3::translation(1., 1., 1.);
-    client.reset_base_transform(cube, &transform);
+    client.reset_base_transform(cube, transform);
     let cube_pose_end = client.get_base_transform(cube).unwrap();
     slice_compare(
         cube_pose_end.translation.vector.as_slice(),

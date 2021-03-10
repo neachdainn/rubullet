@@ -58,7 +58,7 @@ fn main() -> Result<()> {
     physics_client.save_bullet("state1.bullet")?;
     let state_1 = physics_client.save_state()?;
 
-    physics_client.reset_base_transform(kuka_id, &Isometry3::translation(2., 0., 0.));
+    physics_client.reset_base_transform(kuka_id, Isometry3::translation(2., 0., 0.));
     physics_client.save_bullet("state2.bullet")?;
     std::thread::sleep(Duration::from_secs(2));
 

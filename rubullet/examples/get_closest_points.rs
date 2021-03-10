@@ -72,7 +72,7 @@ fn main() -> Result<()> {
             yaw = 0.;
         }
         base_pose_b.rotation = UnitQuaternion::from_euler_angles(0., pitch, yaw);
-        physics_client.reset_base_transform(ob_b, &base_pose_b);
+        physics_client.reset_base_transform(ob_b, base_pose_b);
 
         let pts = match METHOD {
             ClosestPointsMethod::Body => {

@@ -550,8 +550,8 @@ impl PhysicsClient {
     /// to reset to a non-zero linear and/or angular velocity.
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `pose` - reset the base of the object at the specified position in world space coordinates
-    pub fn reset_base_transform(&mut self, body: BodyId, pose: &Isometry3<f64>) {
+    /// * `pose` - reset the base of the object to the specified pose in world space coordinates
+    pub fn reset_base_transform(&mut self, body: BodyId, pose: Isometry3<f64>) {
         unsafe {
             let command_handle = ffi::b3CreatePoseCommandInit(self.handle, body.0);
             ffi::b3CreatePoseCommandSetBasePosition(

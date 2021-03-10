@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         Duration::from_secs_f64(last_log.time_stamp.as_secs_f64() / last_log.step_count as f64)
     };
     for log in logs {
-        physics_client.reset_base_transform(log.body, &log.base_pose);
+        physics_client.reset_base_transform(log.body, log.base_pose);
         for i in 0..log.num_joints {
             physics_client.reset_joint_state(
                 log.body,
