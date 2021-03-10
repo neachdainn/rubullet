@@ -162,7 +162,7 @@ fn main() -> Result<()> {
         },
     )?;
     physics_client.configure_debug_visualizer(CovEnableRendering, true);
-    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
+    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0));
 
     loop {
         physics_client.step_simulation()?;

@@ -220,14 +220,10 @@ impl PhysicsClient {
     /// # Arguments
     /// * `gravity` - a gravity vector. Can be a Vector3, a \[f64;3\]-array or anything else that can be
     /// converted into a Vector3.
-    pub fn set_gravity<GravityVector: Into<Vector3<f64>>>(
-        &mut self,
-        gravity: GravityVector,
-    ) -> Result<(), Error> {
+    pub fn set_gravity<GravityVector: Into<Vector3<f64>>>(&mut self, gravity: GravityVector) {
         let gravity = gravity.into();
-        if !self.can_submit_command() {
-            return Err(Error::new("Not connected to physics server"));
-        }
+
+        assert!(self.can_submit_command(), "Not connected to physics server");
 
         unsafe {
             // PyBullet error checks none of these. Looking through the code, it looks like there is
@@ -236,8 +232,6 @@ impl PhysicsClient {
             let _ret = ffi::b3PhysicsParamSetGravity(command, gravity.x, gravity.y, gravity.z);
             let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
-
-        Ok(())
     }
 
     /// Sends a command to the physics server to load a physics model from a Unified Robot
@@ -3448,7 +3442,7 @@ impl PhysicsClient {
     ///             ..Default::default()
     ///         },
     ///     )?;
-    ///     physics_client.set_gravity([0., 0., -10.])?;
+    ///     physics_client.set_gravity([0., 0., -10.]);
     ///     physics_client.set_real_time_simulation(true);
     ///     let cid = physics_client.create_constraint(
     ///         cube_id,
@@ -4454,7 +4448,6 @@ impl PhysicsClient {
     ///             ..Default::default()
     ///         },
     ///     )?;
-    ///    physics_client.set_gravity([0.;3])?;
     ///     physics_client.step_simulation()?;
     ///     physics_client.save_bullet("cubes.bullet")?;
     ///#     Ok(())

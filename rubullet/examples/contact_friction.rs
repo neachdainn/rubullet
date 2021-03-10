@@ -20,7 +20,7 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )?;
-    physics_client.set_gravity([0., 3., -10.])?;
+    physics_client.set_gravity([0., 3., -10.]);
     loop {
         physics_client.step_simulation()?;
         let pts = physics_client.get_contact_points(None, None, None, None)?;

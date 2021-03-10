@@ -12,7 +12,7 @@ fn main() -> Result<()> {
         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
     )?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
-    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
+    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.));
 
     let time_step = Duration::from_secs_f64(1. / 60.);
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;

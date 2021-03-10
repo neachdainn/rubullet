@@ -15,7 +15,7 @@ fn main() -> Result<()> {
             ..Default::default()
         },
     )?;
-    physics_client.set_gravity([0., 0., -10.])?;
+    physics_client.set_gravity([0., 0., -10.]);
     physics_client.set_real_time_simulation(true);
 
     let cid = physics_client.create_constraint(

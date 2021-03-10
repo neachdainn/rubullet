@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     for i in 0..num_joints {
         physics_client.reset_joint_state(kuka_id, i, rp[i], None)?;
     }
-    physics_client.set_gravity([0., 0., -10.])?;
+    physics_client.set_gravity([0., 0., -10.]);
 
     std::thread::sleep(Duration::from_secs(2));
     physics_client.save_world("kuka_world.py")?;

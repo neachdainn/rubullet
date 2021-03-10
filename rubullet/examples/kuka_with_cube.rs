@@ -52,7 +52,7 @@ fn main() -> Result<()> {
     for i in 0..num_joints {
         physics_client.reset_joint_state(kuka_id, i, rp[i], None)?;
     }
-    physics_client.set_gravity([0., 0., -10.])?;
+    physics_client.set_gravity([0., 0., -10.]);
     physics_client.set_real_time_simulation(true);
     let _log_id_1 = physics_client.start_state_logging(
         LoggingType::GenericRobot,

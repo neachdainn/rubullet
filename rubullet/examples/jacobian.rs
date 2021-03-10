@@ -106,7 +106,7 @@ fn main() -> Result<()> {
     p.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     let gravity_constant = -9.81;
     p.set_time_step(delta_t);
-    p.set_gravity(Vector3::new(0., 0., gravity_constant))?;
+    p.set_gravity(Vector3::new(0., 0., gravity_constant));
     p.load_urdf(
         "plane.urdf",
         UrdfOptions {
