@@ -4,8 +4,9 @@ use anyhow::Result;
 use rubullet::ControlModeArray::Torques;
 use rubullet::Mode::Direct;
 use rubullet::{
-    BodyId, ChangeDynamicsOptions, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
-    InverseKinematicsParametersBuilder, JointInfoFlags, JointType, LoadModelFlags, PhysicsClient,
+    BodyId, ChangeDynamicsOptions, ConstraintSolverType, ControlMode, ControlModeArray,
+    DebugVisualizerFlag, Error, InverseKinematicsParametersBuilder, JointFeedbackMode,
+    JointInfoFlags, JointType, LoadModelFlags, PhysicsClient, SetPhysicsEngineParameterOptions,
     UrdfOptions,
 };
 use rubullet::{JointInfo, JointState};
@@ -986,4 +987,70 @@ fn load_bullet_test() {
         .unwrap();
     let bodies = client.load_bullet("spider.bullet").unwrap();
     assert_eq!(bodies.len(), 27);
+}
+
+#[test]
+fn set_and_get_physics_engine_parameters() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    let _params = client.get_physics_engine_parameters().unwrap();
+    let b = true;
+    let f = 0.3;
+    let u = 5;
+    let dur = Duration::from_secs_f64(0.11);
+    client.set_physics_engine_parameter(SetPhysicsEngineParameterOptions {
+        fixed_time_step: Some(dur),
+        num_solver_iterations: Some(u),
+        use_split_impulse: Some(b),
+        split_impulse_penetration_threshold: Some(f),
+        num_sub_steps: Some(u),
+        collision_filter_mode: Some(u),
+        contact_breaking_threshold: Some(f),
+        max_num_cmd_per_1_ms: Some(u as i32),
+        enable_file_caching: Some(b),
+        restitution_velocity_threshold: Some(f),
+        erp: Some(f),
+        contact_erp: Some(f),
+        friction_erp: Some(f),
+        enable_cone_friction: Some(b),
+        deterministic_overlapping_pairs: Some(b),
+        allowed_ccd_penetration: Some(f),
+        joint_feedback_mode: Some(JointFeedbackMode::WorldSpace),
+        solver_residual_threshold: Some(f),
+        contact_slop: Some(f),
+        enable_sat: Some(b),
+        constraint_solver_type: Some(ConstraintSolverType::Dantzig),
+        global_cfm: Some(f),
+        minimum_solver_island_size: Some(u),
+        report_solver_analytics: Some(b),
+        warm_starting_factor: Some(f),
+        sparse_sdf_voxel_size: Some(f),
+        num_non_contact_inner_iterations: Some(u),
+    });
+    let params = client.get_physics_engine_parameters().unwrap();
+    assert_eq!(params.fixed_time_step, dur);
+    assert_eq!(params.num_solver_iterations, u);
+    assert_eq!(params.use_split_impulse, b);
+    assert_eq!(params.split_impulse_penetration_threshold, f);
+    assert_eq!(params.num_sub_steps, u);
+    assert_eq!(params.collision_filter_mode, u);
+    assert_eq!(params.contact_breaking_threshold, f);
+    assert_eq!(params.enable_file_caching, b);
+    assert_eq!(params.restitution_velocity_threshold, f);
+    assert_eq!(params.erp, f);
+    assert_eq!(params.contact_erp, f);
+    assert_eq!(params.friction_erp, f);
+    assert_eq!(params.enable_cone_friction, b);
+    assert_eq!(params.deterministic_overlapping_pairs, b);
+    assert_eq!(params.allowed_ccd_penetration, f);
+    assert_eq!(params.joint_feedback_mode, JointFeedbackMode::WorldSpace);
+    assert_eq!(params.solver_residual_threshold, f);
+    assert_eq!(params.contact_slop, f);
+    assert_eq!(params.enable_sat, b);
+    // assert_eq!(params.constraint_solver_type, ConstraintSolverType::Dantzig);// bug in bullet3
+    assert_eq!(params.global_cfm, f);
+    // assert_eq!(params.minimum_solver_island_size, u);// bug in bullet3
+    // assert_eq!(params.report_solver_analytics, b);// bug in bullet3
+    // assert_eq!(params.warm_starting_factor, f);// bug in bullet3
+    // assert_eq!(params.sparse_sdf_voxel_size, f);// bug in bullet3
+    assert_eq!(params.num_non_contact_inner_iterations, u);
 }

@@ -7,13 +7,14 @@ use nalgebra::{
 };
 use rubullet_sys::{
     b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
-    b3UserConstraint, b3VisualShapeData,
+    b3PhysicsSimulationParameters, b3UserConstraint, b3VisualShapeData,
 };
 use std::convert::TryFrom;
 use std::ffi::CStr;
 
 use std::os::raw::c_int;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// The unique ID for a body within a physics server.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -1794,5 +1795,262 @@ bitflags::bitflags! {
         const JOINT_MOTOR_TORQUES = 1;
         const JOINT_USER_TORQUES = 2;
         const JOINT_TORQUES = 3;
+    }
+}
+
+/// Options for the [`set_physics_engine_parameter`](`crate::PhysicsClient::set_physics_engine_parameter`) method.
+#[derive(Default, Debug)]
+pub struct SetPhysicsEngineParameterOptions {
+    /// See the warning in the [`set_time_step`](`crate::PhysicsClient::set_time_step`) section.
+    /// physics engine time step,
+    /// each time you call [`step_simulation`](`crate::PhysicsClient::step_simulation`) simulated
+    /// time will progress this amount. Same as [`set_time_step`](`crate::PhysicsClient::set_time_step`)
+    pub fixed_time_step: Option<Duration>,
+    ///Choose the maximum number of constraint solver iterations.
+    /// If the solver_residual_threshold is reached,
+    /// the solver may terminate before the num_solver_iterations.
+    pub num_solver_iterations: Option<usize>,
+    /// Advanced feature, only when using maximal coordinates: split the positional
+    /// constraint solving and velocity constraint solving in two stages,
+    /// to prevent huge penetration recovery forces.
+    pub use_split_impulse: Option<bool>,
+    /// Related to `use_split_impulse`: if the penetration for a particular contact constraint is
+    /// less than this specified threshold, no split impulse will happen for that contact.
+    pub split_impulse_penetration_threshold: Option<f64>,
+    /// Subdivide the physics simulation step further by `num_sub_steps`.
+    /// This will trade performance over accuracy.
+    pub num_sub_steps: Option<usize>,
+    /// Use 0 for default collision filter: (group A&maskB) AND (groupB&maskA).
+    /// Use 1 to switch to the OR collision filter: (group A&maskB) OR (groupB&maskA)
+    pub collision_filter_mode: Option<usize>,
+    /// Contact points with distance exceeding this threshold are not processed by the LCP solver.
+    /// In addition, AABBs are extended by this number. Defaults to 0.02 in Bullet 2.x.
+    pub contact_breaking_threshold: Option<f64>,
+    /// Experimental: add 1ms sleep if the number of commands executed exceed this threshold.
+    /// setting the value to `-1` disables the feature.
+    pub max_num_cmd_per_1_ms: Option<i32>,
+    /// Set to `false` to disable file caching, such as .obj wavefront file loading
+    pub enable_file_caching: Option<bool>,
+    /// If relative velocity is below this threshold, restitution will be zero.
+    pub restitution_velocity_threshold: Option<f64>,
+    /// constraint error reduction parameter (non-contact, non-friction)
+    pub erp: Option<f64>,
+    /// contact error reduction parameter
+    pub contact_erp: Option<f64>,
+    /// friction error reduction parameter (when positional friction anchors are enabled)
+    pub friction_erp: Option<f64>,
+    /// Set to `false` to disable implicit cone friction and use pyramid approximation (cone is default).
+    /// NOTE: Although enabled by default, it is worth trying to disable this feature, in case there are friction artifacts.
+    pub enable_cone_friction: Option<bool>,
+    /// enables or disables sorting of overlapping pairs (backward compatibility setting).
+    pub deterministic_overlapping_pairs: Option<bool>,
+    /// If continuous collision detection (CCD) is enabled, CCD will not be used if the
+    /// penetration is below this threshold.
+    pub allowed_ccd_penetration: Option<f64>,
+    /// Specifcy joint feedback frame
+    pub joint_feedback_mode: Option<JointFeedbackMode>,
+    /// velocity threshold, if the maximum velocity-level error for each constraint is below this
+    /// threshold the solver will terminate (unless the solver hits the numSolverIterations).
+    /// Default value is 1e-7
+    pub solver_residual_threshold: Option<f64>,
+    /// Position correction of contacts is not resolved below this threshold,
+    /// to allow more stable contact.
+    pub contact_slop: Option<f64>,
+    /// if true, enable separating axis theorem based convex collision detection,
+    /// if features are available (instead of using GJK and EPA).
+    /// Requires [`URDF_INITIALIZE_SAT_FEATURES`](`LoadModelFlags::URDF_INITIALIZE_SAT_FEATURES`) in
+    /// the [`UrdfOptions`](`UrdfOptions`) in [`load_urdf`](`crate::PhysicsClient::load_urdf`).
+    pub enable_sat: Option<bool>,
+    /// Experimental (best to ignore): allow to use a direct LCP solver, such as Dantzig.
+    pub constraint_solver_type: Option<ConstraintSolverType>,
+    /// Experimental (best to ignore) global default constraint force mixing parameter.
+    pub global_cfm: Option<f64>,
+    /// Experimental (best to ignore), minimum size of constraint solving islands,
+    /// to avoid very small islands of independent constraints.
+    pub minimum_solver_island_size: Option<usize>,
+    /// when true, additional solve analytics is available.
+    pub report_solver_analytics: Option<bool>,
+    /// fraction of previous-frame force/impulse that is used to initialize the initial solver solution
+    pub warm_starting_factor: Option<f64>,
+    pub sparse_sdf_voxel_size: Option<f64>,
+    pub num_non_contact_inner_iterations: Option<usize>,
+}
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum ConstraintSolverType {
+    None,
+    Si = 1,
+    Pgs,
+    Dantzig,
+    Lemke,
+    Nncg,
+    BlockPgs,
+}
+/// Specifies joint feedback frame. Is used in
+/// [`SetPhysicsEngineParameterOptions::joint_feedback_mode`](`SetPhysicsEngineParameterOptions::joint_feedback_mode`)
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum JointFeedbackMode {
+    None,
+    /// gets the joint feedback in world space
+    WorldSpace = 1,
+    /// gets the joint feedback in the joint frame
+    JointFrame,
+}
+///
+/// See [`SetPhysicsEngineParameterOptions`](`SetPhysicsEngineParameterOptions`) for a description of the parameters.
+#[derive(Debug)]
+pub struct PhysicsEngineParameters {
+    pub fixed_time_step: Duration,
+    pub simulation_time_stamp: Duration,
+    pub num_solver_iterations: usize,
+
+    pub use_split_impulse: bool,
+
+    pub split_impulse_penetration_threshold: f64,
+
+    pub num_sub_steps: usize,
+
+    pub collision_filter_mode: usize,
+
+    pub contact_breaking_threshold: f64,
+
+    pub enable_file_caching: bool,
+
+    pub restitution_velocity_threshold: f64,
+
+    pub erp: f64,
+
+    pub contact_erp: f64,
+
+    pub friction_erp: f64,
+    pub enable_cone_friction: bool,
+
+    pub deterministic_overlapping_pairs: bool,
+
+    pub allowed_ccd_penetration: f64,
+
+    pub joint_feedback_mode: JointFeedbackMode,
+
+    pub solver_residual_threshold: f64,
+
+    pub contact_slop: f64,
+    pub enable_sat: bool,
+
+    pub constraint_solver_type: ConstraintSolverType,
+
+    pub global_cfm: f64,
+
+    pub minimum_solver_island_size: usize,
+
+    pub report_solver_analytics: bool,
+
+    pub warm_starting_factor: f64,
+    pub sparse_sdf_voxel_size: f64,
+    pub num_non_contact_inner_iterations: usize,
+
+    pub use_real_time_simulation: bool,
+    pub gravity: Vector3<f64>,
+    pub articulated_warm_starting_factor: f64,
+    pub internal_sim_flags: i32,
+    pub friction_cfm: f64,
+}
+fn int_to_bool(int: i32) -> bool {
+    match int {
+        0 => false,
+        1 => true,
+        _ => panic!("could not convert \"{}\" to boolean", int),
+    }
+}
+impl From<b3PhysicsSimulationParameters> for PhysicsEngineParameters {
+    fn from(b3: b3PhysicsSimulationParameters) -> Self {
+        #[allow(non_snake_case)]
+        let b3PhysicsSimulationParameters {
+            m_deltaTime,
+            m_simulationTimestamp,
+            m_gravityAcceleration,
+            m_numSimulationSubSteps,
+            m_numSolverIterations,
+            m_warmStartingFactor,
+            m_articulatedWarmStartingFactor,
+            m_useRealTimeSimulation,
+            m_useSplitImpulse,
+            m_splitImpulsePenetrationThreshold,
+            m_contactBreakingThreshold,
+            m_internalSimFlags,
+            m_defaultContactERP,
+            m_collisionFilterMode,
+            m_enableFileCaching,
+            m_restitutionVelocityThreshold,
+            m_defaultNonContactERP,
+            m_frictionERP,
+            m_defaultGlobalCFM,
+            m_frictionCFM,
+            m_enableConeFriction,
+            m_deterministicOverlappingPairs,
+            m_allowedCcdPenetration,
+            m_jointFeedbackMode,
+            m_solverResidualThreshold,
+            m_contactSlop,
+            m_enableSAT,
+            m_constraintSolverType,
+            m_minimumSolverIslandSize,
+            m_reportSolverAnalytics,
+            m_sparseSdfVoxelSize,
+            m_numNonContactInnerIterations,
+        } = b3;
+        let joint_feedback_mode = {
+            match m_jointFeedbackMode {
+                0 => JointFeedbackMode::None,
+                1 => JointFeedbackMode::WorldSpace,
+                2 => JointFeedbackMode::JointFrame,
+                n => panic!("Unexpected JointFeedbackMode  \"{}\"", n),
+            }
+        };
+        let constraint_solver_type = {
+            match m_constraintSolverType {
+                0 => ConstraintSolverType::None,
+                1 => ConstraintSolverType::Si,
+                2 => ConstraintSolverType::Pgs,
+                3 => ConstraintSolverType::Dantzig,
+                4 => ConstraintSolverType::Lemke,
+                5 => ConstraintSolverType::Nncg,
+                6 => ConstraintSolverType::BlockPgs,
+                n => panic!("Unexpected ConstraintSolverType  \"{}\"", n),
+            }
+        };
+        PhysicsEngineParameters {
+            fixed_time_step: Duration::from_secs_f64(m_deltaTime),
+            simulation_time_stamp: Duration::from_secs_f64(m_simulationTimestamp),
+            num_solver_iterations: m_numSolverIterations as usize,
+            use_split_impulse: int_to_bool(m_useSplitImpulse),
+            split_impulse_penetration_threshold: m_splitImpulsePenetrationThreshold,
+            num_sub_steps: m_numSimulationSubSteps as usize,
+            collision_filter_mode: m_collisionFilterMode as usize,
+            contact_breaking_threshold: m_contactBreakingThreshold,
+
+            enable_file_caching: int_to_bool(m_enableFileCaching),
+            restitution_velocity_threshold: m_restitutionVelocityThreshold,
+            erp: m_defaultNonContactERP,
+            contact_erp: m_defaultContactERP,
+            friction_erp: m_frictionERP,
+            enable_cone_friction: int_to_bool(m_enableConeFriction),
+            deterministic_overlapping_pairs: int_to_bool(m_deterministicOverlappingPairs),
+            allowed_ccd_penetration: m_allowedCcdPenetration,
+            joint_feedback_mode,
+            solver_residual_threshold: m_solverResidualThreshold,
+            contact_slop: m_contactSlop,
+            enable_sat: int_to_bool(m_enableSAT),
+            constraint_solver_type,
+            global_cfm: m_defaultGlobalCFM,
+            minimum_solver_island_size: m_minimumSolverIslandSize as usize,
+            report_solver_analytics: int_to_bool(m_reportSolverAnalytics),
+            warm_starting_factor: m_warmStartingFactor,
+            sparse_sdf_voxel_size: m_sparseSdfVoxelSize,
+            num_non_contact_inner_iterations: m_numNonContactInnerIterations as usize,
+            use_real_time_simulation: int_to_bool(m_useRealTimeSimulation),
+            gravity: m_gravityAcceleration.into(),
+            articulated_warm_starting_factor: m_articulatedWarmStartingFactor,
+            internal_sim_flags: m_internalSimFlags,
+            friction_cfm: m_frictionCFM,
+        }
     }
 }

@@ -87,23 +87,6 @@ extern "C" {
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
 
-    pub fn b3InitPhysicsParamCommand(
-        physClient: b3PhysicsClientHandle,
-    ) -> b3SharedMemoryCommandHandle;
-    pub fn b3PhysicsParamSetGravity(
-        commandHandle: b3SharedMemoryCommandHandle,
-        gravx: f64,
-        gravy: f64,
-        gravz: f64,
-    ) -> c_int;
-    pub fn b3PhysicsParamSetTimeStep(
-        commandHandle: b3SharedMemoryCommandHandle,
-        time_step: f64,
-    ) -> c_int;
-    pub fn b3PhysicsParamSetRealTimeSimulation(
-        commandHandle: b3SharedMemoryCommandHandle,
-        enableRealTimeSimulation: c_int,
-    ) -> c_int;
     pub fn b3InitStepSimulationCommand(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
@@ -1254,6 +1237,185 @@ extern "C" {
         specularColor: *const f64,
     );
 
+    pub fn b3InitPhysicsParamCommand(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitPhysicsParamCommand2(
+        commandHandle: b3SharedMemoryCommandHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3PhysicsParamSetGravity(
+        commandHandle: b3SharedMemoryCommandHandle,
+        gravx: f64,
+        gravy: f64,
+        gravz: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetTimeStep(
+        commandHandle: b3SharedMemoryCommandHandle,
+        timeStep: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetDefaultContactERP(
+        commandHandle: b3SharedMemoryCommandHandle,
+        defaultContactERP: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetDefaultNonContactERP(
+        commandHandle: b3SharedMemoryCommandHandle,
+        defaultNonContactERP: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetDefaultFrictionERP(
+        commandHandle: b3SharedMemoryCommandHandle,
+        frictionERP: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetDefaultGlobalCFM(
+        commandHandle: b3SharedMemoryCommandHandle,
+        defaultGlobalCFM: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetDefaultFrictionCFM(
+        commandHandle: b3SharedMemoryCommandHandle,
+        frictionCFM: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetNumSubSteps(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numSubSteps: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetRealTimeSimulation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        enableRealTimeSimulation: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetNumSolverIterations(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numSolverIterations: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetNumNonContactInnerIterations(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numMotorIterations: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetWarmStartingFactor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        warmStartingFactor: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetArticulatedWarmStartingFactor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        warmStartingFactor: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetCollisionFilterMode(
+        commandHandle: b3SharedMemoryCommandHandle,
+        filterMode: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetUseSplitImpulse(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useSplitImpulse: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetSplitImpulsePenetrationThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        splitImpulsePenetrationThreshold: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetContactBreakingThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        contactBreakingThreshold: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetMaxNumCommandsPer1ms(
+        commandHandle: b3SharedMemoryCommandHandle,
+        maxNumCmdPer1ms: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetEnableFileCaching(
+        commandHandle: b3SharedMemoryCommandHandle,
+        enableFileCaching: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetRestitutionVelocityThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        restitutionVelocityThreshold: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetEnableConeFriction(
+        commandHandle: b3SharedMemoryCommandHandle,
+        enableConeFriction: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetDeterministicOverlappingPairs(
+        commandHandle: b3SharedMemoryCommandHandle,
+        deterministicOverlappingPairs: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetAllowedCcdPenetration(
+        commandHandle: b3SharedMemoryCommandHandle,
+        allowedCcdPenetration: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetJointFeedbackMode(
+        commandHandle: b3SharedMemoryCommandHandle,
+        jointFeedbackMode: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetSolverResidualThreshold(
+        commandHandle: b3SharedMemoryCommandHandle,
+        solverResidualThreshold: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetContactSlop(
+        commandHandle: b3SharedMemoryCommandHandle,
+        contactSlop: f64,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetEnableSAT(
+        commandHandle: b3SharedMemoryCommandHandle,
+        enableSAT: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetConstraintSolverType(
+        commandHandle: b3SharedMemoryCommandHandle,
+        constraintSolverType: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetMinimumSolverIslandSize(
+        commandHandle: b3SharedMemoryCommandHandle,
+        minimumSolverIslandSize: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetSolverAnalytics(
+        commandHandle: b3SharedMemoryCommandHandle,
+        reportSolverAnalytics: c_int,
+    ) -> c_int;
+
+    pub fn b3PhysicsParameterSetSparseSdfVoxelSize(
+        commandHandle: b3SharedMemoryCommandHandle,
+        sparseSdfVoxelSize: f64,
+    ) -> c_int;
+
+    pub fn b3InitRequestPhysicsParamCommand(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusPhysicsSimulationParameters(
+        statusHandle: b3SharedMemoryStatusHandle,
+        params: *mut b3PhysicsSimulationParameters,
+    ) -> c_int;
+
+    pub fn b3PhysicsParamSetInternalSimFlags(
+        commandHandle: b3SharedMemoryCommandHandle,
+        flags: c_int,
+    ) -> c_int;
+
     pub fn b3LoadSdfCommandInit(
         physClient: b3PhysicsClientHandle,
         sdfFileName: *const c_char,
@@ -1822,4 +1984,41 @@ pub struct b3ContactPointData {
     pub m_linearFrictionForce2: f64,
     pub m_linearFrictionDirection1: [f64; 3usize],
     pub m_linearFrictionDirection2: [f64; 3usize],
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct b3PhysicsSimulationParameters {
+    pub m_deltaTime: f64,
+    pub m_simulationTimestamp: f64,
+    pub m_gravityAcceleration: [f64; 3usize],
+    pub m_numSimulationSubSteps: c_int,
+    pub m_numSolverIterations: c_int,
+    pub m_warmStartingFactor: f64,
+    pub m_articulatedWarmStartingFactor: f64,
+    pub m_useRealTimeSimulation: c_int,
+    pub m_useSplitImpulse: c_int,
+    pub m_splitImpulsePenetrationThreshold: f64,
+    pub m_contactBreakingThreshold: f64,
+    pub m_internalSimFlags: c_int,
+    pub m_defaultContactERP: f64,
+    pub m_collisionFilterMode: c_int,
+    pub m_enableFileCaching: c_int,
+    pub m_restitutionVelocityThreshold: f64,
+    pub m_defaultNonContactERP: f64,
+    pub m_frictionERP: f64,
+    pub m_defaultGlobalCFM: f64,
+    pub m_frictionCFM: f64,
+    pub m_enableConeFriction: c_int,
+    pub m_deterministicOverlappingPairs: c_int,
+    pub m_allowedCcdPenetration: f64,
+    pub m_jointFeedbackMode: c_int,
+    pub m_solverResidualThreshold: f64,
+    pub m_contactSlop: f64,
+    pub m_enableSAT: c_int,
+    pub m_constraintSolverType: c_int,
+    pub m_minimumSolverIslandSize: c_int,
+    pub m_reportSolverAnalytics: c_int,
+    pub m_sparseSdfVoxelSize: f64,
+    pub m_numNonContactInnerIterations: c_int,
 }

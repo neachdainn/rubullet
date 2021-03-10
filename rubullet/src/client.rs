@@ -22,8 +22,9 @@ use crate::types::{
 };
 use crate::{
     BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
-    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, LogId, LoggingType, Mode, StateId,
-    StateLoggingOptions, UrdfOptions, VisualShapeData,
+    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, LogId, LoggingType, Mode,
+    PhysicsEngineParameters, SetPhysicsEngineParameterOptions, StateId, StateLoggingOptions,
+    UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -34,16 +35,17 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
     CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_RESTORE_STATE_COMPLETED, CMD_SAVE_STATE_COMPLETED,
-    CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
+    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED,
+    CMD_RESTORE_STATE_COMPLETED, CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED,
+    CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
     CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
     CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
     b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
     b3JointSensorState, b3KeyboardEventsData, b3LinkState, b3MouseEventsData,
-    b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
-    B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
+    b3PhysicsSimulationParameters, b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus,
+    B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -4525,6 +4527,190 @@ impl PhysicsClient {
                 let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
                 let _status_type = ffi::b3GetStatusType(status_handle);
             }
+        }
+    }
+    /// Set some internal physics engine parameter, such as cfm or erp etc.
+    pub fn set_physics_engine_parameter(&mut self, options: SetPhysicsEngineParameterOptions) {
+        unsafe {
+            let command = ffi::b3InitPhysicsParamCommand(self.handle);
+            if let Some(num_solver_iterations) = options.num_solver_iterations {
+                ffi::b3PhysicsParamSetNumSolverIterations(command, num_solver_iterations as i32);
+            }
+            if let Some(minimum_solver_island_size) = options.minimum_solver_island_size {
+                ffi::b3PhysicsParameterSetMinimumSolverIslandSize(
+                    command,
+                    minimum_solver_island_size as i32,
+                );
+            }
+            if let Some(solver_residual_threshold) = options.solver_residual_threshold {
+                assert!(solver_residual_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetSolverResidualThreshold(command, solver_residual_threshold);
+            }
+            if let Some(collision_filter_mode) = options.collision_filter_mode {
+                ffi::b3PhysicsParamSetCollisionFilterMode(command, collision_filter_mode as i32);
+            }
+            if let Some(num_sub_steps) = options.num_sub_steps {
+                ffi::b3PhysicsParamSetNumSubSteps(command, num_sub_steps as i32);
+            }
+            if let Some(fixed_time_step) = options.fixed_time_step {
+                ffi::b3PhysicsParamSetTimeStep(command, fixed_time_step.as_secs_f64());
+            }
+            if let Some(use_split_impulse) = options.use_split_impulse {
+                match use_split_impulse {
+                    true => {
+                        ffi::b3PhysicsParamSetUseSplitImpulse(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetUseSplitImpulse(command, 0);
+                    }
+                }
+            }
+            if let Some(split_impulse_penetration_threshold) =
+                options.split_impulse_penetration_threshold
+            {
+                assert!(split_impulse_penetration_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetSplitImpulsePenetrationThreshold(
+                    command,
+                    split_impulse_penetration_threshold,
+                );
+            }
+            if let Some(contact_breaking_threshold) = options.contact_breaking_threshold {
+                assert!(contact_breaking_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetContactBreakingThreshold(command, contact_breaking_threshold);
+            }
+            if let Some(contact_slop) = options.contact_slop {
+                assert!(contact_slop.is_sign_positive());
+                ffi::b3PhysicsParamSetContactSlop(command, contact_slop);
+            }
+            if let Some(max_num_cmd_per_1_ms) = options.max_num_cmd_per_1_ms {
+                assert!(max_num_cmd_per_1_ms >= -1);
+                ffi::b3PhysicsParamSetMaxNumCommandsPer1ms(command, max_num_cmd_per_1_ms);
+            }
+            if let Some(restitution_velocity_threshold) = options.restitution_velocity_threshold {
+                assert!(restitution_velocity_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetRestitutionVelocityThreshold(
+                    command,
+                    restitution_velocity_threshold,
+                );
+            }
+            if let Some(enable_file_caching) = options.enable_file_caching {
+                match enable_file_caching {
+                    true => {
+                        ffi::b3PhysicsParamSetEnableFileCaching(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetEnableFileCaching(command, 0);
+                    }
+                }
+            }
+            if let Some(erp) = options.erp {
+                assert!(erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultNonContactERP(command, erp);
+            }
+            if let Some(contact_erp) = options.contact_erp {
+                assert!(contact_erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultContactERP(command, contact_erp);
+            }
+            if let Some(friction_erp) = options.friction_erp {
+                assert!(friction_erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultFrictionERP(command, friction_erp);
+            }
+            if let Some(enable_cone_friction) = options.enable_cone_friction {
+                match enable_cone_friction {
+                    true => {
+                        ffi::b3PhysicsParamSetEnableConeFriction(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetEnableConeFriction(command, 0);
+                    }
+                }
+            }
+            if let Some(deterministic_overlapping_pairs) = options.deterministic_overlapping_pairs {
+                match deterministic_overlapping_pairs {
+                    true => {
+                        ffi::b3PhysicsParameterSetDeterministicOverlappingPairs(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParameterSetDeterministicOverlappingPairs(command, 0);
+                    }
+                }
+            }
+            if let Some(allowed_ccd_penetration) = options.allowed_ccd_penetration {
+                assert!(allowed_ccd_penetration.is_sign_positive());
+                ffi::b3PhysicsParameterSetAllowedCcdPenetration(command, allowed_ccd_penetration);
+            }
+            if let Some(joint_feedback_mode) = options.joint_feedback_mode {
+                ffi::b3PhysicsParameterSetJointFeedbackMode(command, joint_feedback_mode as i32);
+            }
+            if let Some(enable_sat) = options.enable_sat {
+                match enable_sat {
+                    true => {
+                        ffi::b3PhysicsParameterSetEnableSAT(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParameterSetEnableSAT(command, 0);
+                    }
+                }
+            }
+            if let Some(constraint_solver_type) = options.constraint_solver_type {
+                let val = constraint_solver_type as i32;
+                println!("{:?}", val);
+                ffi::b3PhysicsParameterSetConstraintSolverType(command, val);
+            }
+            if let Some(global_cfm) = options.global_cfm {
+                assert!(global_cfm.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultGlobalCFM(command, global_cfm);
+            }
+            if let Some(report_solver_analytics) = options.report_solver_analytics {
+                match report_solver_analytics {
+                    true => {
+                        ffi::b3PhysicsParamSetSolverAnalytics(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetSolverAnalytics(command, 0);
+                    }
+                }
+            }
+            if let Some(warm_starting_factor) = options.warm_starting_factor {
+                assert!(warm_starting_factor.is_sign_positive());
+                ffi::b3PhysicsParamSetWarmStartingFactor(command, warm_starting_factor);
+            }
+            if let Some(sparse_sdf_voxel_size) = options.sparse_sdf_voxel_size {
+                assert!(sparse_sdf_voxel_size.is_sign_positive());
+                ffi::b3PhysicsParameterSetSparseSdfVoxelSize(command, sparse_sdf_voxel_size);
+            }
+            if let Some(num_non_contact_inner_iterations) = options.num_non_contact_inner_iterations
+            {
+                assert!(num_non_contact_inner_iterations >= 1);
+                ffi::b3PhysicsParamSetNumNonContactInnerIterations(
+                    command,
+                    num_non_contact_inner_iterations as i32,
+                );
+            }
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+        }
+    }
+    /// Get the current values of internal physics engine parameter.
+    /// # Warning
+    /// Some of the parameters are always returning the same value even when you change them using
+    /// [`set_physics_engine_parameter`](`Self::set_physics_engine_parameter`)
+    /// . These parameters are:
+    /// * constraint_solver_type
+    /// * minimum_solver_island_size
+    /// * report_solver_analytics
+    /// * warm_starting_factor
+    /// * sparse_sdf_voxel_size
+    pub fn get_physics_engine_parameters(&mut self) -> Result<PhysicsEngineParameters, Error> {
+        unsafe {
+            let command = ffi::b3InitRequestPhysicsParamCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED as i32 {
+                return Err(Error::new("Couldn't get physics simulation parameters."));
+            }
+            let mut params = b3PhysicsSimulationParameters::default();
+            ffi::b3GetStatusPhysicsSimulationParameters(status_handle, &mut params);
+            Ok(params.into())
         }
     }
 }
