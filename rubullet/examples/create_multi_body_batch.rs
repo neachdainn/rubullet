@@ -141,20 +141,19 @@ fn main() -> Result<()> {
         }
     }
 
-    let body_id = physics_client.create_multi_body(
+    let body_id = physics_client.create_multi_body_batch(
         collision_shape_id,
         visual_shape_id,
+        &batch_positions,
         MultiBodyOptions {
             base_pose: Isometry3::translation(0., 0., 2.),
             use_maximal_coordinates: true,
-
-            batch_positions: Some(batch_positions),
             ..Default::default()
         },
     )?;
 
     physics_client.change_visual_shape(
-        body_id,
+        body_id[0],
         None,
         ChangeVisualShapeOptions {
             texture_id: Some(tex_uid),

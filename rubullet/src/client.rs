@@ -47,8 +47,9 @@ use rubullet_sys::{
     b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
     b3JointSensorState, b3KeyboardEventsData, b3LinkState, b3MouseEventsData,
     b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RaycastInformation,
-    b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
-    B3_MAX_NUM_VERTICES, MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING, MAX_SDF_BODIES,
+    b3SharedMemoryCommandHandle, b3SharedMemoryStatusHandle, b3SubmitClientCommandAndWaitStatus,
+    B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES, MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING,
+    MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -3171,13 +3172,85 @@ impl PhysicsClient {
     ///#    Ok(())
     ///# }
     /// ```
-    // TODO: think about splitting this function in two function. A normal one. And one for batches which returns a list instead
     pub fn create_multi_body(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
         options: MultiBodyOptions,
     ) -> Result<BodyId, Error> {
+        unsafe {
+            let command_handle =
+                self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
+            let status_handle = self.submit_multi_body_command(&options, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                return Ok(BodyId(uid));
+            }
+        }
+        Err(Error::new("create_multi_body failed."))
+    }
+
+    /// like [`create_multi_body`](`Self::create_multi_body`) but creates multiple instances of this
+    /// object.
+    /// # Arguments
+    /// * `base_collision_shape` - unique id from [create_collision_shape](`Self::create_collision_shape`)
+    /// or use [`CollisionId::NONE`](`crate::types::CollisionId::NONE`) if you do not want to have a collision shape.
+    /// You can re-use the collision shape for multiple multibodies (instancing)
+    /// * `base_visual_shape` - unique id from [create_visual_shape](`Self::create_visual_shape`)
+    /// or use [`VisualId::NONE`](`crate::types::VisualId::NONE`) if you do not want to set a visual shape.
+    /// You can re-use the visual shape (instancing)
+    /// * `batch_positions` - list of base positions for the new multibodies.
+    /// * `options` - additional options for creating a multi_body. See [MultiBodyOptions](`crate::MultiBodyOptions`)
+    /// for details
+    ///
+    /// # Return
+    /// returns a list of [BodyId's](`crate::BodyId`) of the newly created bodies.
+    ///
+    /// See `create_multi_body_batch.rs` for an example.
+    pub fn create_multi_body_batch(
+        &mut self,
+        base_collision_shape: CollisionId,
+        base_visual_shape: VisualId,
+        batch_positions: &[Vector3<f64>],
+        options: MultiBodyOptions,
+    ) -> Result<Vec<BodyId>, Error> {
+        unsafe {
+            let command_handle =
+                self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
+
+            let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
+            for pos in batch_positions.iter() {
+                new_batch_positions.extend_from_slice(pos.as_slice());
+            }
+            ffi::b3CreateMultiBodySetBatchPositions(
+                self.handle,
+                command_handle,
+                new_batch_positions.as_mut_slice().as_mut_ptr(),
+                batch_positions.len() as i32,
+            );
+
+            let status_handle = self.submit_multi_body_command(&options, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                let num_batch_positions = batch_positions.len() as i32;
+                let out = (0..num_batch_positions)
+                    .into_iter()
+                    .map(|x| BodyId(uid - num_batch_positions + x + 1))
+                    .collect();
+                return Ok(out);
+            }
+        }
+        Err(Error::new("create_multi_body_batch failed."))
+    }
+    // internal method to split create_multi_body and create_multi_body_batch
+    fn create_multi_body_base(
+        &mut self,
+        base_collision_shape: CollisionId,
+        base_visual_shape: VisualId,
+        options: &MultiBodyOptions,
+    ) -> b3SharedMemoryCommandHandle {
         unsafe {
             assert!(
                 options.link_masses.len() == options.link_collision_shapes.len()
@@ -3211,18 +3284,16 @@ impl PhysicsClient {
                 base_inertial_position_array.as_ptr(),
                 base_inertial_rotation_array.as_ptr(),
             );
-            if let Some(batch_positions) = options.batch_positions {
-                let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
-                for pos in batch_positions.iter() {
-                    new_batch_positions.extend_from_slice(pos.as_slice());
-                }
-                ffi::b3CreateMultiBodySetBatchPositions(
-                    self.handle,
-                    command_handle,
-                    new_batch_positions.as_mut_slice().as_mut_ptr(),
-                    batch_positions.len() as i32,
-                );
-            }
+            command_handle
+        }
+    }
+    // internal method to split create_multi_body and create_multi_body_batch
+    fn submit_multi_body_command(
+        &mut self,
+        options: &MultiBodyOptions,
+        command_handle: b3SharedMemoryCommandHandle,
+    ) -> b3SharedMemoryStatusHandle {
+        unsafe {
             for i in 0..options.link_masses.len() {
                 let link_mass = options.link_masses[i];
                 let link_collision_shape_index = options.link_collision_shapes[i].0;
@@ -3264,14 +3335,8 @@ impl PhysicsClient {
             if let Some(flags) = options.flags {
                 ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
             }
-            let status_handle = b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
-            let status_type = ffi::b3GetStatusType(status_handle);
-            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
-                let uid = ffi::b3GetStatusBodyIndex(status_handle);
-                return Ok(BodyId(uid));
-            }
+            b3SubmitClientCommandAndWaitStatus(self.handle, command_handle)
         }
-        Err(Error::new("create_multi_body failed."))
     }
     /// Use this function to change the texture of a shape,
     /// the RGBA color and other properties.

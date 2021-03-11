@@ -1094,9 +1094,6 @@ pub struct MultiBodyOptions {
     /// similar to the flags passed in load_urdf, for example URDF_USE_SELF_COLLISION.
     /// See [`LoadModelFlags`](`LoadModelFlags`) for flags explanation.
     pub flags: Option<LoadModelFlags>,
-    /// list of base positions, for fast batch creation of many multibodies.
-    /// See create_multi_body_batch.rs example.
-    pub batch_positions: Option<Vec<Vector3<f64>>>,
 }
 impl Default for MultiBodyOptions {
     fn default() -> Self {
@@ -1114,8 +1111,6 @@ impl Default for MultiBodyOptions {
             link_joint_axis: Vec::new(),
             use_maximal_coordinates: false,
             flags: None,
-
-            batch_positions: None,
         }
     }
 }
