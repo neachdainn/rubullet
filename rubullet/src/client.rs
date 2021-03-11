@@ -4939,6 +4939,84 @@ impl PhysicsClient {
             Err(Error::new("could not get ray info"))
         }
     }
+    /// Each body is part of a group. It collides with other bodies if their group matches the mask, and vise versa.
+    /// The following check is performed using the group and mask of the two bodies involved.
+    /// It depends on the collision filter mode.
+    /// # Arguments
+    /// * `body` - Id of the body to be configured
+    /// * `link_index` - link index of the body to be configured
+    /// * `collision_filter_group` - bitwise group of the filter
+    /// * `collision_filter_mask` - bitwise mask of the filter
+    ///
+    /// See `collision_filter.rs` for an example.
+    pub fn set_collision_filter_group_mask<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        collision_filter_group: i32,
+        collision_filter_mask: i32,
+    ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3CollisionFilterCommandInit(self.handle);
+            ffi::b3SetCollisionFilterGroupMask(
+                command_handle,
+                body.0,
+                link_index,
+                collision_filter_group,
+                collision_filter_mask,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// You can have more fine-grain control over collision detection between specific pairs of links.
+    /// With this method you can enable or disable collision detection.
+    /// This method will override the filter group/mask and other logic.
+    ///
+    /// # Arguments
+    /// * `body_a` - Id of body B
+    /// * `body_b` -  Id of body B
+    /// * `link_index_a` - link index of body A
+    /// * `link_index_b` - link index of body B
+    /// * `enable_collision` - enables and disables collision
+    ///
+    /// See `collision_filter.rs` for an example.
+    pub fn set_collision_filter_pair<LinkA: Into<Option<usize>>, LinkB: Into<Option<usize>>>(
+        &mut self,
+        body_a: BodyId,
+        body_b: BodyId,
+        link_index_a: LinkA,
+        link_index_b: LinkB,
+        enable_collision: bool,
+    ) {
+        let link_index_a = match link_index_a.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let link_index_b = match link_index_b.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3CollisionFilterCommandInit(self.handle);
+            ffi::b3SetCollisionFilterPair(
+                command_handle,
+                body_a.0,
+                body_b.0,
+                link_index_a,
+                link_index_b,
+                enable_collision as i32,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
 }
 
 impl Drop for PhysicsClient {

@@ -544,6 +544,26 @@ extern "C" {
         commandHandle: b3SharedMemoryCommandHandle,
         residualThreshold: f64,
     );
+    pub fn b3CollisionFilterCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3SetCollisionFilterPair(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdA: c_int,
+        bodyUniqueIdB: c_int,
+        linkIndexA: c_int,
+        linkIndexB: c_int,
+        enableCollision: c_int,
+    );
+
+    pub fn b3SetCollisionFilterGroupMask(
+        commandHandle: b3SharedMemoryCommandHandle,
+        bodyUniqueIdA: c_int,
+        linkIndexA: c_int,
+        collisionFilterGroup: c_int,
+        collisionFilterMask: c_int,
+    );
 
     pub fn b3CalculateJacobianCommandInit(
         physClient: b3PhysicsClientHandle,

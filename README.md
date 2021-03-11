@@ -21,9 +21,9 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Create and manage constraints
 * Logging and saving states
 * Set physics engine parameters
+* Collision Detection Queries
 
 Things which are not implemented yet:
-* Collision Detection Queries 
 * Virtual Reality
 * Connect via SHARED_MEMORY, UDP or TCP
 * Plugins
