@@ -22,9 +22,9 @@ use crate::types::{
 };
 use crate::{
     BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
-    ControlMode, DebugVisualizerFlag, DynamicsInfo, Error, LogId, LoggingType, Mode,
-    PhysicsEngineParameters, SetPhysicsEngineParameterOptions, StateId, StateLoggingOptions,
-    UrdfOptions, VisualShapeData,
+    ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error, LogId,
+    LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions,
+    SetPhysicsEngineParameterOptions, StateId, StateLoggingOptions, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -36,16 +36,18 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
     CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
     CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED,
-    CMD_RESTORE_STATE_COMPLETED, CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED,
-    CMD_STATE_LOGGING_START_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED,
-    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
-    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED, CMD_RESTORE_STATE_COMPLETED,
+    CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED,
+    CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
+    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
     b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
     b3JointSensorState, b3KeyboardEventsData, b3LinkState, b3MouseEventsData,
-    b3PhysicsSimulationParameters, b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus,
-    B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES, MAX_SDF_BODIES,
+    b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RaycastInformation,
+    b3SharedMemoryCommandHandle, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES,
+    B3_MAX_NUM_VERTICES, MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING, MAX_SDF_BODIES,
 };
 use std::time::Duration;
 
@@ -4711,6 +4713,230 @@ impl PhysicsClient {
             let mut params = b3PhysicsSimulationParameters::default();
             ffi::b3GetStatusPhysicsSimulationParameters(status_handle, &mut params);
             Ok(params.into())
+        }
+    }
+    /// You can get the width and height (in pixels) of the camera, its view and projection matrix
+    /// and more information using this command.
+    /// Can be useful to calculate rays. See `add_planar_reflection.rs` example.
+    pub fn get_debug_visualizer_camera(&mut self) -> DebugVisualizerCameraInfo {
+        unsafe {
+            let mut camera = b3OpenGLVisualizerCameraInfo::default();
+            let command = ffi::b3InitRequestOpenGLVisualizerCameraCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let _has_cam_info = ffi::b3GetStatusOpenGLVisualizerCamera(status_handle, &mut camera);
+            camera.into()
+        }
+    }
+    /// You can reset the 3D OpenGL debug visualizer camera distance
+    /// (between eye and camera target position), camera yaw and pitch and camera target position
+    /// # Arguments
+    /// * `camera_distance` - distance from eye to camera target position
+    /// * `camera_yaw` - camera yaw angle (in degrees) left/right
+    /// * `camera_pitch` - camera pitch angle (in degrees) up/down
+    /// * `camera_target_position` - this is the camera focus point
+    pub fn reset_debug_visualizer_camera<Vector: Into<Vector3<f32>>>(
+        &mut self,
+        camera_distance: f32,
+        camera_yaw: f32,
+        camera_pitch: f32,
+        camera_target_position: Vector,
+    ) {
+        let camera_target_position = camera_target_position.into();
+        unsafe {
+            let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle);
+            assert!(
+                camera_distance.is_sign_positive(),
+                "camera_distance cannot be negative!"
+            );
+            ffi::b3ConfigureOpenGLVisualizerSetViewMatrix(
+                command_handle,
+                camera_distance,
+                camera_pitch,
+                camera_yaw,
+                camera_target_position.as_ptr(),
+            );
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+        }
+    }
+    /// You can perform a single raycast to find the intersection information of the first object hit.
+    /// # Arguments
+    /// * `ray_from_position` - start of the ray in world coordinates
+    /// * `ray_to_position` - end of the ray in world coordinates
+    /// * `options` - additional options. See [`RayTestOptions`](`crate::types::RayTestOptions`)
+    ///
+    /// # Return
+    /// Either `None`, which means that there was no object hit or a [`RayHitInfo`](`crate::types::RayHitInfo`)
+    /// which contains all necessary information about the hit target.
+    ///
+    /// # Example
+    /// ```
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let cube = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let hit_info = physics_client.ray_test([-1.; 3], [1.; 3], None)?.unwrap();
+    ///     assert_eq!(hit_info.body_id, cube);
+    ///     assert!(physics_client.ray_test([2.; 3], [1.; 3], None)?.is_none());
+    ///     Ok(())
+    /// }
+    ///```
+    /// See `add_planar_reflection.rs` for a more complex example.
+    pub fn ray_test<
+        RayFrom: Into<Vector3<f64>>,
+        RayTo: Into<Vector3<f64>>,
+        Options: Into<Option<RayTestOptions>>,
+    >(
+        &mut self,
+        ray_from_position: RayFrom,
+        ray_to_position: RayTo,
+        options: Options,
+    ) -> Result<Option<RayHitInfo>, Error> {
+        let options = options.into().unwrap_or_default();
+        let from = ray_from_position.into();
+        let to = ray_to_position.into();
+        unsafe {
+            let command_handle = ffi::b3CreateRaycastCommandInit(
+                self.handle,
+                from.x,
+                from.y,
+                from.z,
+                to.x,
+                to.y,
+                to.z,
+            );
+            let collision_mask = options.collision_filter_mask.unwrap_or(-1);
+            ffi::b3RaycastBatchSetCollisionFilterMask(command_handle, collision_mask);
+            if let Some(report_hit_number) = options.report_hit_number {
+                ffi::b3RaycastBatchSetReportHitNumber(command_handle, report_hit_number as i32);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED as i32 {
+                let mut raycast_info = b3RaycastInformation::default();
+                ffi::b3GetRaycastInformation(self.handle, &mut raycast_info);
+                #[allow(non_snake_case)]
+                let b3RaycastInformation {
+                    m_numRayHits,
+                    m_rayHits,
+                } = raycast_info;
+                assert_eq!(m_numRayHits, 1);
+                let array = std::slice::from_raw_parts(m_rayHits, m_numRayHits as usize);
+                return Ok(RayHitInfo::new(array[0]));
+            }
+            Err(Error::new("could not get ray info"))
+        }
+    }
+    /// This is similar to the [`ray_test`](`Self::ray_test`), but allows you to provide an array
+    /// of rays, for faster execution. The size of 'ray_from_positions'
+    /// needs to be equal to the size of 'ray_to_positions'.
+    /// # Arguments
+    /// * `ray_from_positions` - list of start points for each ray, in world coordinates
+    /// * `ray_to_positions` - list of end points for each ray in world coordinates
+    /// + `options` - additional options to set the number of threads etc.
+    ///
+    /// # Return
+    /// A list of Option<RayHitInfo>. The Option is `None` when nothing was hit. Otherwise the
+    /// you get the [`RayHitInfo`](`crate::types::RayHitInfo`)
+    ///
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use nalgebra::Vector3;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let cube = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///
+    ///     let from = vec![Vector3::from_element(-1.), Vector3::from_element(2.)];
+    ///     let to = vec![Vector3::from_element(1.), Vector3::from_element(1.)];
+    ///
+    ///     let hit_list = physics_client.ray_test_batch(&from, &to, None)?;
+    ///     assert_eq!(hit_list[0].unwrap().body_id, cube);
+    ///     assert!(hit_list[1].is_none());
+    ///     Ok(())
+    /// }
+    /// ```
+    /// See `batch_ray_cast.rs` for a more complex example.
+    pub fn ray_test_batch<Options: Into<Option<RayTestBatchOptions>>>(
+        &mut self,
+        ray_from_positions: &[Vector3<f64>],
+        ray_to_positions: &[Vector3<f64>],
+        options: Options,
+    ) -> Result<Vec<Option<RayHitInfo>>, Error> {
+        assert_eq!(
+            ray_from_positions.len(),
+            ray_to_positions.len(),
+            "ray_from_positions and ray_to_positions must have the same length!"
+        );
+        assert!(
+            !ray_to_positions.is_empty(),
+            "ray_positions cannot be empty!"
+        );
+        assert!(
+            ray_to_positions.len() <= MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING,
+            "Number of rays exceed the maximum batch size of {}.",
+            MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING
+        );
+
+        let options = options.into().unwrap_or_default();
+        unsafe {
+            let command_handle = ffi::b3CreateRaycastBatchCommandInit(self.handle);
+            let num_threads = match options.report_hit_number {
+                None => -1,
+                Some(threads) => threads as i32,
+            };
+            ffi::b3RaycastBatchSetNumThreads(command_handle, num_threads);
+            ffi::b3RaycastBatchAddRays(
+                self.handle,
+                command_handle,
+                ray_from_positions[0].as_ptr(),
+                ray_to_positions[0].as_ptr(),
+                ray_to_positions.len() as i32,
+            );
+
+            if let Some(body) = options.parent_object_id {
+                let link_index = match options.parent_link_index {
+                    None => -1,
+                    Some(index) => index as i32,
+                };
+                ffi::b3RaycastBatchSetParentObject(command_handle, body.0, link_index);
+            }
+            if let Some(report_hit_number) = options.report_hit_number {
+                ffi::b3RaycastBatchSetReportHitNumber(command_handle, report_hit_number as i32);
+            }
+            let collision_mask = options.collision_filter_mask.unwrap_or(-1);
+            ffi::b3RaycastBatchSetCollisionFilterMask(command_handle, collision_mask);
+            if let Some(fraction_epsilon) = options.fraction_epsilon {
+                assert!(fraction_epsilon >= 0., "fraction epsilon must be positive");
+                ffi::b3RaycastBatchSetFractionEpsilon(command_handle, fraction_epsilon);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED as i32 {
+                let mut ray_cast_info = b3RaycastInformation::default();
+                ffi::b3GetRaycastInformation(self.handle, &mut ray_cast_info);
+                #[allow(non_snake_case)]
+                let b3RaycastInformation {
+                    m_numRayHits,
+                    m_rayHits,
+                } = ray_cast_info;
+                let mut vec = Vec::<Option<RayHitInfo>>::with_capacity(m_numRayHits as usize);
+
+                let array = std::slice::from_raw_parts(m_rayHits, m_numRayHits as usize);
+                for &ray in array.iter() {
+                    vec.push(RayHitInfo::new(ray));
+                }
+
+                return Ok(vec);
+            }
+            Err(Error::new("could not get ray info"))
         }
     }
 }

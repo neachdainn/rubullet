@@ -2,12 +2,13 @@
 use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
-    DVector, Isometry3, Matrix3xX, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
-    Vector3, Vector6, U3,
+    DVector, Isometry3, Matrix3xX, Matrix4, Matrix6xX, Point3, Quaternion, Translation3,
+    UnitQuaternion, Vector3, Vector6, U3,
 };
 use rubullet_sys::{
     b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
-    b3PhysicsSimulationParameters, b3UserConstraint, b3VisualShapeData,
+    b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RayHitInfo, b3UserConstraint,
+    b3VisualShapeData,
 };
 use std::convert::TryFrom;
 use std::ffi::CStr;
@@ -2051,6 +2052,135 @@ impl From<b3PhysicsSimulationParameters> for PhysicsEngineParameters {
             articulated_warm_starting_factor: m_articulatedWarmStartingFactor,
             internal_sim_flags: m_internalSimFlags,
             friction_cfm: m_frictionCFM,
+        }
+    }
+}
+/// Contains the state of the Gui camera.
+/// Is returned by [`get_debug_visualizer_camera`](`crate::PhysicsClient::get_debug_visualizer_camera`).
+#[derive(Default, Debug)]
+pub struct DebugVisualizerCameraInfo {
+    /// width of the camera image in pixels
+    pub width: usize,
+    /// height of the camera image in pixels
+    pub height: usize,
+    /// view matrix of the camera
+    pub view_matrix: Matrix4<f32>,
+    /// projection matrix of the camera
+    pub projection_matrix: Matrix4<f32>,
+    /// up axis of the camera, in Cartesian world space coordinates
+    pub camera_up: Vector3<f32>,
+    /// forward axis of the camera, in Cartesian world space coordinates
+    pub camera_forward: Vector3<f32>,
+    /// This is a horizontal vector that can be used to generate rays (for mouse picking or creating a simple ray tracer for example)
+    pub horizontal: Vector3<f32>,
+    /// This is a vertical vector that can be used to generate rays(for mouse picking or creating a simple ray tracer for example).
+    pub vertical: Vector3<f32>,
+    /// yaw angle of the camera (in degree), in Cartesian local space coordinates
+    pub yaw: f32,
+    /// pitch angle of the camera (in degree), in Cartesian local space coordinates
+    pub pitch: f32,
+    /// distance between the camera and the camera target
+    pub dist: f32,
+    /// target of the camera, in Cartesian world space coordinates
+    pub target: Vector3<f32>,
+}
+
+impl From<b3OpenGLVisualizerCameraInfo> for DebugVisualizerCameraInfo {
+    fn from(b3: b3OpenGLVisualizerCameraInfo) -> Self {
+        #[allow(non_snake_case)]
+        let b3OpenGLVisualizerCameraInfo {
+            m_width,
+            m_height,
+            m_viewMatrix,
+            m_projectionMatrix,
+            m_camUp,
+            m_camForward,
+            m_horizontal,
+            m_vertical,
+            m_yaw,
+            m_pitch,
+            m_dist,
+            m_target,
+        } = b3;
+        DebugVisualizerCameraInfo {
+            width: m_width as usize,
+            height: m_height as usize,
+            view_matrix: Matrix4::from_column_slice(&m_viewMatrix),
+            projection_matrix: Matrix4::from_column_slice(&m_projectionMatrix),
+            camera_up: m_camUp.into(),
+            camera_forward: m_camForward.into(),
+            horizontal: m_horizontal.into(),
+            vertical: m_vertical.into(),
+            yaw: m_yaw,
+            pitch: m_pitch,
+            dist: m_dist,
+            target: m_target.into(),
+        }
+    }
+}
+
+/// Options for [`ray_test`](`crate::PhysicsClient::ray_test`)
+#[derive(Default, Debug)]
+pub struct RayTestOptions {
+    /// instead of first closest hit, you can report the n-th hit
+    pub report_hit_number: Option<usize>,
+    /// only test hits if the bitwise and between collisionFilterMask and body collision
+    /// filter group is non-zero. See
+    /// set_collision_filter_group_mask on how to modify the body filter mask/group.
+    pub collision_filter_mask: Option<i32>,
+}
+/// Options for [`ray_test_batch`](`crate::PhysicsClient::ray_test_batch`)
+#[derive(Default, Debug)]
+pub struct RayTestBatchOptions {
+    /// ray from/to is in local space of a parent object
+    pub parent_object_id: Option<BodyId>,
+    /// ray from/to is in local space of a link.
+    pub parent_link_index: Option<usize>,
+    /// use multiple threads to compute ray tests
+    /// (0 = use all threads available, positive number = exactly this amoung of threads,
+    /// default = None =  single-threaded)
+    pub num_threads: Option<usize>,
+    /// instead of first closest hit, you can report the n-th hit
+    pub report_hit_number: Option<usize>,
+    /// only useful when using report_hit_number: ignore duplicate hits if the fraction is
+    /// similar to an existing hit within this fractionEpsilon when hitting the same body.
+    /// For example, a ray may hit many co-planar triangles of one body,
+    /// you may only be interested in one of those hits.
+    pub fraction_epsilon: Option<f64>,
+    /// only test hits if the bitwise and between collisionFilterMask and body collision
+    /// filter group is non-zero. See
+    /// set_collision_filter_group_mask on how to modify the body filter mask/group.
+    pub collision_filter_mask: Option<i32>,
+}
+#[derive(Debug, Copy, Clone)]
+pub struct RayHitInfo {
+    pub body_id: BodyId,
+    pub link_index: Option<usize>,
+    pub hit_fraction: f64,
+    pub hit_position: Vector3<f64>,
+    pub hit_normal: Vector3<f64>,
+}
+impl RayHitInfo {
+    pub fn new(ray: b3RayHitInfo) -> Option<Self> {
+        let link_index = {
+            assert!(ray.m_hitObjectLinkIndex >= -1);
+            if ray.m_hitObjectLinkIndex == -1 {
+                None
+            } else {
+                Some(ray.m_hitObjectLinkIndex as usize)
+            }
+        };
+
+        if ray.m_hitObjectUniqueId < 0 {
+            None
+        } else {
+            Some(RayHitInfo {
+                body_id: BodyId(ray.m_hitObjectUniqueId),
+                link_index,
+                hit_fraction: ray.m_hitFraction,
+                hit_position: ray.m_hitPositionWorld.into(),
+                hit_normal: ray.m_hitNormalWorld.into(),
+            })
         }
     }
 }

@@ -679,6 +679,24 @@ extern "C" {
         statusHandle: b3SharedMemoryStatusHandle,
         paramValue: *mut f64,
     ) -> c_int;
+
+    pub fn b3ConfigureOpenGLVisualizerSetViewMatrix(
+        commandHandle: b3SharedMemoryCommandHandle,
+        cameraDistance: f32,
+        cameraPitch: f32,
+        cameraYaw: f32,
+        cameraTargetPosition: *const f32,
+    );
+
+    pub fn b3InitRequestOpenGLVisualizerCameraCommand(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3GetStatusOpenGLVisualizerCamera(
+        statusHandle: b3SharedMemoryStatusHandle,
+        camera: *mut b3OpenGLVisualizerCameraInfo,
+    ) -> c_int;
+
     #[doc = " Add/remove user-specific debug lines and debug text messages"]
     pub fn b3InitUserDebugDrawAddLine3D(
         physClient: b3PhysicsClientHandle,
@@ -722,6 +740,66 @@ extern "C" {
     pub fn b3InitUserDebugDrawRemoveAll(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateRaycastCommandInit(
+        physClient: b3PhysicsClientHandle,
+        rayFromWorldX: f64,
+        rayFromWorldY: f64,
+        rayFromWorldZ: f64,
+        rayToWorldX: f64,
+        rayToWorldY: f64,
+        rayToWorldZ: f64,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3CreateRaycastBatchCommandInit(
+        physClient: b3PhysicsClientHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3RaycastBatchSetNumThreads(
+        commandHandle: b3SharedMemoryCommandHandle,
+        numThreads: c_int,
+    );
+
+    pub fn b3RaycastBatchAddRay(
+        commandHandle: b3SharedMemoryCommandHandle,
+        rayFromWorld: *const f64,
+        rayToWorld: *const f64,
+    );
+
+    pub fn b3RaycastBatchAddRays(
+        physClient: b3PhysicsClientHandle,
+        commandHandle: b3SharedMemoryCommandHandle,
+        rayFromWorld: *const f64,
+        rayToWorld: *const f64,
+        numRays: c_int,
+    );
+
+    pub fn b3RaycastBatchSetParentObject(
+        commandHandle: b3SharedMemoryCommandHandle,
+        parentObjectUniqueId: c_int,
+        parentLinkIndex: c_int,
+    );
+
+    pub fn b3RaycastBatchSetReportHitNumber(
+        commandHandle: b3SharedMemoryCommandHandle,
+        reportHitNumber: c_int,
+    );
+
+    pub fn b3RaycastBatchSetCollisionFilterMask(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionFilterMask: c_int,
+    );
+
+    pub fn b3RaycastBatchSetFractionEpsilon(
+        commandHandle: b3SharedMemoryCommandHandle,
+        fractionEpsilon: f64,
+    );
+
+    pub fn b3GetRaycastInformation(
+        physClient: b3PhysicsClientHandle,
+        raycastInfo: *mut b3RaycastInformation,
+    );
+
     #[doc = " Apply external force at the body (or link) center of mass, in world space/Cartesian coordinates."]
     pub fn b3ApplyExternalForceCommandInit(
         physClient: b3PhysicsClientHandle,
@@ -2022,3 +2100,45 @@ pub struct b3PhysicsSimulationParameters {
     pub m_sparseSdfVoxelSize: f64,
     pub m_numNonContactInnerIterations: c_int,
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct b3OpenGLVisualizerCameraInfo {
+    pub m_width: c_int,
+    pub m_height: c_int,
+    pub m_viewMatrix: [f32; 16usize],
+    pub m_projectionMatrix: [f32; 16usize],
+    pub m_camUp: [f32; 3usize],
+    pub m_camForward: [f32; 3usize],
+    pub m_horizontal: [f32; 3usize],
+    pub m_vertical: [f32; 3usize],
+    pub m_yaw: f32,
+    pub m_pitch: f32,
+    pub m_dist: f32,
+    pub m_target: [f32; 3usize],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct b3RaycastInformation {
+    pub m_numRayHits: c_int,
+    pub m_rayHits: *mut b3RayHitInfo,
+}
+impl Default for b3RaycastInformation {
+    fn default() -> Self {
+        b3RaycastInformation {
+            m_numRayHits: 0,
+            m_rayHits: [].as_mut_ptr(),
+        }
+    }
+}
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct b3RayHitInfo {
+    pub m_hitFraction: f64,
+    pub m_hitObjectUniqueId: c_int,
+    pub m_hitObjectLinkIndex: c_int,
+    pub m_hitPositionWorld: [f64; 3usize],
+    pub m_hitNormalWorld: [f64; 3usize],
+}
+pub const MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING: usize = 16384;
