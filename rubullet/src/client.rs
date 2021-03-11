@@ -24,7 +24,8 @@ use crate::{
     BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
     ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error, LogId,
     LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions,
-    SetPhysicsEngineParameterOptions, StateId, StateLoggingOptions, UrdfOptions, VisualShapeData,
+    SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions, UrdfOptions,
+    VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -34,7 +35,7 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_CALCULATED_MASS_MATRIX_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED,
     CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
     CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
-    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
+    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_SOFT_BODY_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
     CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED,
     CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED, CMD_RESTORE_STATE_COMPLETED,
     CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED,
@@ -5015,6 +5016,107 @@ impl PhysicsClient {
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
             let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// lets you load a deformable object from a VTK or OBJ file.
+    /// # Arguments
+    /// * `filename` - a relative or absolute path on the file system of the physics server
+    /// * `options` - use additional options. See [`SoftBodyOptions`](`crate::types::SoftBodyOptions`).
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let _bunny = physics_client.load_soft_body("bunny.obj", None)?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn load_soft_body<P: AsRef<Path>, Options: Into<Option<SoftBodyOptions>>>(
+        &mut self,
+        filename: P,
+        options: Options,
+    ) -> Result<BodyId, Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadSoftBodyCommandInit(self.handle, file.as_ptr());
+            let options = options.into().unwrap_or_default();
+            let pose = options.base_pose;
+            ffi::b3LoadSoftBodySetStartPosition(
+                command,
+                pose.translation.x,
+                pose.translation.y,
+                pose.translation.z,
+            );
+            ffi::b3LoadSoftBodySetStartOrientation(
+                command,
+                pose.rotation.i,
+                pose.rotation.j,
+                pose.rotation.k,
+                pose.rotation.w,
+            );
+            if let Some(sim_filename) = options.sim_filename {
+                let sim_file = CString::new(sim_filename.as_os_str().as_bytes())
+                    .map_err(|_| Error::new("Invalid path"))?;
+                ffi::b3LoadSoftBodyUpdateSimMesh(command, sim_file.as_ptr());
+            }
+            if let Some(scale) = options.scale {
+                assert!(scale > 0.);
+                ffi::b3LoadSoftBodySetScale(command, scale);
+            }
+            if let Some(mass) = options.mass {
+                assert!(mass > 0.);
+                ffi::b3LoadSoftBodySetMass(command, mass);
+            }
+            if let Some(collision_margin) = options.collision_margin {
+                assert!(collision_margin > 0.);
+                ffi::b3LoadSoftBodySetCollisionMargin(command, collision_margin);
+            }
+            if options.use_mass_spring {
+                ffi::b3LoadSoftBodyAddMassSpringForce(
+                    command,
+                    options.spring_elastic_stiffness,
+                    options.spring_damping_stiffness,
+                );
+                ffi::b3LoadSoftBodyUseBendingSprings(
+                    command,
+                    options.use_bending_springs as i32,
+                    options.spring_bending_stiffness,
+                );
+                ffi::b3LoadSoftBodyUseAllDirectionDampingSprings(
+                    command,
+                    options.spring_damping_all_directions as i32,
+                );
+            }
+            if options.use_neo_hookean {
+                ffi::b3LoadSoftBodyAddNeoHookeanForce(
+                    command,
+                    options.neo_hookean_mu,
+                    options.neo_hookean_lambda,
+                    options.neo_hookean_damping,
+                );
+            }
+            if options.use_self_collision {
+                ffi::b3LoadSoftBodySetSelfCollision(command, 1);
+            }
+            if let Some(repulsion_stiffness) = options.repulsion_stiffness {
+                assert!(repulsion_stiffness > 0.);
+                ffi::b3LoadSoftBodySetRepulsionStiffness(command, repulsion_stiffness);
+            }
+            ffi::b3LoadSoftBodySetFrictionCoefficient(command, options.friction_coeff);
+
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_LOAD_SOFT_BODY_COMPLETED as i32 {
+                Err(Error::new("Cannot load soft body."))
+            } else {
+                let id = ffi::b3GetStatusBodyIndex(status_handle);
+                assert!(id >= 0);
+                Ok(BodyId(id))
+            }
         }
     }
 }

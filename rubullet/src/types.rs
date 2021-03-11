@@ -2184,3 +2184,70 @@ impl RayHitInfo {
         }
     }
 }
+/// options for [`load_soft_body`](`crate::PhysicsClient::load_soft_body`)
+#[derive(Debug)]
+pub struct SoftBodyOptions {
+    /// initial pose of the deformable object
+    pub base_pose: Isometry3<f64>,
+    /// scaling factor to resize the deformable (default = 1)
+    pub scale: Option<f64>,
+    /// total mass of the deformable, the mass is equally distributed among all vertices
+    pub mass: Option<f64>,
+    /// a collision margin extends the deformable, it can help avoiding penetrations, especially for thin (cloth) deformables
+    pub collision_margin: Option<f64>,
+    /// using mass spring
+    pub use_mass_spring: bool,
+    /// create bending springs to control bending of deformables
+    pub use_bending_springs: bool,
+    /// enable the Neo Hookean simulation
+    pub use_neo_hookean: bool,
+    /// stiffness parameter
+    pub spring_elastic_stiffness: f64,
+    /// damping parameter
+    pub spring_damping_stiffness: f64,
+    /// spring damping parameter
+    pub spring_damping_all_directions: bool,
+    /// parameters of bending stiffness
+    pub spring_bending_stiffness: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_mu: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_lambda: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_damping: f64,
+    /// contact friction for deformables
+    pub friction_coeff: f64,
+    /// enable collisions internal to faces, not just at vertices.
+    pub use_face_contact: bool,
+    /// enable self collision for a deformable
+    pub use_self_collision: bool,
+    /// a parameter that helps avoiding penetration.
+    pub repulsion_stiffness: Option<f64>,
+    pub sim_filename: Option<PathBuf>,
+}
+
+impl Default for SoftBodyOptions {
+    fn default() -> Self {
+        SoftBodyOptions {
+            base_pose: Isometry3::identity(),
+            scale: None,
+            mass: None,
+            collision_margin: None,
+            use_mass_spring: false,
+            use_bending_springs: false,
+            use_neo_hookean: false,
+            spring_elastic_stiffness: 1.,
+            spring_damping_stiffness: 0.1,
+            spring_damping_all_directions: false,
+            spring_bending_stiffness: 0.1,
+            neo_hookean_mu: 1.,
+            neo_hookean_lambda: 1.,
+            neo_hookean_damping: 0.1,
+            friction_coeff: 0.,
+            use_face_contact: false,
+            use_self_collision: false,
+            repulsion_stiffness: None,
+            sim_filename: None,
+        }
+    }
+}

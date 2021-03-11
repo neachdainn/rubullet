@@ -51,8 +51,8 @@ pub use crate::{
         JointInfoFlags, JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, LogFlags,
         LogId, LoggingType, MouseButtonState, MouseEvent, MultiBodyOptions, OverlappingObject,
         PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions, SdfOptions,
-        SetPhysicsEngineParameterOptions, StateId, StateLoggingOptions, TextureId, UrdfOptions,
-        Velocity, VisualId, VisualShapeData, VisualShapeOptions,
+        SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions, TextureId,
+        UrdfOptions, Velocity, VisualId, VisualShapeData, VisualShapeOptions,
     },
 };
 pub use image;

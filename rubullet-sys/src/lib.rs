@@ -841,6 +841,112 @@ extern "C" {
         flag: c_int,
     );
 
+    #[doc = "experiments of robots interacting with non-rigid objects (such as btSoftBody)"]
+    pub fn b3LoadSoftBodyCommandInit(
+        physClient: b3PhysicsClientHandle,
+        fileName: *const c_char,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3LoadSoftBodySetScale(commandHandle: b3SharedMemoryCommandHandle, scale: f64) -> c_int;
+
+    pub fn b3LoadSoftBodySetMass(commandHandle: b3SharedMemoryCommandHandle, mass: f64) -> c_int;
+
+    pub fn b3LoadSoftBodySetCollisionMargin(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionMargin: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetStartPosition(
+        commandHandle: b3SharedMemoryCommandHandle,
+        startPosX: f64,
+        startPosY: f64,
+        startPosZ: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetStartOrientation(
+        commandHandle: b3SharedMemoryCommandHandle,
+        startOrnX: f64,
+        startOrnY: f64,
+        startOrnZ: f64,
+        startOrnW: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyUpdateSimMesh(
+        commandHandle: b3SharedMemoryCommandHandle,
+        filename: *const c_char,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyAddCorotatedForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        corotatedMu: f64,
+        corotatedLambda: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyAddNeoHookeanForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        NeoHookeanMu: f64,
+        NeoHookeanLambda: f64,
+        NeoHookeanDamping: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyAddMassSpringForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        springElasticStiffness: f64,
+        springDampingStiffness: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyAddGravityForce(
+        commandHandle: b3SharedMemoryCommandHandle,
+        gravityX: f64,
+        gravityY: f64,
+        gravityZ: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetCollisionHardness(
+        commandHandle: b3SharedMemoryCommandHandle,
+        collisionHardness: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetSelfCollision(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useSelfCollision: c_int,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetRepulsionStiffness(
+        commandHandle: b3SharedMemoryCommandHandle,
+        stiffness: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyUseFaceContact(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useFaceContact: c_int,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodySetFrictionCoefficient(
+        commandHandle: b3SharedMemoryCommandHandle,
+        frictionCoefficient: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyUseBendingSprings(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useBendingSprings: c_int,
+        bendingStiffness: f64,
+    ) -> c_int;
+
+    pub fn b3LoadSoftBodyUseAllDirectionDampingSprings(
+        commandHandle: b3SharedMemoryCommandHandle,
+        useAllDirectionDamping: c_int,
+    ) -> c_int;
+
+    pub fn b3InitCreateSoftBodyAnchorConstraintCommand(
+        physClient: b3PhysicsClientHandle,
+        softBodyUniqueId: c_int,
+        nodeIndex: c_int,
+        bodyUniqueId: c_int,
+        linkIndex: c_int,
+        bodyFramePosition: *const f64,
+    ) -> b3SharedMemoryCommandHandle;
+
     pub fn b3RequestKeyboardEventsCommandInit(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
