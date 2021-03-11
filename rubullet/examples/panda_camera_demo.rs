@@ -20,8 +20,11 @@ fn main() -> Result<()> {
         let _images = physics_client.get_camera_image(
             128,
             128,
-            panda.view_matrix,
-            panda.projection_matrix,
+            CameraImageOptions {
+                view_matrix: Some(panda.view_matrix),
+                projection_matrix: Some(panda.projection_matrix),
+                ..Default::default()
+            },
         )?;
         _images.rgba.save("/tmp/test.png")?;
         panda.step(&mut physics_client);

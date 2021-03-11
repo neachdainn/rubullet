@@ -622,23 +622,79 @@ extern "C" {
         dofIndex: c_int,
         value: f64,
     ) -> c_int;
+    #[doc = "request an image from a simulated camera, using a software renderer."]
     pub fn b3InitRequestCameraImage(
         physClient: b3PhysicsClientHandle,
     ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3InitRequestCameraImage2(
+        commandHandle: b3SharedMemoryCommandHandle,
+    ) -> b3SharedMemoryCommandHandle;
+
+    pub fn b3RequestCameraImageSetCameraMatrices(
+        commandHandle: b3SharedMemoryCommandHandle,
+        viewMatrix: *mut f32,
+        projectionMatrix: *mut f32,
+    );
+
     pub fn b3RequestCameraImageSetPixelResolution(
         commandHandle: b3SharedMemoryCommandHandle,
         width: c_int,
         height: c_int,
     );
-    pub fn b3RequestCameraImageSetCameraMatrices(
+
+    pub fn b3RequestCameraImageSetLightDirection(
         commandHandle: b3SharedMemoryCommandHandle,
-        viewMatrix: *const f32,
-        projectionMatrix: *const f32,
+        lightDirection: *const f32,
     );
+
+    pub fn b3RequestCameraImageSetLightColor(
+        commandHandle: b3SharedMemoryCommandHandle,
+        lightColor: *const f32,
+    );
+
+    pub fn b3RequestCameraImageSetLightDistance(
+        commandHandle: b3SharedMemoryCommandHandle,
+        lightDistance: f32,
+    );
+
+    pub fn b3RequestCameraImageSetLightAmbientCoeff(
+        commandHandle: b3SharedMemoryCommandHandle,
+        lightAmbientCoeff: f32,
+    );
+
+    pub fn b3RequestCameraImageSetLightDiffuseCoeff(
+        commandHandle: b3SharedMemoryCommandHandle,
+        lightDiffuseCoeff: f32,
+    );
+
+    pub fn b3RequestCameraImageSetLightSpecularCoeff(
+        commandHandle: b3SharedMemoryCommandHandle,
+        lightSpecularCoeff: f32,
+    );
+
+    pub fn b3RequestCameraImageSetShadow(
+        commandHandle: b3SharedMemoryCommandHandle,
+        hasShadow: c_int,
+    );
+
+    pub fn b3RequestCameraImageSelectRenderer(
+        commandHandle: b3SharedMemoryCommandHandle,
+        renderer: c_int,
+    );
+
+    pub fn b3RequestCameraImageSetFlags(commandHandle: b3SharedMemoryCommandHandle, flags: c_int);
 
     pub fn b3GetCameraImageData(
         physClient: b3PhysicsClientHandle,
         imageData: *mut b3CameraImageData,
+    );
+
+    #[doc = "set projective texture camera matrices."]
+    pub fn b3RequestCameraImageSetProjectiveTextureMatrices(
+        commandHandle: b3SharedMemoryCommandHandle,
+        viewMatrix: *mut f32,
+        projectionMatrix: *mut f32,
     );
 
     pub fn b3ComputeViewMatrixFromPositions(

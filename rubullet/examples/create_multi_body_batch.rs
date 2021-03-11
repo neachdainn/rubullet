@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use nalgebra::{Isometry3, Point3, Vector3};
+use nalgebra::{Isometry3, Vector3};
 use rubullet::DebugVisualizerFlag::{CovEnableGui, CovEnableRendering, CovEnableTinyRenderer};
 use rubullet::*;
 
@@ -132,7 +132,7 @@ fn main() -> Result<()> {
     for x in 0..32 {
         for y in 0..32 {
             for z in 0..10 {
-                batch_positions.push(Point3::new(
+                batch_positions.push(Vector3::new(
                     x as f64 * mesh_scaling[0] * 5.5,
                     y as f64 * mesh_scaling[1] * 5.5,
                     (0.5 + z as f64) * mesh_scaling[2] * 2.5,

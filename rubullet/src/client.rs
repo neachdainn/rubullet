@@ -7,8 +7,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 
 use nalgebra::{
-    DMatrix, DVector, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3,
-    UnitQuaternion, Vector3,
+    DMatrix, DVector, Isometry3, Matrix4, Matrix6xX, Quaternion, Translation3, UnitQuaternion,
+    Vector3,
 };
 
 use self::gui_marker::GuiMarker;
@@ -21,11 +21,11 @@ use crate::types::{
     VisualShapeOptions,
 };
 use crate::{
-    BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
-    ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error, LogId,
-    LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions,
-    ResetFlags, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions,
-    UrdfOptions, VisualShapeData,
+    BodyInfo, CameraImageOptions, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId,
+    ContactPoint, ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error,
+    LogId, LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions,
+    RayTestOptions, ResetFlags, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId,
+    StateLoggingOptions, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -1351,7 +1351,7 @@ impl PhysicsClient {
                         command,
                         dof_count as i32,
                         end_effector_link_index as i32,
-                        pos.coords.as_ptr(),
+                        pos.as_ptr(),
                         orientation.coords.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
@@ -1363,7 +1363,7 @@ impl PhysicsClient {
                         command,
                         dof_count as i32,
                         end_effector_link_index as i32,
-                        pos.coords.as_ptr(),
+                        pos.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
@@ -1374,14 +1374,14 @@ impl PhysicsClient {
                 ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
                     command,
                     end_effector_link_index as i32,
-                    pos.coords.as_ptr(),
+                    pos.as_ptr(),
                     orientation.coords.as_ptr(),
                 );
             } else {
                 ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
                     command,
                     end_effector_link_index as i32,
-                    pos.coords.as_ptr(),
+                    pos.as_ptr(),
                 );
             }
 
@@ -1919,7 +1919,7 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::PhysicsClient;
-    /// use nalgebra::{Point3, Vector3};
+    /// use nalgebra::Vector3;
     ///
     /// // variant 1: using arrays
     /// let eye_position = [1.; 3];
@@ -1927,9 +1927,9 @@ impl PhysicsClient {
     /// let up_vector = [0., 1., 0.];
     /// let view_matrix_from_arrays = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
     ///
-    /// // variant 2: using vectors and points
-    /// let eye_position = Point3::new(1.,1.,1.);
-    /// let target_position = Point3::new(1., 0., 0.);
+    /// // variant 2: using vectors
+    /// let eye_position = Vector3::new(1.,1.,1.);
+    /// let target_position = Vector3::new(1., 0., 0.);
     /// let up_vector = Vector3::new(0., 1., 0.);
     /// let view_matrix_from_points = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
     /// assert_eq!(view_matrix_from_arrays.as_slice(),view_matrix_from_points.as_slice());
@@ -1939,16 +1939,16 @@ impl PhysicsClient {
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix<Point: Into<Point3<f32>>, Vector: Into<Vector3<f32>>>(
-        camera_eye_position: Point,
-        camera_target_position: Point,
+    pub fn compute_view_matrix<Vector: Into<Vector3<f32>>>(
+        camera_eye_position: Vector,
+        camera_target_position: Vector,
         camera_up_vector: Vector,
     ) -> Matrix4<f32> {
         let mut view_matrix: Matrix4<f32> = Matrix4::zeros();
         unsafe {
             ffi::b3ComputeViewMatrixFromPositions(
-                camera_eye_position.into().coords.as_ptr(),
-                camera_target_position.into().coords.as_ptr(),
+                camera_eye_position.into().as_ptr(),
+                camera_target_position.into().as_ptr(),
                 camera_up_vector.into().as_slice().as_ptr(),
                 view_matrix.as_mut_ptr(),
             );
@@ -1969,7 +1969,7 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::PhysicsClient;
-    /// use nalgebra::Point3;
+    /// use nalgebra::Vector3;
     /// // variant 1: using array
     /// let target_position = [1., 0., 0.];
     /// let view_matrix_from_array = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
@@ -1980,8 +1980,8 @@ impl PhysicsClient {
     ///     0.5,
     ///     false,
     /// );
-    /// // variant 1: using Point3
-    /// let target_position = Point3::new(1., 0., 0.);
+    /// // variant 1: using Vector3
+    /// let target_position = Vector3::new(1., 0., 0.);
     /// let view_matrix_from_point = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
     ///     target_position,
     ///     0.6,
@@ -1997,8 +1997,8 @@ impl PhysicsClient {
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix_from_yaw_pitch_roll<Point: Into<Point3<f32>>>(
-        camera_target_position: Point,
+    pub fn compute_view_matrix_from_yaw_pitch_roll<Vector: Into<Vector3<f32>>>(
+        camera_target_position: Vector,
         distance: f32,
         yaw: f32,
         pitch: f32,
@@ -2012,7 +2012,7 @@ impl PhysicsClient {
         };
         unsafe {
             ffi::b3ComputeViewMatrixFromYawPitchRoll(
-                camera_target_position.into().coords.as_ptr(),
+                camera_target_position.into().as_ptr(),
                 distance,
                 yaw,
                 pitch,
@@ -2102,46 +2102,83 @@ impl PhysicsClient {
     /// # Arguments
     /// * `width` - eye position in Cartesian world coordinates
     /// * `height` - position of the target (focus) point, in Cartesian world coordinates
-    /// * `view_matrix` -  view matrix, see [compute_view_matrix](`Self::compute_view_matrix`)
-    /// * `projection_matrix` - projection matrix, see [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * `options` - additional options to set view and projection matrix etc.
     /// # See also
     /// * [compute_view_matrix](`Self::compute_view_matrix`)
     /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * panda_camera_demo.rs for an example
-    pub fn get_camera_image(
+    pub fn get_camera_image<Options: Into<Option<CameraImageOptions>>>(
         &mut self,
-        width: i32,
-        height: i32,
-        view_matrix: Matrix4<f32>,
-        projection_matrix: Matrix4<f32>,
+        width: usize,
+        height: usize,
+        options: Options,
     ) -> Result<Images, Error> {
         unsafe {
+            let options = options.into().unwrap_or_default();
             let command = ffi::b3InitRequestCameraImage(self.handle);
-            ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
-            ffi::b3RequestCameraImageSetCameraMatrices(
-                command,
-                view_matrix.as_ptr(),
-                projection_matrix.as_ptr(),
-            );
+            ffi::b3RequestCameraImageSetPixelResolution(command, width as i32, height as i32);
+            if let (Some(mut view_matrix), Some(mut projection_matrix)) =
+                (options.view_matrix, options.projection_matrix)
+            {
+                ffi::b3RequestCameraImageSetCameraMatrices(
+                    command,
+                    view_matrix.as_mut_ptr(),
+                    projection_matrix.as_mut_ptr(),
+                );
+            }
+            if let Some(light_dir) = options.light_direction {
+                ffi::b3RequestCameraImageSetLightDirection(command, light_dir.as_ptr());
+            }
+            if let Some(light_color) = options.light_color {
+                ffi::b3RequestCameraImageSetLightColor(command, light_color.as_ptr());
+            }
+            if let Some(light_distance) = options.light_distance {
+                ffi::b3RequestCameraImageSetLightDistance(command, light_distance);
+            }
+            if let Some(shadow) = options.shadow {
+                ffi::b3RequestCameraImageSetShadow(command, shadow as i32);
+            }
+            if let Some(light_ambient_coeff) = options.light_ambient_coeff {
+                ffi::b3RequestCameraImageSetLightAmbientCoeff(command, light_ambient_coeff);
+            }
+            if let Some(light_diffuse_coeff) = options.light_diffuse_coeff {
+                ffi::b3RequestCameraImageSetLightDiffuseCoeff(command, light_diffuse_coeff);
+            }
+            if let Some(light_specular_coeff) = options.light_specular_coeff {
+                ffi::b3RequestCameraImageSetLightSpecularCoeff(command, light_specular_coeff);
+            }
+            if let Some(flags) = options.flags {
+                ffi::b3RequestCameraImageSetFlags(command, flags.bits());
+            }
+            if let Some(renderer) = options.renderer {
+                ffi::b3RequestCameraImageSelectRenderer(command, renderer as i32);
+            }
+            if let (Some(mut projective_texture_view), Some(mut projective_texture_proj)) = (
+                options.projective_texture_view,
+                options.projective_texture_proj,
+            ) {
+                ffi::b3RequestCameraImageSetProjectiveTextureMatrices(
+                    command,
+                    projective_texture_view.as_mut_ptr(),
+                    projective_texture_proj.as_mut_ptr(),
+                );
+            }
+
             if self.can_submit_command() {
                 let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
                     ffi::b3GetCameraImageData(self.handle, &mut image_data);
-                    let buffer = std::slice::from_raw_parts(
-                        image_data.m_rgb_color_data,
-                        (width * height * 4) as usize,
-                    );
-                    let depth_buffer = std::slice::from_raw_parts(
-                        image_data.m_depth_values,
-                        (width * height) as usize,
-                    );
+                    let buffer =
+                        std::slice::from_raw_parts(image_data.m_rgb_color_data, width * height * 4);
+                    let depth_buffer =
+                        std::slice::from_raw_parts(image_data.m_depth_values, width * height);
                     let segmentation_buffer = std::slice::from_raw_parts(
                         image_data.m_segmentation_mask_values,
-                        (width * height) as usize,
+                        width * height,
                     );
                     let rgba: RgbaImage =
                         ImageBuffer::from_vec(width as u32, height as u32, buffer.into()).unwrap();
@@ -2159,13 +2196,15 @@ impl PhysicsClient {
                     )
                     .unwrap();
                     return Ok(Images {
+                        width: image_data.m_pixel_width as usize,
+                        height: image_data.m_pixel_height as usize,
                         rgba,
                         depth,
                         segmentation,
                     });
                 }
             }
-            Err(Error::new("getCameraImage failed"))
+            Err(Error::new("get_camera_image failed"))
         }
     }
     /// This method can configure some settings of the built-in OpenGL visualizer,
@@ -2193,9 +2232,9 @@ impl PhysicsClient {
     ///
     /// # Arguments
     /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `line_to_xyz` - end point of the line in Cartesian world coordinates. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `options` - advanced options for the line. Use None for default settings.
     ///
     /// # Return
@@ -2211,11 +2250,11 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///#     use nalgebra::Point3;
+    ///#     use nalgebra::Vector3;
     /// let mut client = PhysicsClient::connect(Gui)?;
     ///     let red_line = client.add_user_debug_line(
     ///         [0.; 3],
-    ///         Point3::new(1.,1.,1.),
+    ///         Vector3::new(1.,1.,1.),
     ///         AddDebugLineOptions {
     ///             line_color_rgb: [1., 0., 0.],
     ///             ..Default::default()
@@ -2227,8 +2266,8 @@ impl PhysicsClient {
     /// ```
     pub fn add_user_debug_line<
         Options: Into<Option<AddDebugLineOptions>>,
-        Start: Into<Point3<f64>>,
-        End: Into<Point3<f64>>,
+        Start: Into<Vector3<f64>>,
+        End: Into<Vector3<f64>>,
     >(
         &mut self,
         line_from_xyz: Start,
@@ -2239,8 +2278,8 @@ impl PhysicsClient {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
                 self.handle,
-                line_from_xyz.into().coords.as_ptr(),
-                line_to_xyz.into().coords.as_ptr(),
+                line_from_xyz.into().as_ptr(),
+                line_to_xyz.into().as_ptr(),
                 options.line_color_rgb.as_ptr(),
                 options.line_width,
                 options.life_time,
@@ -2342,7 +2381,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `text` - text represented  by something which can be converted to a &str
     /// * `text_position` - 3d position of the text in Cartesian world coordinates \[x,y,z\]. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `options` - advanced options for the text. Use None for default settings.
     ///
     /// # Return
@@ -2356,12 +2395,12 @@ impl PhysicsClient {
     ///# use rubullet::AddDebugTextOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
-    ///# use nalgebra::Point3;
+    ///# use nalgebra::Vector3;
     ///# pub fn main() -> Result<()> {
     ///#     use nalgebra::UnitQuaternion;
     ///# use std::f64::consts::PI;
     /// let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text = client.add_user_debug_text("My text", Vector3::new(0., 0., 1.), None)?;
     ///     let text_red_on_floor = client.add_user_debug_text(
     ///         "My red text on the floor",
     ///         [0.;3],
@@ -2378,7 +2417,7 @@ impl PhysicsClient {
     pub fn add_user_debug_text<
         'a,
         Text: Into<&'a str>,
-        Position: Into<Point3<f64>>,
+        Position: Into<Vector3<f64>>,
         Options: Into<Option<AddDebugTextOptions>>,
     >(
         &mut self,
@@ -2392,7 +2431,7 @@ impl PhysicsClient {
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
                 self.handle,
                 text.as_ptr(),
-                text_position.into().coords.as_ptr(),
+                text_position.into().as_ptr(),
                 options.text_color_rgb.as_ptr(),
                 options.text_size,
                 options.life_time,
@@ -2465,9 +2504,9 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///#     use nalgebra::Point3;
+    ///#     use nalgebra::Vector3;
     /// let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text = client.add_user_debug_text("My text", Vector3::new(0., 0., 1.), None)?;
     ///     let text_2 = client.add_user_debug_text("My text2", [0., 0., 2.], None)?;
     ///     client.remove_all_user_debug_items();
     ///#     std::thread::sleep(Duration::from_secs(10));
@@ -2654,7 +2693,7 @@ impl PhysicsClient {
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
     pub fn apply_external_force<
         Force: Into<Vector3<f64>>,
-        Position: Into<Point3<f64>>,
+        Position: Into<Vector3<f64>>,
         Link: Into<Option<usize>>,
     >(
         &mut self,
@@ -2675,7 +2714,7 @@ impl PhysicsClient {
                 body.0,
                 link_index,
                 force_object.into().as_ptr(),
-                position_object.into().coords.as_ptr(),
+                position_object.into().as_ptr(),
                 flags as i32,
             );
             let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
@@ -3175,7 +3214,7 @@ impl PhysicsClient {
             if let Some(batch_positions) = options.batch_positions {
                 let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
                 for pos in batch_positions.iter() {
-                    new_batch_positions.extend_from_slice(pos.coords.as_slice());
+                    new_batch_positions.extend_from_slice(pos.as_slice());
                 }
                 ffi::b3CreateMultiBodySetBatchPositions(
                     self.handle,

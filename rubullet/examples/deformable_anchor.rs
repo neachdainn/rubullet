@@ -71,6 +71,5 @@ fn main() -> Result<()> {
     loop {
         std::thread::sleep(Duration::from_secs_f64(1. / 240.));
         physics_client.step_simulation()?;
-        // physics_client.set_gravity([0., 0., -10.]);
     }
 }

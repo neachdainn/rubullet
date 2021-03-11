@@ -2,8 +2,8 @@
 use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
-    DVector, Isometry3, Matrix3xX, Matrix4, Matrix6xX, Point3, Quaternion, Translation3,
-    UnitQuaternion, Vector3, Vector6, U3,
+    DVector, Isometry3, Matrix3xX, Matrix4, Matrix6xX, Quaternion, Translation3, UnitQuaternion,
+    Vector3, Vector6, U3,
 };
 use rubullet_sys::{
     b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
@@ -220,7 +220,7 @@ pub struct InverseKinematicsParameters<'a> {
     pub end_effector_link_index: usize,
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
     /// By default this is in Cartesian world space, unless you provide current_position joint angles.
-    pub target_position: Point3<f64>,
+    pub target_position: Vector3<f64>,
     /// Target orientation in Cartesian world space.
     /// If not specified, pure position IK will be used.
     pub target_orientation: Option<UnitQuaternion<f64>>,
@@ -259,7 +259,7 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
     fn default() -> Self {
         InverseKinematicsParameters {
             end_effector_link_index: 0,
-            target_position: Point3::new(0., 0., 0.),
+            target_position: Vector3::zeros(),
             target_orientation: None,
             limits: None,
             joint_damping: None,
@@ -310,7 +310,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
     /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
     pub fn new(end_effector_link_index: usize, target_pose: &'a Isometry3<f64>) -> Self {
-        let target_position: Point3<f64> = target_pose.translation.vector.into();
+        let target_position = target_pose.translation.vector;
         let params = InverseKinematicsParameters {
             end_effector_link_index,
             target_position,
@@ -1096,7 +1096,7 @@ pub struct MultiBodyOptions {
     pub flags: Option<LoadModelFlags>,
     /// list of base positions, for fast batch creation of many multibodies.
     /// See create_multi_body_batch.rs example.
-    pub batch_positions: Option<Vec<Point3<f64>>>,
+    pub batch_positions: Option<Vec<Vector3<f64>>>,
 }
 impl Default for MultiBodyOptions {
     fn default() -> Self {
@@ -1222,6 +1222,10 @@ impl From<b3VisualShapeData> for VisualShapeData {
 }
 /// Stores the images from [`get_camera_image()`](`crate::PhysicsClient::get_camera_image()`)
 pub struct Images {
+    /// width image resolution in pixels (horizontal)
+    pub width: usize,
+    /// height image resolution in pixels (vertical)
+    pub height: usize,
     /// RGB image with additional alpha channel
     pub rgba: RgbaImage,
     /// Depth image. Every pixel represents a distance in meters
@@ -2266,4 +2270,50 @@ bitflags::bitflags! {
         const TEXTURE_UNIQUE_IDS = 1;
         const DOUBLE_SIDED = 4;
     }
+}
+bitflags::bitflags! {
+    /// flags for camera rendering
+    pub struct RendererAuxFlags : i32 {
+        /// if used the pixels of the segmentation mask are calculated with this formula:
+        /// bodyId + (linkIndex+1)<<24
+        const SEGMENTATION_MASK_OBJECT_AND_LINKINDEX = 1;
+        const USE_PROJECTIVE_TEXTURE = 2;
+        /// avoids calculating the segmentation mask
+        const NO_SEGMENTATION_MASK = 4;
+    }
+}
+#[derive(Debug)]
+pub enum Renderer {
+    TinyRenderer = 1 << 16,
+    /// Direct mode has no OpenGL, so you can not use this setting in direct mode.
+    BulletHardwareOpenGl = 1 << 17,
+}
+
+/// Options for [`get_camera_image`](`crate::PhysicsClient::get_camera_image`)
+#[derive(Debug, Default)]
+pub struct CameraImageOptions {
+    /// view matrix, see [compute_view_matrix](`crate::PhysicsClient::compute_view_matrix`)
+    pub view_matrix: Option<Matrix4<f32>>,
+    ///  projection matrix, see [compute_projection_matrix](`crate::PhysicsClient::compute_projection_matrix`)
+    pub projection_matrix: Option<Matrix4<f32>>,
+    /// specifies the world position of the light source, the direction is from the light source position to the origin of the world frame.
+    pub light_direction: Option<Vector3<f32>>,
+    /// directional light color in \[RED,GREEN,BLUE\] in range 0..1,  only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_color: Option<[f32; 3]>,
+    /// distance of the light along the normalized lightDirection,  only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_distance: Option<f32>,
+    /// enables disables shadows, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub shadow: Option<bool>,
+    /// light ambient coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_ambient_coeff: Option<f32>,
+    /// light diffuse coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_diffuse_coeff: Option<f32>,
+    /// light specular coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_specular_coeff: Option<f32>,
+    /// Note that Direct mode has no OpenGL, so it requires [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`).
+    pub renderer: Option<Renderer>,
+    /// additional rendering flags
+    pub flags: Option<RendererAuxFlags>,
+    pub projective_texture_view: Option<Matrix4<f32>>,
+    pub projective_texture_proj: Option<Matrix4<f32>>,
 }
