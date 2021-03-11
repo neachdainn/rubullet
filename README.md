@@ -22,12 +22,12 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Logging and saving states
 * Set physics engine parameters
 * Collision Detection Queries
+* Deformables and Cloth
 
 Things which are not implemented yet:
 * Virtual Reality
 * Connect via SHARED_MEMORY, UDP or TCP
 * Plugins
-* Deformables and Cloth
 
 The API is unstable and subject to change.
 

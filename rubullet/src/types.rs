@@ -910,7 +910,7 @@ pub struct VisualShapeOptions {
     pub specular_colors: [f64; 3],
     /// Additional flags. Currently not used
     #[doc(hidden)]
-    pub flags: Option<i32>,
+    pub flags: Option<VisualShapeFlags>,
 }
 impl Default for VisualShapeOptions {
     fn default() -> Self {
@@ -1136,7 +1136,7 @@ pub struct ChangeVisualShapeOptions {
     pub specular_color: Option<[f64; 3]>,
     /// Not yet used anywhere. But it is in the code.
     #[doc(hidden)]
-    pub flags: Option<i32>,
+    pub flags: Option<VisualShapeFlags>,
 }
 impl Default for ChangeVisualShapeOptions {
     fn default() -> Self {
@@ -2249,5 +2249,21 @@ impl Default for SoftBodyOptions {
             repulsion_stiffness: None,
             sim_filename: None,
         }
+    }
+}
+bitflags::bitflags! {
+    /// Experimental flags, best to ignore.
+    pub struct ResetFlags : i32 {
+        const DEFORMABLE_WORLD = 1;
+        const DISCRETE_DYNAMICS_WORLD = 2;
+        const SIMPLE_BROADPHASE = 4;
+    }
+}
+
+bitflags::bitflags! {
+    /// Experimental flags, best to ignore.
+    pub struct VisualShapeFlags : i32 {
+        const TEXTURE_UNIQUE_IDS = 1;
+        const DOUBLE_SIDED = 4;
     }
 }

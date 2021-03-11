@@ -24,8 +24,8 @@ use crate::{
     BodyInfo, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId, ContactPoint,
     ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error, LogId,
     LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions,
-    SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions, UrdfOptions,
-    VisualShapeData,
+    ResetFlags, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions,
+    UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
@@ -3049,7 +3049,7 @@ impl PhysicsClient {
 
             if shape_index >= 0 {
                 if let Some(flags) = options.flags {
-                    ffi::b3CreateVisualSetFlag(command_handle, shape_index, flags);
+                    ffi::b3CreateVisualSetFlag(command_handle, shape_index, flags.bits());
                 }
                 ffi::b3CreateVisualShapeSetRGBAColor(
                     command_handle,
@@ -3308,7 +3308,7 @@ impl PhysicsClient {
                 ffi::b3UpdateVisualShapeRGBAColor(command_handle, rgba.as_ptr());
             }
             if let Some(flags) = options.flags {
-                ffi::b3UpdateVisualShapeFlags(command_handle, flags);
+                ffi::b3UpdateVisualShapeFlags(command_handle, flags.bits());
             }
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
@@ -5117,6 +5117,61 @@ impl PhysicsClient {
                 assert!(id >= 0);
                 Ok(BodyId(id))
             }
+        }
+    }
+    /// You can pin vertices of a deformable object to the world, or attach a vertex of a deformable
+    /// to a multi body using this method.
+    /// It will return a ConstraintId.
+    /// You can remove this constraint using the [`remove_constraint`](`Self::remove_constraint`) method.
+    ///
+    /// See `deformable_anchor.rs` for an example.
+    pub fn create_soft_body_anchor<
+        Body: Into<Option<BodyId>>,
+        Link: Into<Option<usize>>,
+        Vector: Into<Option<Vector3<f64>>>,
+    >(
+        &mut self,
+        soft_body_id: BodyId,
+        node_index: usize,
+        body: Body,
+        link_index: Link,
+        body_frame_position: Vector,
+    ) -> Result<ConstraintId, Error> {
+        let body_frame_position = body_frame_position.into().unwrap_or_else(Vector3::zeros);
+        let body_id = body.into().unwrap_or(BodyId(-1));
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitCreateSoftBodyAnchorConstraintCommand(
+                self.handle,
+                soft_body_id.0,
+                node_index as i32,
+                body_id.0,
+                link_index,
+                body_frame_position.as_ptr(),
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_CONSTRAINT_COMPLETED as i32 {
+                return Ok(ConstraintId(ffi::b3GetStatusUserConstraintUniqueId(
+                    status_handle,
+                )));
+            }
+            Err(Error::new("Cannot load soft body."))
+        }
+    }
+    /// reset_simulation_with_flags does the same as [`reset_simulation`](`Self::reset_simulation`),
+    /// but also lets you add some experimental flags. It can be useful if you want to create a world
+    /// with soft body objects.
+    pub fn reset_simulation_with_flags(&mut self, flags: ResetFlags) {
+        unsafe {
+            let command_handle = ffi::b3InitResetSimulationCommand(self.handle);
+            ffi::b3InitResetSimulationSetFlags(command_handle, flags.bits());
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
 }

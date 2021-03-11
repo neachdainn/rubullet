@@ -50,9 +50,10 @@ pub use crate::{
         InverseKinematicsParametersBuilder, ItemId, Jacobian, JointFeedbackMode, JointInfo,
         JointInfoFlags, JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, LogFlags,
         LogId, LoggingType, MouseButtonState, MouseEvent, MultiBodyOptions, OverlappingObject,
-        PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions, SdfOptions,
-        SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId, StateLoggingOptions, TextureId,
-        UrdfOptions, Velocity, VisualId, VisualShapeData, VisualShapeOptions,
+        PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions, RayTestOptions, ResetFlags,
+        SdfOptions, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId,
+        StateLoggingOptions, TextureId, UrdfOptions, Velocity, VisualId, VisualShapeData,
+        VisualShapeFlags, VisualShapeOptions,
     },
 };
 pub use image;
