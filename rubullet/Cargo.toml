@@ -1,6 +1,6 @@
 [package]
 name = "rubullet"
-version = "0.1.0-alpha"
+version = "0.1.0-alpha-2"
 authors = ["Nathan Kent <nkent2@cs.rochester.edu>", "Marco Boneberger <m.boneberger@tu-bs.de>"]
 edition = "2018"
 license = "MIT"
@@ -91,7 +91,7 @@ path = "examples/inverse_dynamics.rs"
 [dependencies]
 nalgebra = "0.23"
 image = "0.23.12"
-rubullet-sys = { version = "0.1.0-alpha", path = "../rubullet-sys" }
+rubullet-sys = { version = "0.1.0-alpha-2", path = "../rubullet-sys" }
 bitflags = "1.2.1"
 
 [dev-dependencies]
