@@ -11,7 +11,8 @@ use nalgebra::{
     Vector3,
 };
 
-use self::gui_marker::GuiMarker;
+use self::marker::GuiMarker;
+use crate::client::marker::SharedMemoryMarker;
 use crate::types::{
     Aabb, AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
     ConstraintInfo, ControlModeArray, ExternalForceFrame, GeometricCollisionShape,
@@ -39,7 +40,7 @@ use rubullet_sys::EnumSharedMemoryServerStatus::{
     CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED,
     CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED, CMD_RESTORE_STATE_COMPLETED,
     CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED,
-    CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_SYNC_BODY_INFO_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
     CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
     CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
@@ -49,7 +50,7 @@ use rubullet_sys::{
     b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RaycastInformation,
     b3SharedMemoryCommandHandle, b3SharedMemoryStatusHandle, b3SubmitClientCommandAndWaitStatus,
     B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES, MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING,
-    MAX_SDF_BODIES,
+    MAX_SDF_BODIES, SHARED_MEMORY_KEY,
 };
 use std::time::Duration;
 
@@ -65,10 +66,13 @@ type Handle = ffi::b3PhysicsClientHandle;
 /// This serves as an abstraction over the possible physics servers, providing a unified interface.
 pub struct PhysicsClient {
     /// The underlying `b3PhysicsClientHandle` that is guaranteed to not be null.
-    handle: Handle,
+    pub(crate) handle: Handle,
 
     /// A marker indicating whether or not a GUI is in use by this client.
-    _gui_marker: Option<GuiMarker>,
+    pub(crate) _gui_marker: Option<GuiMarker>,
+
+    /// A marker indicating whether or not SharedMemory is in use by this client.
+    pub(crate) _shared_memory_marker: Option<SharedMemoryMarker>,
 }
 
 impl PhysicsClient {
@@ -83,10 +87,97 @@ impl PhysicsClient {
     /// You also cannot get mouse or keyboard events.
     /// The can be many instances of PhysicsClients running in Direct mode
     ///
-    /// Other modes are currently not implemented.
+    /// There are also other modes for more advanced use cases. However, these were not heavily tested,
+    /// so be careful when you use them.
     pub fn connect(mode: Mode) -> Result<PhysicsClient, Error> {
-        let (raw_handle, _gui_marker) = match mode {
-            Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None) },
+        let (raw_handle, _gui_marker, _shared_memory_marker) = match mode {
+            Mode::GuiMainThread => {
+                // Only one GUI is allowed per process. Try to get the marker and fail if there is
+                // another.
+                let gui_marker = GuiMarker::acquire()?;
+
+                unsafe {
+                    let raw_handle =
+                        ffi::b3CreateInProcessPhysicsServerAndConnectMainThread(0, ptr::null_mut());
+                    (raw_handle, Some(gui_marker), None)
+                }
+            }
+            Mode::GraphicsServerTcp { hostname, port } => {
+                let gui_marker = GuiMarker::acquire()?;
+
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(6667);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnectTCP(
+                            hostname.as_ptr(),
+                            port as i32,
+                        )
+                    }
+                };
+
+                (raw_handle, Some(gui_marker), None)
+            }
+            Mode::Udp { hostname, port } => {
+                // Looking at the source code for both of these functions, they do not assume
+                // anything about the size of `argv` beyond what is supplied by `argc`. So, and
+                // `argc` of zero should keep this safe.
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(1234);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3ConnectPhysicsUDP(hostname.as_ptr(), port as i32)
+                    }
+                };
+
+                (raw_handle, None, None)
+            }
+            Mode::Tcp { hostname, port } => {
+                // Looking at the source code for both of these functions, they do not assume
+                // anything about the size of `argv` beyond what is supplied by `argc`. So, and
+                // `argc` of zero should keep this safe.
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(6667);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3ConnectPhysicsTCP(hostname.as_ptr(), port as i32)
+                    }
+                };
+
+                (raw_handle, None, None)
+            }
+            Mode::SharedMemoryServer => unsafe {
+                let raw_handle =
+                    ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect3(
+                        ptr::null_mut(),
+                        SHARED_MEMORY_KEY,
+                    );
+                (raw_handle, None, None)
+            },
+            Mode::GuiServer => {
+                // Only one GUI is allowed per process. Try to get the marker and fail if there is
+                // another.
+                let gui_marker = GuiMarker::acquire()?;
+
+                let raw_handle = if cfg!(target_os = "macos") {
+                    unsafe {
+                        ffi::b3CreateInProcessPhysicsServerAndConnectMainThreadSharedMemory(
+                            0,
+                            ptr::null_mut(),
+                        )
+                    }
+                } else {
+                    unsafe {
+                        ffi::b3CreateInProcessPhysicsServerAndConnectSharedMemory(
+                            0,
+                            ptr::null_mut(),
+                        )
+                    }
+                };
+
+                (raw_handle, Some(gui_marker), None)
+            }
+            Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None, None) },
             Mode::Gui => {
                 // Only one GUI is allowed per process. Try to get the marker and fail if there is
                 // another.
@@ -103,8 +194,22 @@ impl PhysicsClient {
                     unsafe { ffi::b3CreateInProcessPhysicsServerAndConnect(0, ptr::null_mut()) }
                 };
 
-                (raw_handle, Some(gui_marker))
+                (raw_handle, Some(gui_marker), None)
             }
+            Mode::SharedMemoryGui => unsafe {
+                let shared_memory_marker = SharedMemoryMarker::acquire()?;
+                let raw_handle =
+                    ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect4(
+                        ptr::null_mut(),
+                        SHARED_MEMORY_KEY,
+                    );
+                (raw_handle, None, Some(shared_memory_marker))
+            },
+            Mode::SharedMemory => unsafe {
+                let shared_memory_marker = SharedMemoryMarker::acquire()?;
+                let raw_handle = ffi::b3ConnectSharedMemory(SHARED_MEMORY_KEY);
+                (raw_handle, None, Some(shared_memory_marker))
+            },
         };
         let handle = raw_handle.expect("Bullet returned a null pointer");
 
@@ -113,6 +218,7 @@ impl PhysicsClient {
         let mut client = PhysicsClient {
             handle,
             _gui_marker,
+            _shared_memory_marker,
         };
 
         // Make sure it is up and running.
@@ -802,7 +908,7 @@ impl PhysicsClient {
     }
 
     /// Returns whether or not this client can submit a command.
-    fn can_submit_command(&mut self) -> bool {
+    pub(crate) fn can_submit_command(&mut self) -> bool {
         unsafe { ffi::b3CanSubmitCommand(self.handle) != 0 }
     }
     /// You can change the properties such as mass, friction and restitution coefficients using this
@@ -1313,10 +1419,10 @@ impl PhysicsClient {
         }
         if let Some(damping) = joint_damping {
             assert_eq!(damping.len(),
-                dof_count,
-                "calculateInverseKinematics: the size of input joint damping values ({}) should be equal to the number of degrees of freedom ({})",
-                damping.len(),
-                dof_count,
+                       dof_count,
+                       "calculateInverseKinematics: the size of input joint damping values ({}) should be equal to the number of degrees of freedom ({})",
+                       damping.len(),
+                       dof_count,
             );
 
             has_joint_damping = true;
@@ -1452,10 +1558,10 @@ impl PhysicsClient {
     ) -> Result<Vec<f64>, Error> {
         let flags = 0; // TODO find out what those flags are and let the user set them
         assert_eq!(object_velocities.len(),
-            object_accelerations.len(),
-            "number of object velocities ({}) should be equal to the number of object accelerations ({})",
-            object_velocities.len(),
-            object_accelerations.len(),
+                   object_accelerations.len(),
+                   "number of object velocities ({}) should be equal to the number of object accelerations ({})",
+                   object_velocities.len(),
+                   object_accelerations.len(),
         );
         unsafe {
             let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
@@ -1759,10 +1865,10 @@ impl PhysicsClient {
             }
         }
         assert_eq!(forces.len(),
-            joint_indices.len(),
-            "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
-            forces.len(),
-            joint_indices.len(),
+                   joint_indices.len(),
+                   "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
+                   forces.len(),
+                   joint_indices.len(),
         );
         let kp = 0.1;
         let kd = 1.0;
@@ -1782,10 +1888,10 @@ impl PhysicsClient {
             match control_mode {
                 ControlModeArray::Positions(target_positions) => {
                     assert_eq!(target_positions.len(),
-                        joint_indices.len(),
-                        "number of target positions ({}) should match the number of joint indices ({})",
-                        target_positions.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target positions ({}) should match the number of joint indices ({})",
+                               target_positions.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..target_positions.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -1818,28 +1924,28 @@ impl PhysicsClient {
                     velocity_gains: vg,
                 } => {
                     assert_eq!(pos.len(),
-                        joint_indices.len(),
-                        "number of target positions ({}) should match the number of joint indices ({})",
-                        pos.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target positions ({}) should match the number of joint indices ({})",
+                               pos.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(vel.len(),
-                        joint_indices.len(),
-                        "number of target velocities ({}) should match the number of joint indices ({})",
-                        vel.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target velocities ({}) should match the number of joint indices ({})",
+                               vel.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(pg.len(),
-                        joint_indices.len(),
-                        "number of position gains ({}) should match the number of joint indices ({})",
-                        pg.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of position gains ({}) should match the number of joint indices ({})",
+                               pg.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(vg.len(),
-                        joint_indices.len(),
-                        "number of velocity gains ({}) should match the number of joint indices ({})",
-                        vg.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of velocity gains ({}) should match the number of joint indices ({})",
+                               vg.len(),
+                               joint_indices.len(),
                     );
 
                     for i in 0..pos.len() {
@@ -1867,10 +1973,10 @@ impl PhysicsClient {
                 }
                 ControlModeArray::Velocities(vel) => {
                     assert_eq!(vel.len(),
-                        joint_indices.len(),
-                        "number of target velocities ({}) should match the number of joint indices ({})",
-                        vel.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target velocities ({}) should match the number of joint indices ({})",
+                               vel.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..vel.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -1889,10 +1995,10 @@ impl PhysicsClient {
                 }
                 ControlModeArray::Torques(f) => {
                     assert_eq!(f.len(),
-                        joint_indices.len(),
-                        "number of target torques ({}) should match the number of joint indices ({})",
-                        f.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target torques ({}) should match the number of joint indices ({})",
+                               f.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..f.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -2854,11 +2960,11 @@ impl PhysicsClient {
                 } => {
                     if num_heightfield_columns > 0 && num_heightfield_rows > 0 {
                         let num_height_field_points = heightfield_data.len();
-                        assert_eq!( num_heightfield_rows * num_heightfield_columns,
-                            num_height_field_points,
-                            "Size of heightfield_data ({}) doesn't match num_heightfield_columns * num_heightfield_rows = {}",
-                            num_height_field_points,
-                            num_heightfield_rows * num_heightfield_columns,
+                        assert_eq!(num_heightfield_rows * num_heightfield_columns,
+                                   num_height_field_points,
+                                   "Size of heightfield_data ({}) doesn't match num_heightfield_columns * num_heightfield_rows = {}",
+                                   num_height_field_points,
+                                   num_heightfield_rows * num_heightfield_columns,
                         );
                         shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
                             self.handle,
@@ -5278,6 +5384,51 @@ impl PhysicsClient {
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
         }
     }
+    /// check whether the client is still connected. Most of the time the call blocks instead of returning false, though
+    pub fn is_connected(&mut self) -> bool {
+        self.can_submit_command()
+    }
+    /// sync_body_info will synchronize the body information (get_body_info) in case of multiple
+    /// clients connected to one physics server changing the world
+    /// ( [`load_urdf`](`Self::load_urdf()`), [remove_body](`Self::remove_body`) etc).
+    pub fn sync_body_info(&mut self) -> Result<(), Error> {
+        unsafe {
+            let command = ffi::b3InitSyncBodyInfoCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SYNC_BODY_INFO_COMPLETED as i32 {
+                return Err(Error::new("Error in sync_body_info command"));
+            }
+        }
+        Ok(())
+    }
+    /// closes the PhysicsClient.
+    pub fn disconnect(self) {}
+
+    /// get a specific body id. The index must be in range \[0,get_num_bodies()\].
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let plane_id = physics_client.load_urdf("plane.urdf", None)?;
+    ///     assert_eq!(physics_client.get_body_id(0)?, plane_id);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_body_id(&mut self, index: usize) -> Result<BodyId, Error> {
+        unsafe {
+            let id = ffi::b3GetBodyUniqueId(self.handle, index as i32);
+            if id >= 0 {
+                Ok(BodyId(id))
+            } else {
+                Err(Error::new("could not get body id"))
+            }
+        }
+    }
 }
 
 impl Drop for PhysicsClient {
@@ -5286,8 +5437,8 @@ impl Drop for PhysicsClient {
     }
 }
 
-/// Module used to enforce the existence of only a single GUI
-mod gui_marker {
+/// Module used to enforce the existence of only a single GUI and a single SharedMemory instance per process.
+pub(crate) mod marker {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     /// A marker for whether or not a GUI has been started.
@@ -5319,6 +5470,39 @@ mod gui_marker {
         fn drop(&mut self) {
             // We are the only marker so no need to CAS
             GUI_EXISTS.store(false, Ordering::SeqCst)
+        }
+    }
+
+    static SHARED_MEMORY_EXISTS: AtomicBool = AtomicBool::new(false);
+
+    /// A marker type for keeping track of the existence of a SharedMemory instance.
+    pub struct SharedMemoryMarker {
+        _unused: (),
+    }
+
+    impl SharedMemoryMarker {
+        /// Attempts to acquire the GUI marker.
+        pub fn acquire() -> Result<SharedMemoryMarker, crate::Error> {
+            // We can probably use a weaker ordering but this will be called so little that we
+            // may as well be sure about it.
+            match SHARED_MEMORY_EXISTS.compare_exchange(
+                false,
+                true,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(false) => Ok(SharedMemoryMarker { _unused: () }),
+                _ => Err(crate::Error::new(
+                    "Only one in-process SharedMemory connection allowed",
+                )),
+            }
+        }
+    }
+
+    impl Drop for SharedMemoryMarker {
+        fn drop(&mut self) {
+            // We are the only marker so no need to CAS
+            SHARED_MEMORY_EXISTS.store(false, Ordering::SeqCst)
         }
     }
 }

@@ -40,6 +40,7 @@ pub use crate::{
     client::PhysicsClient,
     error::Error,
     mode::Mode,
+    server::{PhysicsServer, ServerMode},
     types::{
         Aabb, ActivationState, AddDebugLineOptions, AddDebugTextOptions, BodyId, BodyInfo,
         BodyType, CameraImageOptions, ChangeConstraintOptions, ChangeDynamicsOptions,
@@ -62,4 +63,5 @@ mod client;
 mod error;
 pub mod logging_utils;
 mod mode;
+mod server;
 mod types;

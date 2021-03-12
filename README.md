@@ -8,7 +8,7 @@ Development is ongoing and functionality is currently limited.
 
 ## Status
 Right now RuBullet should cover most of the basic use cases. It can:
-* Create a PhysicsClient in either Direct or Gui mode
+* Create a PhysicsClient in either Direct, Gui or other modes
 * Load models from URDF, SDF or MuJoCo files
 * Create own models within the simulation
 * Control robots in position, velocity or torque mode
@@ -25,8 +25,8 @@ Right now RuBullet should cover most of the basic use cases. It can:
 * Deformables and Cloth
 
 Things which are not implemented yet:
+* Everything MultiDOF related
 * Virtual Reality
-* Connect via SHARED_MEMORY, UDP or TCP
 * Plugins
 
 The API is unstable and subject to change.

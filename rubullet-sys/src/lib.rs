@@ -1,7 +1,9 @@
 //! Foreign function interface for Bullet C API.
 #![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
+use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_uchar};
 use std::ptr::NonNull;
+pub const SHARED_MEMORY_KEY: i32 = 12347;
 
 #[repr(C)]
 pub struct b3PhysicsClientHandle__ {
@@ -31,6 +33,43 @@ extern "C" {
         argc: c_int,
         argv: *mut *mut c_char,
     ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessGraphicsServerAndConnectMainThreadSharedMemory(
+        port: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessGraphicsServerAndConnectSharedMemory(
+        port: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnectTCP(
+        host_name: *const c_char,
+        port: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessPhysicsServerAndConnectSharedMemory(
+        argc: c_int,
+        argv: *mut *mut c_char,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessPhysicsServerAndConnectMainThreadSharedMemory(
+        argc: c_int,
+        argv: *mut *mut c_char,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect3(
+        guiHelperPtr: *mut c_void,
+        sharedMemoryKey: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect4(
+        guiHelperPtr: *mut c_void,
+        sharedMemoryKey: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+
+    pub fn b3ConnectPhysicsUDP(
+        host_name: *const c_char,
+        port: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+    pub fn b3ConnectPhysicsTCP(
+        host_name: *const c_char,
+        port: c_int,
+    ) -> Option<b3PhysicsClientHandle>;
+
+    pub fn b3ConnectSharedMemory(sharedMemoryKey: c_int) -> Option<b3PhysicsClientHandle>;
     pub fn b3DisconnectSharedMemory(physClient: b3PhysicsClientHandle);
 
     pub fn b3InitConfigureOpenGLVisualizer(
