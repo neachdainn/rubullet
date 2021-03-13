@@ -1,4 +1,8 @@
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/neachdainn/rubullet/Rust)
+[![crates.io](https://img.shields.io/crates/v/rubullet.svg)](https://crates.io/crates/rubullet)
+[![crates.io](https://img.shields.io/crates/l/rubullet.svg)](https://crates.io/crates/rubullet)
+[![crates.io](https://img.shields.io/crates/d/rubullet.svg)](https://crates.io/crates/rubullet)
+[![docs.rs](https://docs.rs/rubullet/badge.svg)](https://docs.rs/rubullet)
 # RuBullet
 
 RuBullet is a Rust implementation of [PyBullet](https://pybullet.org/).
@@ -8,18 +12,19 @@ Development is ongoing and functionality is currently limited.
 
 ## Status
 Right now RuBullet should cover most of the basic use cases. It can:
-* Create a PhysicsClient in either Direct, Gui or other modes
-* Load models from URDF, SDF or MuJoCo files
+* Create a PhysicsClient in Direct, Gui or other modes
+* Load models from URDF, SDF, MuJoCo or Bullet files
 * Create own models within the simulation
 * Control robots in position, velocity or torque mode
 * Calculate inverse dynamics, inverse kinematics, jacobians and mass matrices
 * Render camera images
 * Read information about links and joints
 * Change dynamics of a body
-* Create GUI sliders, button or put debugging text or lines in the simulation
+* Create GUI sliders, buttons or put debugging text or lines in the simulation
 * Get keyboard and mouse events 
 * Create and manage constraints
-* Logging and saving states
+* Logging
+* Saving states and loading states
 * Set physics engine parameters
 * Collision Detection Queries
 * Deformables and Cloth
@@ -43,7 +48,7 @@ fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
 
     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
-    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
+    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0));
 
     let _plane_id = physics_client.load_urdf("plane.urdf", Default::default())?;
 
