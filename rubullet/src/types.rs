@@ -2,15 +2,20 @@
 use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
-    DVector, Isometry3, Matrix3xX, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
+    DVector, Isometry3, Matrix3xX, Matrix4, Matrix6xX, Quaternion, Translation3, UnitQuaternion,
     Vector3, Vector6, U3,
 };
-use rubullet_sys::{b3BodyInfo, b3JointInfo, b3JointSensorState, b3LinkState, b3VisualShapeData};
+use rubullet_sys::{
+    b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
+    b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RayHitInfo, b3UserConstraint,
+    b3VisualShapeData,
+};
 use std::convert::TryFrom;
 use std::ffi::CStr;
 
 use std::os::raw::c_int;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// The unique ID for a body within a physics server.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -40,6 +45,18 @@ pub struct TextureId(pub(crate) c_int);
 /// The unique ID for a User Debug Parameter Item
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ItemId(pub(crate) c_int);
+
+/// The unique ID for a constraint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct ConstraintId(pub(crate) c_int);
+
+/// The unique ID for a Logging Object.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct LogId(pub(crate) c_int);
+
+/// The unique ID for a State Object.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct StateId(pub(crate) c_int);
 
 /// An enum to represent different types of joints
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -203,7 +220,7 @@ pub struct InverseKinematicsParameters<'a> {
     pub end_effector_link_index: usize,
     /// Target position of the end effector (its link coordinate, not center of mass coordinate!).
     /// By default this is in Cartesian world space, unless you provide current_position joint angles.
-    pub target_position: Point3<f64>,
+    pub target_position: Vector3<f64>,
     /// Target orientation in Cartesian world space.
     /// If not specified, pure position IK will be used.
     pub target_orientation: Option<UnitQuaternion<f64>>,
@@ -242,7 +259,7 @@ impl<'a> Default for InverseKinematicsParameters<'a> {
     fn default() -> Self {
         InverseKinematicsParameters {
             end_effector_link_index: 0,
-            target_position: Point3::new(0., 0., 0.),
+            target_position: Vector3::zeros(),
             target_orientation: None,
             limits: None,
             joint_damping: None,
@@ -293,7 +310,7 @@ impl<'a> InverseKinematicsParametersBuilder<'a> {
     /// * `target_pose` - target pose of the end effector in its link coordinate (not CoM).
     /// use [`ignore_orientation()`](`Self::ignore_orientation()`) if you do not want to consider the orientation
     pub fn new(end_effector_link_index: usize, target_pose: &'a Isometry3<f64>) -> Self {
-        let target_position: Point3<f64> = target_pose.translation.vector.into();
+        let target_position = target_pose.translation.vector;
         let params = InverseKinematicsParameters {
             end_effector_link_index,
             target_position,
@@ -396,7 +413,7 @@ pub struct AddDebugLineOptions {
     /// By default it is the base frame (-1)
     pub parent_link_index: Option<usize>,
     /// replace an existing line (to improve performance and to avoid flickering of remove/add)
-    pub replace_item_id: Option<BodyId>,
+    pub replace_item_id: Option<ItemId>,
 }
 
 impl Default for AddDebugLineOptions {
@@ -862,7 +879,10 @@ impl From<(b3LinkState, bool)> for LinkState {
     }
 }
 
-fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -> Isometry3<f64> {
+pub(crate) fn position_orientation_to_isometry(
+    position: [f64; 3],
+    orientation: [f64; 4],
+) -> Isometry3<f64> {
     Isometry3::<f64>::from_parts(
         Translation3::from(Vector3::from_column_slice(&position)),
         UnitQuaternion::from_quaternion(Quaternion::from_parts(
@@ -871,7 +891,9 @@ fn position_orientation_to_isometry(position: [f64; 3], orientation: [f64; 4]) -
         )),
     )
 }
-fn combined_position_orientation_array_to_isometry(combined: [f64; 7]) -> Isometry3<f64> {
+pub(crate) fn combined_position_orientation_array_to_isometry(
+    combined: [f64; 7],
+) -> Isometry3<f64> {
     let position = [combined[0], combined[1], combined[2]];
     let orientation = [combined[3], combined[4], combined[5], combined[6]];
     position_orientation_to_isometry(position, orientation)
@@ -888,7 +910,7 @@ pub struct VisualShapeOptions {
     pub specular_colors: [f64; 3],
     /// Additional flags. Currently not used
     #[doc(hidden)]
-    pub flags: Option<i32>,
+    pub flags: Option<VisualShapeFlags>,
 }
 impl Default for VisualShapeOptions {
     fn default() -> Self {
@@ -1072,9 +1094,6 @@ pub struct MultiBodyOptions {
     /// similar to the flags passed in load_urdf, for example URDF_USE_SELF_COLLISION.
     /// See [`LoadModelFlags`](`LoadModelFlags`) for flags explanation.
     pub flags: Option<LoadModelFlags>,
-    /// list of base positions, for fast batch creation of many multibodies.
-    /// See create_multi_body_batch.rs example.
-    pub batch_positions: Option<Vec<Point3<f64>>>,
 }
 impl Default for MultiBodyOptions {
     fn default() -> Self {
@@ -1092,8 +1111,6 @@ impl Default for MultiBodyOptions {
             link_joint_axis: Vec::new(),
             use_maximal_coordinates: false,
             flags: None,
-
-            batch_positions: None,
         }
     }
 }
@@ -1114,7 +1131,7 @@ pub struct ChangeVisualShapeOptions {
     pub specular_color: Option<[f64; 3]>,
     /// Not yet used anywhere. But it is in the code.
     #[doc(hidden)]
-    pub flags: Option<i32>,
+    pub flags: Option<VisualShapeFlags>,
 }
 impl Default for ChangeVisualShapeOptions {
     fn default() -> Self {
@@ -1200,6 +1217,10 @@ impl From<b3VisualShapeData> for VisualShapeData {
 }
 /// Stores the images from [`get_camera_image()`](`crate::PhysicsClient::get_camera_image()`)
 pub struct Images {
+    /// width image resolution in pixels (horizontal)
+    pub width: usize,
+    /// height image resolution in pixels (vertical)
+    pub height: usize,
     /// RGB image with additional alpha channel
     pub rgba: RgbaImage,
     /// Depth image. Every pixel represents a distance in meters
@@ -1323,4 +1344,971 @@ impl Default for JointInfoFlags {
     fn default() -> Self {
         JointInfoFlags::NONE
     }
+}
+
+/// contains the parameters for [`change_constraint`](`crate::PhysicsClient::change_constraint`) method.
+#[derive(Default)]
+pub struct ChangeConstraintOptions {
+    /// updated child pivot, see [`create_constraint`](`crate::PhysicsClient::create_constraint`)
+    pub joint_child_pivot: Option<Vector3<f64>>,
+    /// updated child frame orientation as quaternion
+    pub joint_child_frame_orientation: Option<UnitQuaternion<f64>>,
+    /// maximum force that constraint can apply
+    pub max_force: Option<f64>,
+    /// the ratio between the rates at which the two gears rotate
+    pub gear_ratio: Option<f64>,
+    /// In some cases, such as a differential drive, a third (auxiliary) link is used as reference pose.
+    pub gear_aux_link: Option<usize>,
+    /// the relative position target offset between two gears
+    pub relative_position_target: Option<f64>,
+    /// constraint error reduction parameter
+    pub erp: Option<f64>,
+}
+
+/// contains the parameters for [`change_constraint`](`crate::PhysicsClient::change_constraint`) method.
+#[derive(Debug)]
+pub struct ConstraintInfo {
+    /// the constraint for which this info is generated
+    pub id: ConstraintId,
+    /// parent body unique id
+    pub parent_body: BodyId,
+    /// parent body link index or `None` for base link.
+    pub parent_link_index: Option<usize>,
+    /// child body unique id or `None`or no body (specify a non-dynamic child frame in world coordinates)
+    pub child_body: Option<BodyId>,
+    /// child body link index or `None` for base link.
+    pub child_link_index: Option<usize>,
+    /// The [`JointType`](`crate::types::JointType`) for the constraint
+    pub constraint_type: JointType,
+    /// joint axis, in child link frame
+    pub joint_axis: Vector3<f64>,
+    /// pose of the joint frame relative to parent center of mass frame.
+    pub joint_parent_frame_pose: Isometry3<f64>,
+    /// updated child pose, see [`create_constraint`](`crate::PhysicsClient::create_constraint`)
+    pub joint_child_frame_pose: Isometry3<f64>,
+    /// maximum force that constraint can apply
+    pub max_applied_force: f64,
+    /// the ratio between the rates at which the two gears rotate
+    pub gear_ratio: f64,
+    /// In some cases, such as a differential drive, a third (auxiliary) link is used as reference pose.
+    pub gear_aux_link: Option<usize>,
+    /// the relative position target offset between two gears
+    pub relative_position_target: f64,
+    /// constraint error reduction parameter
+    pub erp: f64,
+}
+impl From<b3UserConstraint> for ConstraintInfo {
+    fn from(b3: b3UserConstraint) -> Self {
+        #[allow(non_snake_case)]
+        let b3UserConstraint {
+            m_parentBodyIndex,
+            m_parentJointIndex,
+            m_childBodyIndex,
+            m_childJointIndex,
+            m_parentFrame,
+            m_childFrame,
+            m_jointAxis,
+            m_jointType,
+            m_maxAppliedForce,
+            m_userConstraintUniqueId,
+            m_gearRatio,
+            m_gearAuxLink,
+            m_relativePositionTarget,
+            m_erp,
+        } = b3;
+        let parent_joint_index = {
+            if m_parentJointIndex >= 0 {
+                Some(m_parentJointIndex as usize)
+            } else {
+                None
+            }
+        };
+        let child_link_index = {
+            if m_childJointIndex >= 0 {
+                Some(m_childJointIndex as usize)
+            } else {
+                None
+            }
+        };
+        let gear_aux_link = {
+            if m_gearAuxLink >= 0 {
+                Some(m_gearAuxLink as usize)
+            } else {
+                None
+            }
+        };
+        let child_body = {
+            if m_childBodyIndex >= 0 {
+                Some(BodyId(m_childBodyIndex))
+            } else {
+                None
+            }
+        };
+        ConstraintInfo {
+            id: ConstraintId(m_userConstraintUniqueId),
+            parent_body: BodyId(m_parentBodyIndex),
+            parent_link_index: parent_joint_index,
+            child_body,
+            child_link_index,
+            constraint_type: JointType::try_from(m_jointType).unwrap(),
+            joint_axis: m_jointAxis.into(),
+            joint_parent_frame_pose: combined_position_orientation_array_to_isometry(m_parentFrame),
+            joint_child_frame_pose: combined_position_orientation_array_to_isometry(m_childFrame),
+            max_applied_force: m_maxAppliedForce,
+            gear_ratio: m_gearRatio,
+            gear_aux_link,
+            relative_position_target: m_relativePositionTarget,
+            erp: m_erp,
+        }
+    }
+}
+bitflags::bitflags! {
+    pub struct ActivationState : i32 {
+        const ENABLE_SLEEPING = 1;
+        const DISABLE_SLEEPING = 2;
+        const WAKE_UP = 4;
+        const SLEEP = 8;
+        const ENABLE_WAKEUP = 16;
+        const DISABLE_WAKEUP = 32;
+    }
+}
+/// Dynamics options for the [`change_dynamics`](`crate::PhysicsClient::`change_dynamics`) method.
+/// Some options do not depend on the given link and apply to the whole body. These options are:
+///
+/// * `linear_damping`
+/// * `angular_damping`
+/// * `activation_state`
+/// * `max_joint_velocity` - PyBullet claims that you can set it per joint, but that is not true
+/// * `collision_margin`
+#[derive(Default, Debug, Clone)]
+pub struct ChangeDynamicsOptions {
+    /// change the mass of the link
+    pub mass: Option<f64>,
+    /// lateral (linear) contact friction
+    pub lateral_friction: Option<f64>,
+    /// torsional friction around the contact normal
+    pub spinning_friction: Option<f64>,
+    /// torsional friction orthogonal to contact normal (keep this value very close to zero,
+    /// otherwise the simulation can become very unrealistic
+    pub rolling_friction: Option<f64>,
+    /// bouncyness of contact. Keep it a bit less than 1, preferably closer to 0.
+    pub restitution: Option<f64>,
+    /// linear damping of the link (0.04 by default)
+    pub linear_damping: Option<f64>,
+    /// angular damping of the link (0.04 by default)
+    pub angular_damping: Option<f64>,
+    /// The contact stiffness and contact damping of the link encoded as tuple (contact_stiffness, contact_damping)
+    /// This overrides the value if it was specified in the URDF file in the contact section.
+    pub contact_stiffness_and_damping: Option<(f64, f64)>,
+    /// enable or disable a friction anchor: friction drift correction
+    /// (disabled by default, unless set in the URDF contact section)
+    pub friction_anchor: Option<bool>,
+    /// diagonal elements of the inertia tensor. Note that the base and links are centered around
+    /// the center of mass and aligned with the principal axes of inertia
+    /// so there are no off-diagonal elements in the inertia tensor.
+    pub local_inertia_diagonal: Option<Vector3<f64>>,
+    /// radius of the sphere to perform continuous collision detection.
+    pub ccd_swept_sphere_radius: Option<f64>,
+    /// contacts with a distance below this threshold will be processed by the constraint solver.
+    /// For example, if 0, then contacts with distance 0.01 will not be processed as a constraint
+    pub contact_processing_threshold: Option<f64>,
+    /// When sleeping is enabled, objects that don't move (below a threshold) will be disabled
+    /// as sleeping, if all other objects that influence it are also ready to sleep.
+    pub activation_state: Option<ActivationState>,
+    /// Joint damping coefficient applied at each joint. This coefficient is read from URDF joint damping field.
+    /// Keep the value close to 0.
+    /// Joint damping force = -damping_coefficient * joint_velocity
+    pub joint_damping: Option<f64>,
+    /// coefficient to allow scaling of friction in different directions.
+    pub anisotropic_friction: Option<f64>,
+    /// maximum joint velocity for the whole robot, if it is exceeded during constraint solving,
+    /// it is clamped. Default maximum joint velocity is 100 units.
+    pub max_joint_velocity: Option<f64>,
+    /// change the collision margin. dependent on the shape type, it may or may not add some padding to the collision shape.
+    pub collision_margin: Option<f64>,
+    /// changes the lower and upper limits of a joint. (lower_limit, upper_limit)
+    ///
+    /// NOTE that at the moment, the joint limits are not updated in [`get_joint_info`](`crate::PhysicsClient::get_joint_info`)!
+    pub joint_limits: Option<(f64, f64)>,
+    /// change the maximum force applied to satisfy a joint limit.
+    pub joint_limit_force: Option<f64>,
+}
+
+/// Contains information about the mass, center of mass, friction and other properties of the base and links.
+/// Is returned by [`get_dynamics_info`](`crate::PhysicsClient::get_dynamics_info`).
+#[derive(Debug)]
+pub struct DynamicsInfo {
+    /// mass in kg
+    pub mass: f64,
+    /// lateral (linear) contact friction
+    pub lateral_friction: f64,
+    /// spinning friction coefficient around contact normal
+    pub spinning_friction: f64,
+    /// rolling friction coefficient orthogonal to contact normal
+    pub rolling_friction: f64,
+    /// coefficient of restitution (bouncyness of contact).
+    pub restitution: f64,
+
+    /// The contact stiffness and contact damping of the link encoded as tuple (contact_stiffness, contact_damping).
+    /// Is `None` if not available
+    pub contact_stiffness_and_damping: Option<(f64, f64)>,
+
+    /// diagonal elements of the inertia tensor. Note that the base and links are centered around
+    /// the center of mass and aligned with the principal axes of inertia
+    /// so there are no off-diagonal elements in the inertia tensor.
+    pub local_inertia_diagonal: Vector3<f64>,
+    ///  of inertial frame in local coordinates of the joint frame
+    pub local_inertial_pose: Isometry3<f64>,
+    /// body type of the object
+    pub body_type: BodyType,
+    ///  collision margin of the collision shape. collision margins depend on the shape type, it is not consistent.
+    pub collision_margin: f64,
+}
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum BodyType {
+    RigidBody = 1,
+    MultiBody = 2,
+    SoftBody = 3,
+}
+
+impl From<b3DynamicsInfo> for DynamicsInfo {
+    fn from(b3: b3DynamicsInfo) -> Self {
+        #[allow(unused, non_snake_case)]
+        let b3DynamicsInfo {
+            m_mass,
+            m_localInertialDiagonal,
+            m_localInertialFrame,
+            m_lateralFrictionCoeff,
+            m_rollingFrictionCoeff,
+            m_spinningFrictionCoeff,
+            m_restitution,
+            m_contactStiffness,
+            m_contactDamping,
+            m_activationState,
+            m_bodyType,
+            m_angularDamping,
+            m_linearDamping,
+            m_ccdSweptSphereRadius,
+            m_contactProcessingThreshold,
+            m_frictionAnchor,
+            m_collisionMargin,
+            m_dynamicType,
+        } = b3;
+        let contact_stiffness_and_damping = {
+            if m_contactStiffness <= 0. || m_contactDamping <= 0. {
+                None
+            } else {
+                Some((m_contactStiffness, m_contactDamping))
+            }
+        };
+        DynamicsInfo {
+            mass: m_mass,
+            lateral_friction: m_lateralFrictionCoeff,
+            spinning_friction: m_spinningFrictionCoeff,
+            rolling_friction: m_rollingFrictionCoeff,
+            restitution: m_restitution,
+            contact_stiffness_and_damping,
+            local_inertia_diagonal: m_localInertialDiagonal.into(),
+            local_inertial_pose: combined_position_orientation_array_to_isometry(
+                m_localInertialFrame,
+            ),
+            body_type: match m_bodyType {
+                1 => BodyType::RigidBody,
+                2 => BodyType::MultiBody,
+                3 => BodyType::SoftBody,
+                _ => panic!("internal error: Unknown BodyType ({})", m_bodyType),
+            },
+            collision_margin: m_collisionMargin,
+        }
+    }
+}
+/// axis-aligned minimum bounding box
+#[derive(Debug)]
+pub struct Aabb {
+    /// minimum coordinates of the aabb
+    pub min: Vector3<f64>,
+    /// maximum coordinates of the aabb
+    pub max: Vector3<f64>,
+}
+
+/// Is the result of [`get_overlapping_objects`](`crate::PhysicsClient::get_overlapping_objects`).
+/// Each object specifies a link of a body.
+#[derive(Debug, Copy, Clone)]
+pub struct OverlappingObject {
+    /// BodyID of the overlapping object
+    pub body: BodyId,
+    /// the index of the link which is overlapping. Is `None` for the base.
+    pub link_index: Option<usize>,
+}
+
+/// Is the result of the get_closest_points and get_contact_points methods.
+#[derive(Debug, Copy, Clone)]
+pub struct ContactPoint {
+    /// reserved
+    #[doc(hidden)]
+    pub contact_flag: i32,
+    /// body unique id of body A. Is `None` When a collision shape was used instead
+    pub body_a: Option<BodyId>,
+    /// body unique id of body B. Is `None` When a collision shape was used instead
+    pub body_b: Option<BodyId>,
+    /// link index of body A, `None` for base
+    pub link_index_a: Option<usize>,
+    /// link index of body A, `None` for base
+    pub link_index_b: Option<usize>,
+    /// contact position on A, in Cartesian world coordinates
+    pub position_on_a: Vector3<f64>,
+    /// contact position on B, in Cartesian world coordinates
+    pub position_on_b: Vector3<f64>,
+    /// contact normal on B, pointing towards A
+    pub contact_normal_on_b: Vector3<f64>,
+    /// contact distance, positive for separation, negative for penetration
+    pub contact_distance: f64,
+    /// normal force applied during the last 'stepSimulation'. Is `None` when used with one of the
+    /// get_closes_points methods
+    pub normal_force: Option<f64>,
+    /// first lateral friction
+    pub lateral_friction_1: Vector3<f64>,
+    /// second lateral friction
+    pub lateral_friction_2: Vector3<f64>,
+}
+
+impl From<b3ContactPointData> for ContactPoint {
+    fn from(b3: b3ContactPointData) -> Self {
+        #[allow(non_snake_case)]
+        let b3ContactPointData {
+            m_contactFlags,
+            m_bodyUniqueIdA,
+            m_bodyUniqueIdB,
+            m_linkIndexA,
+            m_linkIndexB,
+            m_positionOnAInWS,
+            m_positionOnBInWS,
+            m_contactNormalOnBInWS,
+            m_contactDistance,
+            m_normalForce,
+            m_linearFrictionForce1,
+            m_linearFrictionForce2,
+            m_linearFrictionDirection1,
+            m_linearFrictionDirection2,
+        } = b3;
+        let mut lateral_friction_1: Vector3<f64> = m_linearFrictionDirection1.into();
+        lateral_friction_1 *= m_linearFrictionForce1;
+        let mut lateral_friction_2: Vector3<f64> = m_linearFrictionDirection2.into();
+        lateral_friction_2 *= m_linearFrictionForce2;
+        let link_index_a = {
+            if m_linkIndexA.is_negative() {
+                None
+            } else {
+                Some(m_linkIndexA as usize)
+            }
+        };
+        let link_index_b = {
+            if m_linkIndexB.is_negative() {
+                None
+            } else {
+                Some(m_linkIndexB as usize)
+            }
+        };
+        let body_a = {
+            if m_bodyUniqueIdA < 0 {
+                None
+            } else {
+                Some(BodyId(m_bodyUniqueIdA))
+            }
+        };
+        let body_b = {
+            if m_bodyUniqueIdB < 0 {
+                None
+            } else {
+                Some(BodyId(m_bodyUniqueIdB))
+            }
+        };
+        ContactPoint {
+            contact_flag: m_contactFlags,
+            body_a,
+            body_b,
+            link_index_a,
+            link_index_b,
+            position_on_a: m_positionOnAInWS.into(),
+            position_on_b: m_positionOnBInWS.into(),
+            contact_normal_on_b: m_contactNormalOnBInWS.into(),
+            contact_distance: m_contactDistance,
+            normal_force: Some(m_normalForce),
+            lateral_friction_1,
+            lateral_friction_2,
+        }
+    }
+}
+pub enum LoggingType {
+    /// This will require to load the quadruped/quadruped.urdf and object unique
+    /// id from the quadruped. It logs the timestamp, IMU roll/pitch/yaw, 8 leg
+    /// motor positions (q0-q7), 8 leg motor torques (u0-u7), the forward speed of the
+    /// torso and mode (unused in simulation).
+    Minitaur = 0,
+    /// This will log a log of the data of either all objects or selected ones
+    /// (if [`object_ids`](`crate::types::StateLoggingOptions::object_ids`) in the
+    /// [`StateLoggingOptions`](`crate::types::StateLoggingOptions`) is not empty).
+    GenericRobot,
+    VrControllers,
+    /// this will open an MP4 file and start streaming the OpenGL 3D visualizer pixels to the file
+    /// using an ffmpeg pipe. It will require ffmpeg installed. You can also use
+    /// avconv (default on Ubuntu), just create a symbolic link so that ffmpeg points to avconv.
+    /// On Windows, ffmpeg has some issues that cause tearing/color artifacts in some cases.
+    VideoMp4,
+    Commands,
+    ContactPoints,
+    /// This will dump a timings file in JSON format that can be opened using Google Chrome about://tracing LOAD.
+    ProfileTimings,
+    AllCommands,
+    ReplayAllCommands,
+    CustomTimer,
+}
+#[derive(Debug, Default)]
+pub struct StateLoggingOptions {
+    /// If left empty, the logger may log every object, otherwise the logger just logs the objects in the list.
+    pub object_ids: Vec<BodyId>,
+    /// Maximum number of joint degrees of freedom to log (excluding the base dofs).#
+    /// This applies to [`GenericRobot`](`crate::types::LoggingType::GenericRobot`)
+    /// Default value is 12. If a robot exceeds the number of dofs, it won't get logged at all.
+    pub max_log_dof: Option<usize>,
+    /// Applies to [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving body_a.
+    pub body_a: Option<BodyId>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving link_index_a for body_a. Use `Some(None)` to
+    /// specify the base.
+    pub link_index_a: Option<Option<usize>>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided,only log contact points involving bodyUniqueIdB.
+    pub body_b: Option<BodyId>,
+    /// Applies to  [`ContactPoints`](`crate::types::LoggingType::ContactPoints`).
+    /// If provided, only log contact points involving link_index_b for body_b. Use `Some(None)` to
+    /// specify the base.
+    pub link_index_b: Option<Option<usize>>,
+    #[doc(hidden)]
+    pub device_type_filter: Option<i32>,
+    /// Use JOINT_TORQUES to also log joint torques due to joint motors.
+    pub log_flags: Option<LogFlags>,
+}
+bitflags::bitflags! {
+    pub struct LogFlags : i32 {
+        const JOINT_MOTOR_TORQUES = 1;
+        const JOINT_USER_TORQUES = 2;
+        const JOINT_TORQUES = 3;
+    }
+}
+
+/// Options for the [`set_physics_engine_parameter`](`crate::PhysicsClient::set_physics_engine_parameter`) method.
+#[derive(Default, Debug)]
+pub struct SetPhysicsEngineParameterOptions {
+    /// See the warning in the [`set_time_step`](`crate::PhysicsClient::set_time_step`) section.
+    /// physics engine time step,
+    /// each time you call [`step_simulation`](`crate::PhysicsClient::step_simulation`) simulated
+    /// time will progress this amount. Same as [`set_time_step`](`crate::PhysicsClient::set_time_step`)
+    pub fixed_time_step: Option<Duration>,
+    ///Choose the maximum number of constraint solver iterations.
+    /// If the solver_residual_threshold is reached,
+    /// the solver may terminate before the num_solver_iterations.
+    pub num_solver_iterations: Option<usize>,
+    /// Advanced feature, only when using maximal coordinates: split the positional
+    /// constraint solving and velocity constraint solving in two stages,
+    /// to prevent huge penetration recovery forces.
+    pub use_split_impulse: Option<bool>,
+    /// Related to `use_split_impulse`: if the penetration for a particular contact constraint is
+    /// less than this specified threshold, no split impulse will happen for that contact.
+    pub split_impulse_penetration_threshold: Option<f64>,
+    /// Subdivide the physics simulation step further by `num_sub_steps`.
+    /// This will trade performance over accuracy.
+    pub num_sub_steps: Option<usize>,
+    /// Use 0 for default collision filter: (group A&maskB) AND (groupB&maskA).
+    /// Use 1 to switch to the OR collision filter: (group A&maskB) OR (groupB&maskA)
+    pub collision_filter_mode: Option<usize>,
+    /// Contact points with distance exceeding this threshold are not processed by the LCP solver.
+    /// In addition, AABBs are extended by this number. Defaults to 0.02 in Bullet 2.x.
+    pub contact_breaking_threshold: Option<f64>,
+    /// Experimental: add 1ms sleep if the number of commands executed exceed this threshold.
+    /// setting the value to `-1` disables the feature.
+    pub max_num_cmd_per_1_ms: Option<i32>,
+    /// Set to `false` to disable file caching, such as .obj wavefront file loading
+    pub enable_file_caching: Option<bool>,
+    /// If relative velocity is below this threshold, restitution will be zero.
+    pub restitution_velocity_threshold: Option<f64>,
+    /// constraint error reduction parameter (non-contact, non-friction)
+    pub erp: Option<f64>,
+    /// contact error reduction parameter
+    pub contact_erp: Option<f64>,
+    /// friction error reduction parameter (when positional friction anchors are enabled)
+    pub friction_erp: Option<f64>,
+    /// Set to `false` to disable implicit cone friction and use pyramid approximation (cone is default).
+    /// NOTE: Although enabled by default, it is worth trying to disable this feature, in case there are friction artifacts.
+    pub enable_cone_friction: Option<bool>,
+    /// enables or disables sorting of overlapping pairs (backward compatibility setting).
+    pub deterministic_overlapping_pairs: Option<bool>,
+    /// If continuous collision detection (CCD) is enabled, CCD will not be used if the
+    /// penetration is below this threshold.
+    pub allowed_ccd_penetration: Option<f64>,
+    /// Specifcy joint feedback frame
+    pub joint_feedback_mode: Option<JointFeedbackMode>,
+    /// velocity threshold, if the maximum velocity-level error for each constraint is below this
+    /// threshold the solver will terminate (unless the solver hits the numSolverIterations).
+    /// Default value is 1e-7
+    pub solver_residual_threshold: Option<f64>,
+    /// Position correction of contacts is not resolved below this threshold,
+    /// to allow more stable contact.
+    pub contact_slop: Option<f64>,
+    /// if true, enable separating axis theorem based convex collision detection,
+    /// if features are available (instead of using GJK and EPA).
+    /// Requires [`URDF_INITIALIZE_SAT_FEATURES`](`LoadModelFlags::URDF_INITIALIZE_SAT_FEATURES`) in
+    /// the [`UrdfOptions`](`UrdfOptions`) in [`load_urdf`](`crate::PhysicsClient::load_urdf`).
+    pub enable_sat: Option<bool>,
+    /// Experimental (best to ignore): allow to use a direct LCP solver, such as Dantzig.
+    pub constraint_solver_type: Option<ConstraintSolverType>,
+    /// Experimental (best to ignore) global default constraint force mixing parameter.
+    pub global_cfm: Option<f64>,
+    /// Experimental (best to ignore), minimum size of constraint solving islands,
+    /// to avoid very small islands of independent constraints.
+    pub minimum_solver_island_size: Option<usize>,
+    /// when true, additional solve analytics is available.
+    pub report_solver_analytics: Option<bool>,
+    /// fraction of previous-frame force/impulse that is used to initialize the initial solver solution
+    pub warm_starting_factor: Option<f64>,
+    pub sparse_sdf_voxel_size: Option<f64>,
+    pub num_non_contact_inner_iterations: Option<usize>,
+}
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum ConstraintSolverType {
+    None,
+    Si = 1,
+    Pgs,
+    Dantzig,
+    Lemke,
+    Nncg,
+    BlockPgs,
+}
+/// Specifies joint feedback frame. Is used in
+/// [`SetPhysicsEngineParameterOptions::joint_feedback_mode`](`SetPhysicsEngineParameterOptions::joint_feedback_mode`)
+#[derive(Debug, PartialOrd, PartialEq)]
+pub enum JointFeedbackMode {
+    None,
+    /// gets the joint feedback in world space
+    WorldSpace = 1,
+    /// gets the joint feedback in the joint frame
+    JointFrame,
+}
+///
+/// See [`SetPhysicsEngineParameterOptions`](`SetPhysicsEngineParameterOptions`) for a description of the parameters.
+#[derive(Debug)]
+pub struct PhysicsEngineParameters {
+    pub fixed_time_step: Duration,
+    pub simulation_time_stamp: Duration,
+    pub num_solver_iterations: usize,
+
+    pub use_split_impulse: bool,
+
+    pub split_impulse_penetration_threshold: f64,
+
+    pub num_sub_steps: usize,
+
+    pub collision_filter_mode: usize,
+
+    pub contact_breaking_threshold: f64,
+
+    pub enable_file_caching: bool,
+
+    pub restitution_velocity_threshold: f64,
+
+    pub erp: f64,
+
+    pub contact_erp: f64,
+
+    pub friction_erp: f64,
+    pub enable_cone_friction: bool,
+
+    pub deterministic_overlapping_pairs: bool,
+
+    pub allowed_ccd_penetration: f64,
+
+    pub joint_feedback_mode: JointFeedbackMode,
+
+    pub solver_residual_threshold: f64,
+
+    pub contact_slop: f64,
+    pub enable_sat: bool,
+
+    pub constraint_solver_type: ConstraintSolverType,
+
+    pub global_cfm: f64,
+
+    pub minimum_solver_island_size: usize,
+
+    pub report_solver_analytics: bool,
+
+    pub warm_starting_factor: f64,
+    pub sparse_sdf_voxel_size: f64,
+    pub num_non_contact_inner_iterations: usize,
+
+    pub use_real_time_simulation: bool,
+    pub gravity: Vector3<f64>,
+    pub articulated_warm_starting_factor: f64,
+    pub internal_sim_flags: i32,
+    pub friction_cfm: f64,
+}
+fn int_to_bool(int: i32) -> bool {
+    match int {
+        0 => false,
+        1 => true,
+        _ => panic!("could not convert \"{}\" to boolean", int),
+    }
+}
+impl From<b3PhysicsSimulationParameters> for PhysicsEngineParameters {
+    fn from(b3: b3PhysicsSimulationParameters) -> Self {
+        #[allow(non_snake_case)]
+        let b3PhysicsSimulationParameters {
+            m_deltaTime,
+            m_simulationTimestamp,
+            m_gravityAcceleration,
+            m_numSimulationSubSteps,
+            m_numSolverIterations,
+            m_warmStartingFactor,
+            m_articulatedWarmStartingFactor,
+            m_useRealTimeSimulation,
+            m_useSplitImpulse,
+            m_splitImpulsePenetrationThreshold,
+            m_contactBreakingThreshold,
+            m_internalSimFlags,
+            m_defaultContactERP,
+            m_collisionFilterMode,
+            m_enableFileCaching,
+            m_restitutionVelocityThreshold,
+            m_defaultNonContactERP,
+            m_frictionERP,
+            m_defaultGlobalCFM,
+            m_frictionCFM,
+            m_enableConeFriction,
+            m_deterministicOverlappingPairs,
+            m_allowedCcdPenetration,
+            m_jointFeedbackMode,
+            m_solverResidualThreshold,
+            m_contactSlop,
+            m_enableSAT,
+            m_constraintSolverType,
+            m_minimumSolverIslandSize,
+            m_reportSolverAnalytics,
+            m_sparseSdfVoxelSize,
+            m_numNonContactInnerIterations,
+        } = b3;
+        let joint_feedback_mode = {
+            match m_jointFeedbackMode {
+                0 => JointFeedbackMode::None,
+                1 => JointFeedbackMode::WorldSpace,
+                2 => JointFeedbackMode::JointFrame,
+                n => panic!("Unexpected JointFeedbackMode  \"{}\"", n),
+            }
+        };
+        let constraint_solver_type = {
+            match m_constraintSolverType {
+                0 => ConstraintSolverType::None,
+                1 => ConstraintSolverType::Si,
+                2 => ConstraintSolverType::Pgs,
+                3 => ConstraintSolverType::Dantzig,
+                4 => ConstraintSolverType::Lemke,
+                5 => ConstraintSolverType::Nncg,
+                6 => ConstraintSolverType::BlockPgs,
+                n => panic!("Unexpected ConstraintSolverType  \"{}\"", n),
+            }
+        };
+        PhysicsEngineParameters {
+            fixed_time_step: Duration::from_secs_f64(m_deltaTime),
+            simulation_time_stamp: Duration::from_secs_f64(m_simulationTimestamp),
+            num_solver_iterations: m_numSolverIterations as usize,
+            use_split_impulse: int_to_bool(m_useSplitImpulse),
+            split_impulse_penetration_threshold: m_splitImpulsePenetrationThreshold,
+            num_sub_steps: m_numSimulationSubSteps as usize,
+            collision_filter_mode: m_collisionFilterMode as usize,
+            contact_breaking_threshold: m_contactBreakingThreshold,
+
+            enable_file_caching: int_to_bool(m_enableFileCaching),
+            restitution_velocity_threshold: m_restitutionVelocityThreshold,
+            erp: m_defaultNonContactERP,
+            contact_erp: m_defaultContactERP,
+            friction_erp: m_frictionERP,
+            enable_cone_friction: int_to_bool(m_enableConeFriction),
+            deterministic_overlapping_pairs: int_to_bool(m_deterministicOverlappingPairs),
+            allowed_ccd_penetration: m_allowedCcdPenetration,
+            joint_feedback_mode,
+            solver_residual_threshold: m_solverResidualThreshold,
+            contact_slop: m_contactSlop,
+            enable_sat: int_to_bool(m_enableSAT),
+            constraint_solver_type,
+            global_cfm: m_defaultGlobalCFM,
+            minimum_solver_island_size: m_minimumSolverIslandSize as usize,
+            report_solver_analytics: int_to_bool(m_reportSolverAnalytics),
+            warm_starting_factor: m_warmStartingFactor,
+            sparse_sdf_voxel_size: m_sparseSdfVoxelSize,
+            num_non_contact_inner_iterations: m_numNonContactInnerIterations as usize,
+            use_real_time_simulation: int_to_bool(m_useRealTimeSimulation),
+            gravity: m_gravityAcceleration.into(),
+            articulated_warm_starting_factor: m_articulatedWarmStartingFactor,
+            internal_sim_flags: m_internalSimFlags,
+            friction_cfm: m_frictionCFM,
+        }
+    }
+}
+/// Contains the state of the Gui camera.
+/// Is returned by [`get_debug_visualizer_camera`](`crate::PhysicsClient::get_debug_visualizer_camera`).
+#[derive(Default, Debug)]
+pub struct DebugVisualizerCameraInfo {
+    /// width of the camera image in pixels
+    pub width: usize,
+    /// height of the camera image in pixels
+    pub height: usize,
+    /// view matrix of the camera
+    pub view_matrix: Matrix4<f32>,
+    /// projection matrix of the camera
+    pub projection_matrix: Matrix4<f32>,
+    /// up axis of the camera, in Cartesian world space coordinates
+    pub camera_up: Vector3<f32>,
+    /// forward axis of the camera, in Cartesian world space coordinates
+    pub camera_forward: Vector3<f32>,
+    /// This is a horizontal vector that can be used to generate rays (for mouse picking or creating a simple ray tracer for example)
+    pub horizontal: Vector3<f32>,
+    /// This is a vertical vector that can be used to generate rays(for mouse picking or creating a simple ray tracer for example).
+    pub vertical: Vector3<f32>,
+    /// yaw angle of the camera (in degree), in Cartesian local space coordinates
+    pub yaw: f32,
+    /// pitch angle of the camera (in degree), in Cartesian local space coordinates
+    pub pitch: f32,
+    /// distance between the camera and the camera target
+    pub dist: f32,
+    /// target of the camera, in Cartesian world space coordinates
+    pub target: Vector3<f32>,
+}
+
+impl From<b3OpenGLVisualizerCameraInfo> for DebugVisualizerCameraInfo {
+    fn from(b3: b3OpenGLVisualizerCameraInfo) -> Self {
+        #[allow(non_snake_case)]
+        let b3OpenGLVisualizerCameraInfo {
+            m_width,
+            m_height,
+            m_viewMatrix,
+            m_projectionMatrix,
+            m_camUp,
+            m_camForward,
+            m_horizontal,
+            m_vertical,
+            m_yaw,
+            m_pitch,
+            m_dist,
+            m_target,
+        } = b3;
+        DebugVisualizerCameraInfo {
+            width: m_width as usize,
+            height: m_height as usize,
+            view_matrix: Matrix4::from_column_slice(&m_viewMatrix),
+            projection_matrix: Matrix4::from_column_slice(&m_projectionMatrix),
+            camera_up: m_camUp.into(),
+            camera_forward: m_camForward.into(),
+            horizontal: m_horizontal.into(),
+            vertical: m_vertical.into(),
+            yaw: m_yaw,
+            pitch: m_pitch,
+            dist: m_dist,
+            target: m_target.into(),
+        }
+    }
+}
+
+/// Options for [`ray_test`](`crate::PhysicsClient::ray_test`)
+#[derive(Default, Debug)]
+pub struct RayTestOptions {
+    /// instead of first closest hit, you can report the n-th hit
+    pub report_hit_number: Option<usize>,
+    /// only test hits if the bitwise and between collisionFilterMask and body collision
+    /// filter group is non-zero. See
+    /// set_collision_filter_group_mask on how to modify the body filter mask/group.
+    pub collision_filter_mask: Option<i32>,
+}
+/// Options for [`ray_test_batch`](`crate::PhysicsClient::ray_test_batch`)
+#[derive(Default, Debug)]
+pub struct RayTestBatchOptions {
+    /// ray from/to is in local space of a parent object
+    pub parent_object_id: Option<BodyId>,
+    /// ray from/to is in local space of a link.
+    pub parent_link_index: Option<usize>,
+    /// use multiple threads to compute ray tests
+    /// (0 = use all threads available, positive number = exactly this amoung of threads,
+    /// default = None =  single-threaded)
+    pub num_threads: Option<usize>,
+    /// instead of first closest hit, you can report the n-th hit
+    pub report_hit_number: Option<usize>,
+    /// only useful when using report_hit_number: ignore duplicate hits if the fraction is
+    /// similar to an existing hit within this fractionEpsilon when hitting the same body.
+    /// For example, a ray may hit many co-planar triangles of one body,
+    /// you may only be interested in one of those hits.
+    pub fraction_epsilon: Option<f64>,
+    /// only test hits if the bitwise and between collisionFilterMask and body collision
+    /// filter group is non-zero. See
+    /// set_collision_filter_group_mask on how to modify the body filter mask/group.
+    pub collision_filter_mask: Option<i32>,
+}
+#[derive(Debug, Copy, Clone)]
+pub struct RayHitInfo {
+    pub body_id: BodyId,
+    pub link_index: Option<usize>,
+    pub hit_fraction: f64,
+    pub hit_position: Vector3<f64>,
+    pub hit_normal: Vector3<f64>,
+}
+impl RayHitInfo {
+    pub fn new(ray: b3RayHitInfo) -> Option<Self> {
+        let link_index = {
+            assert!(ray.m_hitObjectLinkIndex >= -1);
+            if ray.m_hitObjectLinkIndex == -1 {
+                None
+            } else {
+                Some(ray.m_hitObjectLinkIndex as usize)
+            }
+        };
+
+        if ray.m_hitObjectUniqueId < 0 {
+            None
+        } else {
+            Some(RayHitInfo {
+                body_id: BodyId(ray.m_hitObjectUniqueId),
+                link_index,
+                hit_fraction: ray.m_hitFraction,
+                hit_position: ray.m_hitPositionWorld.into(),
+                hit_normal: ray.m_hitNormalWorld.into(),
+            })
+        }
+    }
+}
+/// options for [`load_soft_body`](`crate::PhysicsClient::load_soft_body`)
+#[derive(Debug)]
+pub struct SoftBodyOptions {
+    /// initial pose of the deformable object
+    pub base_pose: Isometry3<f64>,
+    /// scaling factor to resize the deformable (default = 1)
+    pub scale: Option<f64>,
+    /// total mass of the deformable, the mass is equally distributed among all vertices
+    pub mass: Option<f64>,
+    /// a collision margin extends the deformable, it can help avoiding penetrations, especially for thin (cloth) deformables
+    pub collision_margin: Option<f64>,
+    /// using mass spring
+    pub use_mass_spring: bool,
+    /// create bending springs to control bending of deformables
+    pub use_bending_springs: bool,
+    /// enable the Neo Hookean simulation
+    pub use_neo_hookean: bool,
+    /// stiffness parameter
+    pub spring_elastic_stiffness: f64,
+    /// damping parameter
+    pub spring_damping_stiffness: f64,
+    /// spring damping parameter
+    pub spring_damping_all_directions: bool,
+    /// parameters of bending stiffness
+    pub spring_bending_stiffness: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_mu: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_lambda: f64,
+    /// parameters of the Neo Hookean model
+    pub neo_hookean_damping: f64,
+    /// contact friction for deformables
+    pub friction_coeff: f64,
+    /// enable collisions internal to faces, not just at vertices.
+    pub use_face_contact: bool,
+    /// enable self collision for a deformable
+    pub use_self_collision: bool,
+    /// a parameter that helps avoiding penetration.
+    pub repulsion_stiffness: Option<f64>,
+    pub sim_filename: Option<PathBuf>,
+}
+
+impl Default for SoftBodyOptions {
+    fn default() -> Self {
+        SoftBodyOptions {
+            base_pose: Isometry3::identity(),
+            scale: None,
+            mass: None,
+            collision_margin: None,
+            use_mass_spring: false,
+            use_bending_springs: false,
+            use_neo_hookean: false,
+            spring_elastic_stiffness: 1.,
+            spring_damping_stiffness: 0.1,
+            spring_damping_all_directions: false,
+            spring_bending_stiffness: 0.1,
+            neo_hookean_mu: 1.,
+            neo_hookean_lambda: 1.,
+            neo_hookean_damping: 0.1,
+            friction_coeff: 0.,
+            use_face_contact: false,
+            use_self_collision: false,
+            repulsion_stiffness: None,
+            sim_filename: None,
+        }
+    }
+}
+bitflags::bitflags! {
+    /// Experimental flags, best to ignore.
+    pub struct ResetFlags : i32 {
+        const DEFORMABLE_WORLD = 1;
+        const DISCRETE_DYNAMICS_WORLD = 2;
+        const SIMPLE_BROADPHASE = 4;
+    }
+}
+
+bitflags::bitflags! {
+    /// Experimental flags, best to ignore.
+    pub struct VisualShapeFlags : i32 {
+        const TEXTURE_UNIQUE_IDS = 1;
+        const DOUBLE_SIDED = 4;
+    }
+}
+bitflags::bitflags! {
+    /// flags for camera rendering
+    pub struct RendererAuxFlags : i32 {
+        /// if used the pixels of the segmentation mask are calculated with this formula:
+        /// bodyId + (linkIndex+1)<<24
+        const SEGMENTATION_MASK_OBJECT_AND_LINKINDEX = 1;
+        const USE_PROJECTIVE_TEXTURE = 2;
+        /// avoids calculating the segmentation mask
+        const NO_SEGMENTATION_MASK = 4;
+    }
+}
+#[derive(Debug)]
+pub enum Renderer {
+    TinyRenderer = 1 << 16,
+    /// Direct mode has no OpenGL, so you can not use this setting in direct mode.
+    BulletHardwareOpenGl = 1 << 17,
+}
+
+/// Options for [`get_camera_image`](`crate::PhysicsClient::get_camera_image`)
+#[derive(Debug, Default)]
+pub struct CameraImageOptions {
+    /// view matrix, see [compute_view_matrix](`crate::PhysicsClient::compute_view_matrix`)
+    pub view_matrix: Option<Matrix4<f32>>,
+    ///  projection matrix, see [compute_projection_matrix](`crate::PhysicsClient::compute_projection_matrix`)
+    pub projection_matrix: Option<Matrix4<f32>>,
+    /// specifies the world position of the light source, the direction is from the light source position to the origin of the world frame.
+    pub light_direction: Option<Vector3<f32>>,
+    /// directional light color in \[RED,GREEN,BLUE\] in range 0..1,  only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_color: Option<[f32; 3]>,
+    /// distance of the light along the normalized lightDirection,  only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_distance: Option<f32>,
+    /// enables disables shadows, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub shadow: Option<bool>,
+    /// light ambient coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_ambient_coeff: Option<f32>,
+    /// light diffuse coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_diffuse_coeff: Option<f32>,
+    /// light specular coefficient, only applies to [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`)
+    pub light_specular_coeff: Option<f32>,
+    /// Note that Direct mode has no OpenGL, so it requires [`Renderer::TinyRenderer`](`Renderer::TinyRenderer`).
+    pub renderer: Option<Renderer>,
+    /// additional rendering flags
+    pub flags: Option<RendererAuxFlags>,
+    pub projective_texture_view: Option<Matrix4<f32>>,
+    pub projective_texture_proj: Option<Matrix4<f32>>,
 }

@@ -10,6 +10,8 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}/lib", dst.display());
     println!("cargo:rustc-link-lib=static=BulletExampleBrowserLib");
+    println!("cargo:rustc-link-lib=static=BulletRoboticsGUI");
+    println!("cargo:rustc-link-lib=static=BulletRobotics");
     println!("cargo:rustc-link-lib=static=BulletFileLoader");
     println!("cargo:rustc-link-lib=static=BulletWorldImporter");
     println!("cargo:rustc-link-lib=static=BulletSoftBody");

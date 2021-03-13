@@ -1,6 +1,6 @@
 [package]
 name = "rubullet"
-version = "0.1.0-alpha"
+version = "0.1.0-alpha-2"
 authors = ["Nathan Kent <nkent2@cs.rochester.edu>", "Marco Boneberger <m.boneberger@tu-bs.de>"]
 edition = "2018"
 license = "MIT"
@@ -15,6 +15,50 @@ documentation = "https://docs.rs/rubullet/"
 [lib]
 name = "rubullet"
 path = "src/lib.rs"
+
+[[example]]
+name = "contact_friction"
+path = "examples/contact_friction.rs"
+
+[[example]]
+name = "dump_log"
+path = "examples/dump_log.rs"
+
+[[example]]
+name = "get_aabb"
+path = "examples/get_aabb.rs"
+
+[[example]]
+name = "get_closest_points"
+path = "examples/get_closest_points.rs"
+
+[[example]]
+name = "kuka_with_cube"
+path = "examples/kuka_with_cube.rs"
+
+[[example]]
+name = "kuka_with_cube_playback"
+path = "examples/kuka_with_cube_playback.rs"
+
+[[example]]
+name = "log_minitaur"
+path = "examples/log_minitaur.rs"
+
+[[example]]
+name = "profile_timing"
+path = "examples/profile_timing.rs"
+
+[[example]]
+name = "save_and_restore_states"
+path = "examples/save_and_restore_states.rs"
+
+[[example]]
+name = "jacobian"
+path = "examples/jacobian.rs"
+
+[[example]]
+name = "constraint"
+path = "examples/constraint.rs"
 
 [[example]]
 name = "panda_demo"
@@ -47,9 +91,10 @@ path = "examples/inverse_dynamics.rs"
 [dependencies]
 nalgebra = "0.23"
 image = "0.23.12"
-rubullet-sys = { version = "0.1.0-alpha", path = "../rubullet-sys" }
+rubullet-sys = { version = "0.1.0-alpha-2", path = "../rubullet-sys" }
 bitflags = "1.2.1"
 
 [dev-dependencies]
 anyhow = "1.0"
 rand = "0.8.2"
+structopt = "0.3"

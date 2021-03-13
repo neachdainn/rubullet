@@ -4,8 +4,9 @@ use anyhow::Result;
 use rubullet::ControlModeArray::Torques;
 use rubullet::Mode::Direct;
 use rubullet::{
-    BodyId, ControlMode, ControlModeArray, DebugVisualizerFlag, Error,
-    InverseKinematicsParametersBuilder, JointInfoFlags, JointType, LoadModelFlags, PhysicsClient,
+    BodyId, ChangeDynamicsOptions, ConstraintSolverType, ControlMode, ControlModeArray,
+    DebugVisualizerFlag, Error, InverseKinematicsParametersBuilder, JointFeedbackMode,
+    JointInfoFlags, JointType, LoadModelFlags, PhysicsClient, SetPhysicsEngineParameterOptions,
     UrdfOptions,
 };
 use rubullet::{JointInfo, JointState};
@@ -75,7 +76,7 @@ fn test_get_and_reset_base_transformation() {
         Translation3::new(0.2, 0.3, 0.4),
         UnitQuaternion::from_euler_angles(0.1, 0.2, 0.3),
     );
-    physics_client.reset_base_transform(r2d2, &desired_transform);
+    physics_client.reset_base_transform(r2d2, desired_transform);
     let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
     slice_compare(
         desired_transform.translation.vector.as_slice(),
@@ -92,7 +93,7 @@ fn test_get_and_reset_base_transformation() {
         Translation3::new(3.7, -0.23, 10.4),
         UnitQuaternion::from_euler_angles(1.1, -0.2, 2.3),
     );
-    physics_client.reset_base_transform(r2d2, &desired_transform);
+    physics_client.reset_base_transform(r2d2, desired_transform);
     let actual_transform = physics_client.get_base_transform(r2d2).unwrap();
     slice_compare(
         desired_transform.translation.vector.as_slice(),
@@ -464,28 +465,28 @@ fn test_get_link_state() {
 pub fn inverse_dynamics_test() {
     let target_torque = [
         [
-            2.789039373397827,
-            -4.350228309631348,
-            -9.806090354919434,
-            -11.364048957824707,
-            -8.452873229980469,
-            -2.4533324241638184,
-            4.292827606201172,
-            9.478754043579102,
-            11.22978687286377,
-            8.697705268859863,
+            2.7890393556850084,
+            -4.35022826384923,
+            -9.806091463156854,
+            -11.36404798189885,
+            -8.452873740133834,
+            -2.4533327096931083,
+            4.292827558364013,
+            9.478755361855157,
+            11.229787344270306,
+            8.697705289653415,
         ],
         [
-            1.5324022769927979,
-            -0.3981592059135437,
-            -2.1556396484375,
-            -3.0122971534729004,
-            -2.61287522315979,
-            -1.1830209493637085,
-            0.663445770740509,
-            2.273959159851074,
-            3.1140832901000977,
-            2.8513741493225098,
+            1.5324022942490911,
+            -0.3981591800958851,
+            -2.1556396779135447,
+            -3.0122972444815823,
+            -2.612875295201555,
+            -1.1830210438812325,
+            0.6634457473498473,
+            2.2739591995615016,
+            3.11408342881574,
+            2.85137408903459,
         ],
     ];
     let delta_t = Duration::from_secs_f64(0.1);
@@ -504,8 +505,15 @@ pub fn inverse_dynamics_test() {
             },
         )
         .unwrap();
-    physics_client.change_dynamics_angular_damping(id_robot, 0.);
-    physics_client.change_dynamics_linear_damping(id_robot, 0.);
+    physics_client.change_dynamics(
+        id_robot,
+        None,
+        ChangeDynamicsOptions {
+            linear_damping: Some(0.),
+            angular_damping: Some(0.),
+            ..Default::default()
+        },
+    );
     physics_client
         .set_joint_motor_control_array(
             id_robot,
@@ -574,7 +582,7 @@ fn test_mass_matrix_and_inverse_kinematics() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Direct)?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::CovEnableYAxisUp, true);
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
-    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
+    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.));
 
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;
     panda.step(&mut physics_client);
@@ -609,8 +617,15 @@ impl PandaSim {
             ..Default::default()
         };
         let panda_id = client.load_urdf("franka_panda/panda.urdf", urdf_options)?;
-        client.change_dynamics_linear_damping(panda_id, 0.);
-        client.change_dynamics_angular_damping(panda_id, 0.);
+        client.change_dynamics(
+            panda_id,
+            None,
+            ChangeDynamicsOptions {
+                linear_damping: Some(0.),
+                angular_damping: Some(0.),
+                ..Default::default()
+            },
+        );
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
@@ -862,4 +877,180 @@ fn compute_projection_matrix_test() {
         0.0,
     ];
     slice_compare_f32(projection_matrix.as_slice(), &desired_matrix, 1e-7);
+}
+#[test]
+fn save_and_restore_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let cube = client.load_urdf("cube.urdf", None).unwrap();
+    let cube_pose_start = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_start.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_start.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+    let start_state = client.save_state().unwrap();
+    let transform = Isometry3::translation(1., 1., 1.);
+    client.reset_base_transform(cube, transform);
+    let cube_pose_end = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_end.translation.vector.as_slice(),
+        transform.translation.vector.as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_end.rotation.coords.as_slice(),
+        transform.rotation.coords.as_slice(),
+        1e-10,
+    );
+
+    client.restore_state(start_state).unwrap();
+    let cube_pose_restored = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_restored.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_restored.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+
+    client.remove_state(start_state);
+}
+#[test]
+fn save_and_restore_from_file_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let cube = client.load_urdf("cube.urdf", None).unwrap();
+    let cube_pose_start = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_start.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_start.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+    client
+        .save_bullet("save_and_restore_from_file_test.bullet")
+        .unwrap();
+    let transform = Isometry3::translation(1., 1., 1.);
+    client.reset_base_transform(cube, transform);
+    let cube_pose_end = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_end.translation.vector.as_slice(),
+        transform.translation.vector.as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_end.rotation.coords.as_slice(),
+        transform.rotation.coords.as_slice(),
+        1e-10,
+    );
+
+    client
+        .restore_state_from_file("save_and_restore_from_file_test.bullet")
+        .unwrap();
+    let cube_pose_restored = client.get_base_transform(cube).unwrap();
+    slice_compare(
+        cube_pose_restored.translation.vector.as_slice(),
+        Vector3::zeros().as_slice(),
+        1e-10,
+    );
+    slice_compare(
+        cube_pose_restored.rotation.coords.as_slice(),
+        UnitQuaternion::identity().coords.as_slice(),
+        1e-10,
+    );
+
+    std::fs::remove_file("save_and_restore_from_file_test.bullet").unwrap();
+}
+
+#[test]
+fn load_bullet_test() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let bodies = client.load_bullet("spider.bullet").unwrap();
+    assert_eq!(bodies.len(), 27);
+}
+
+#[test]
+fn set_and_get_physics_engine_parameters() {
+    let mut client = PhysicsClient::connect(Direct).unwrap();
+    let _params = client.get_physics_engine_parameters().unwrap();
+    let b = true;
+    let f = 0.3;
+    let u = 5;
+    let dur = Duration::from_secs_f64(0.11);
+    client.set_physics_engine_parameter(SetPhysicsEngineParameterOptions {
+        fixed_time_step: Some(dur),
+        num_solver_iterations: Some(u),
+        use_split_impulse: Some(b),
+        split_impulse_penetration_threshold: Some(f),
+        num_sub_steps: Some(u),
+        collision_filter_mode: Some(u),
+        contact_breaking_threshold: Some(f),
+        max_num_cmd_per_1_ms: Some(u as i32),
+        enable_file_caching: Some(b),
+        restitution_velocity_threshold: Some(f),
+        erp: Some(f),
+        contact_erp: Some(f),
+        friction_erp: Some(f),
+        enable_cone_friction: Some(b),
+        deterministic_overlapping_pairs: Some(b),
+        allowed_ccd_penetration: Some(f),
+        joint_feedback_mode: Some(JointFeedbackMode::WorldSpace),
+        solver_residual_threshold: Some(f),
+        contact_slop: Some(f),
+        enable_sat: Some(b),
+        constraint_solver_type: Some(ConstraintSolverType::Dantzig),
+        global_cfm: Some(f),
+        minimum_solver_island_size: Some(u),
+        report_solver_analytics: Some(b),
+        warm_starting_factor: Some(f),
+        sparse_sdf_voxel_size: Some(f),
+        num_non_contact_inner_iterations: Some(u),
+    });
+    let params = client.get_physics_engine_parameters().unwrap();
+    assert_eq!(params.fixed_time_step, dur);
+    assert_eq!(params.num_solver_iterations, u);
+    assert_eq!(params.use_split_impulse, b);
+    assert_eq!(params.split_impulse_penetration_threshold, f);
+    assert_eq!(params.num_sub_steps, u);
+    assert_eq!(params.collision_filter_mode, u);
+    assert_eq!(params.contact_breaking_threshold, f);
+    assert_eq!(params.enable_file_caching, b);
+    assert_eq!(params.restitution_velocity_threshold, f);
+    assert_eq!(params.erp, f);
+    assert_eq!(params.contact_erp, f);
+    assert_eq!(params.friction_erp, f);
+    assert_eq!(params.enable_cone_friction, b);
+    assert_eq!(params.deterministic_overlapping_pairs, b);
+    assert_eq!(params.allowed_ccd_penetration, f);
+    assert_eq!(params.joint_feedback_mode, JointFeedbackMode::WorldSpace);
+    assert_eq!(params.solver_residual_threshold, f);
+    assert_eq!(params.contact_slop, f);
+    assert_eq!(params.enable_sat, b);
+    // assert_eq!(params.constraint_solver_type, ConstraintSolverType::Dantzig);// bug in bullet3
+    assert_eq!(params.global_cfm, f);
+    // assert_eq!(params.minimum_solver_island_size, u);// bug in bullet3
+    // assert_eq!(params.report_solver_analytics, b);// bug in bullet3
+    // assert_eq!(params.warm_starting_factor, f);// bug in bullet3
+    // assert_eq!(params.sparse_sdf_voxel_size, f);// bug in bullet3
+    assert_eq!(params.num_non_contact_inner_iterations, u);
 }

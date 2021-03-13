@@ -7,35 +7,50 @@ use std::os::unix::ffi::OsStrExt;
 use std::{ffi::CString, os::raw::c_int, path::Path, ptr};
 
 use nalgebra::{
-    DMatrix, Isometry3, Matrix4, Matrix6xX, Point3, Quaternion, Translation3, UnitQuaternion,
+    DMatrix, DVector, Isometry3, Matrix4, Matrix6xX, Quaternion, Translation3, UnitQuaternion,
     Vector3,
 };
 
-use self::gui_marker::GuiMarker;
+use self::marker::GuiMarker;
+use crate::client::marker::SharedMemoryMarker;
 use crate::types::{
-    AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
-    ControlModeArray, ExternalForceFrame, GeometricCollisionShape, GeometricVisualShape, Images,
-    InverseKinematicsParameters, ItemId, Jacobian, JointInfo, JointState, JointType, KeyboardEvent,
-    LinkState, LoadModelFlags, MouseButtonState, MouseEvent, MultiBodyOptions, SdfOptions,
-    TextureId, Velocity, VisualId, VisualShapeOptions,
+    Aabb, AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
+    ConstraintInfo, ControlModeArray, ExternalForceFrame, GeometricCollisionShape,
+    GeometricVisualShape, Images, InverseKinematicsParameters, ItemId, Jacobian, JointInfo,
+    JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent,
+    MultiBodyOptions, OverlappingObject, SdfOptions, TextureId, Velocity, VisualId,
+    VisualShapeOptions,
 };
 use crate::{
-    BodyInfo, ControlMode, DebugVisualizerFlag, Error, Mode, UrdfOptions, VisualShapeData,
+    BodyInfo, CameraImageOptions, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId,
+    ContactPoint, ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error,
+    LogId, LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions,
+    RayTestOptions, ResetFlags, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId,
+    StateLoggingOptions, UrdfOptions, VisualShapeData,
 };
 use image::{ImageBuffer, Luma, RgbaImage};
 use rubullet_sys as ffi;
 use rubullet_sys::EnumSharedMemoryServerStatus::{
-    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED,
-    CMD_CALCULATED_JACOBIAN_COMPLETED, CMD_CALCULATED_MASS_MATRIX_COMPLETED,
-    CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
-    CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
-    CMD_USER_DEBUG_DRAW_COMPLETED, CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED,
-    CMD_VISUAL_SHAPE_INFO_COMPLETED, CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
+    CMD_ACTUAL_STATE_UPDATE_COMPLETED, CMD_BULLET_LOADING_COMPLETED, CMD_BULLET_SAVING_COMPLETED,
+    CMD_CALCULATED_INVERSE_DYNAMICS_COMPLETED, CMD_CALCULATED_JACOBIAN_COMPLETED,
+    CMD_CALCULATED_MASS_MATRIX_COMPLETED, CMD_CAMERA_IMAGE_COMPLETED, CMD_CLIENT_COMMAND_COMPLETED,
+    CMD_CONTACT_POINT_INFORMATION_COMPLETED, CMD_CREATE_COLLISION_SHAPE_COMPLETED,
+    CMD_CREATE_MULTI_BODY_COMPLETED, CMD_CREATE_VISUAL_SHAPE_COMPLETED,
+    CMD_GET_DYNAMICS_INFO_COMPLETED, CMD_LOAD_SOFT_BODY_COMPLETED, CMD_LOAD_TEXTURE_COMPLETED,
+    CMD_REQUEST_COLLISION_INFO_COMPLETED, CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED,
+    CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED, CMD_RESTORE_STATE_COMPLETED,
+    CMD_SAVE_STATE_COMPLETED, CMD_SAVE_WORLD_COMPLETED, CMD_STATE_LOGGING_START_COMPLETED,
+    CMD_SYNC_BODY_INFO_COMPLETED, CMD_USER_CONSTRAINT_COMPLETED, CMD_USER_DEBUG_DRAW_COMPLETED,
+    CMD_USER_DEBUG_DRAW_PARAMETER_COMPLETED, CMD_VISUAL_SHAPE_INFO_COMPLETED,
+    CMD_VISUAL_SHAPE_UPDATE_COMPLETED,
 };
 use rubullet_sys::{
-    b3CameraImageData, b3JointInfo, b3JointSensorState, b3KeyboardEventsData, b3LinkState,
-    b3MouseEventsData, b3SubmitClientCommandAndWaitStatus, B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES,
-    MAX_SDF_BODIES,
+    b3AABBOverlapData, b3CameraImageData, b3ContactInformation, b3DynamicsInfo, b3JointInfo,
+    b3JointSensorState, b3KeyboardEventsData, b3LinkState, b3MouseEventsData,
+    b3OpenGLVisualizerCameraInfo, b3PhysicsSimulationParameters, b3RaycastInformation,
+    b3SharedMemoryCommandHandle, b3SharedMemoryStatusHandle, b3SubmitClientCommandAndWaitStatus,
+    B3_MAX_NUM_INDICES, B3_MAX_NUM_VERTICES, MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING,
+    MAX_SDF_BODIES, SHARED_MEMORY_KEY,
 };
 use std::time::Duration;
 
@@ -51,10 +66,13 @@ type Handle = ffi::b3PhysicsClientHandle;
 /// This serves as an abstraction over the possible physics servers, providing a unified interface.
 pub struct PhysicsClient {
     /// The underlying `b3PhysicsClientHandle` that is guaranteed to not be null.
-    handle: Handle,
+    pub(crate) handle: Handle,
 
     /// A marker indicating whether or not a GUI is in use by this client.
-    _gui_marker: Option<GuiMarker>,
+    pub(crate) _gui_marker: Option<GuiMarker>,
+
+    /// A marker indicating whether or not SharedMemory is in use by this client.
+    pub(crate) _shared_memory_marker: Option<SharedMemoryMarker>,
 }
 
 impl PhysicsClient {
@@ -69,10 +87,97 @@ impl PhysicsClient {
     /// You also cannot get mouse or keyboard events.
     /// The can be many instances of PhysicsClients running in Direct mode
     ///
-    /// Other modes are currently not implemented.
+    /// There are also other modes for more advanced use cases. However, these were not heavily tested,
+    /// so be careful when you use them.
     pub fn connect(mode: Mode) -> Result<PhysicsClient, Error> {
-        let (raw_handle, _gui_marker) = match mode {
-            Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None) },
+        let (raw_handle, _gui_marker, _shared_memory_marker) = match mode {
+            Mode::GuiMainThread => {
+                // Only one GUI is allowed per process. Try to get the marker and fail if there is
+                // another.
+                let gui_marker = GuiMarker::acquire()?;
+
+                unsafe {
+                    let raw_handle =
+                        ffi::b3CreateInProcessPhysicsServerAndConnectMainThread(0, ptr::null_mut());
+                    (raw_handle, Some(gui_marker), None)
+                }
+            }
+            Mode::GraphicsServerTcp { hostname, port } => {
+                let gui_marker = GuiMarker::acquire()?;
+
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(6667);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnectTCP(
+                            hostname.as_ptr(),
+                            port as i32,
+                        )
+                    }
+                };
+
+                (raw_handle, Some(gui_marker), None)
+            }
+            Mode::Udp { hostname, port } => {
+                // Looking at the source code for both of these functions, they do not assume
+                // anything about the size of `argv` beyond what is supplied by `argc`. So, and
+                // `argc` of zero should keep this safe.
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(1234);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3ConnectPhysicsUDP(hostname.as_ptr(), port as i32)
+                    }
+                };
+
+                (raw_handle, None, None)
+            }
+            Mode::Tcp { hostname, port } => {
+                // Looking at the source code for both of these functions, they do not assume
+                // anything about the size of `argv` beyond what is supplied by `argc`. So, and
+                // `argc` of zero should keep this safe.
+                let raw_handle = {
+                    unsafe {
+                        let port = port.unwrap_or(6667);
+                        let hostname = CString::new(hostname.as_bytes()).unwrap();
+                        ffi::b3ConnectPhysicsTCP(hostname.as_ptr(), port as i32)
+                    }
+                };
+
+                (raw_handle, None, None)
+            }
+            Mode::SharedMemoryServer => unsafe {
+                let raw_handle =
+                    ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect3(
+                        ptr::null_mut(),
+                        SHARED_MEMORY_KEY,
+                    );
+                (raw_handle, None, None)
+            },
+            Mode::GuiServer => {
+                // Only one GUI is allowed per process. Try to get the marker and fail if there is
+                // another.
+                let gui_marker = GuiMarker::acquire()?;
+
+                let raw_handle = if cfg!(target_os = "macos") {
+                    unsafe {
+                        ffi::b3CreateInProcessPhysicsServerAndConnectMainThreadSharedMemory(
+                            0,
+                            ptr::null_mut(),
+                        )
+                    }
+                } else {
+                    unsafe {
+                        ffi::b3CreateInProcessPhysicsServerAndConnectSharedMemory(
+                            0,
+                            ptr::null_mut(),
+                        )
+                    }
+                };
+
+                (raw_handle, Some(gui_marker), None)
+            }
+            Mode::Direct => unsafe { (ffi::b3ConnectPhysicsDirect(), None, None) },
             Mode::Gui => {
                 // Only one GUI is allowed per process. Try to get the marker and fail if there is
                 // another.
@@ -89,8 +194,22 @@ impl PhysicsClient {
                     unsafe { ffi::b3CreateInProcessPhysicsServerAndConnect(0, ptr::null_mut()) }
                 };
 
-                (raw_handle, Some(gui_marker))
+                (raw_handle, Some(gui_marker), None)
             }
+            Mode::SharedMemoryGui => unsafe {
+                let shared_memory_marker = SharedMemoryMarker::acquire()?;
+                let raw_handle =
+                    ffi::b3CreateInProcessPhysicsServerFromExistingExampleBrowserAndConnect4(
+                        ptr::null_mut(),
+                        SHARED_MEMORY_KEY,
+                    );
+                (raw_handle, None, Some(shared_memory_marker))
+            },
+            Mode::SharedMemory => unsafe {
+                let shared_memory_marker = SharedMemoryMarker::acquire()?;
+                let raw_handle = ffi::b3ConnectSharedMemory(SHARED_MEMORY_KEY);
+                (raw_handle, None, Some(shared_memory_marker))
+            },
         };
         let handle = raw_handle.expect("Bullet returned a null pointer");
 
@@ -99,6 +218,7 @@ impl PhysicsClient {
         let mut client = PhysicsClient {
             handle,
             _gui_marker,
+            _shared_memory_marker,
         };
 
         // Make sure it is up and running.
@@ -212,14 +332,10 @@ impl PhysicsClient {
     /// # Arguments
     /// * `gravity` - a gravity vector. Can be a Vector3, a \[f64;3\]-array or anything else that can be
     /// converted into a Vector3.
-    pub fn set_gravity<GravityVector: Into<Vector3<f64>>>(
-        &mut self,
-        gravity: GravityVector,
-    ) -> Result<(), Error> {
+    pub fn set_gravity<GravityVector: Into<Vector3<f64>>>(&mut self, gravity: GravityVector) {
         let gravity = gravity.into();
-        if !self.can_submit_command() {
-            return Err(Error::new("Not connected to physics server"));
-        }
+
+        assert!(self.can_submit_command(), "Not connected to physics server");
 
         unsafe {
             // PyBullet error checks none of these. Looking through the code, it looks like there is
@@ -228,8 +344,6 @@ impl PhysicsClient {
             let _ret = ffi::b3PhysicsParamSetGravity(command, gravity.x, gravity.y, gravity.z);
             let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
-
-        Ok(())
     }
 
     /// Sends a command to the physics server to load a physics model from a Unified Robot
@@ -542,8 +656,8 @@ impl PhysicsClient {
     /// to reset to a non-zero linear and/or angular velocity.
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
-    /// * `pose` - reset the base of the object at the specified position in world space coordinates
-    pub fn reset_base_transform(&mut self, body: BodyId, pose: &Isometry3<f64>) {
+    /// * `pose` - reset the base of the object to the specified pose in world space coordinates
+    pub fn reset_base_transform(&mut self, body: BodyId, pose: Isometry3<f64>) {
         unsafe {
             let command_handle = ffi::b3CreatePoseCommandInit(self.handle, body.0);
             ffi::b3CreatePoseCommandSetBasePosition(
@@ -794,25 +908,251 @@ impl PhysicsClient {
     }
 
     /// Returns whether or not this client can submit a command.
-    fn can_submit_command(&mut self) -> bool {
+    pub(crate) fn can_submit_command(&mut self) -> bool {
         unsafe { ffi::b3CanSubmitCommand(self.handle) != 0 }
     }
-
-    pub fn change_dynamics_linear_damping(&mut self, body: BodyId, linear_damping: f64) {
+    /// You can change the properties such as mass, friction and restitution coefficients using this
+    /// method.
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base. Note that not all options require a link index.
+    /// In those cases where you only want to set these kind of parameters you can just set the link_index to `None`.
+    /// * options - Various options to the change the dynamics.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::Isometry3;
+    ///# use rubullet::*;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.change_dynamics(
+    ///         cube_id,
+    ///         None,
+    ///         ChangeDynamicsOptions {
+    ///             mass: Some(38.),
+    ///             lateral_friction: Some(0.1),
+    ///             ..Default::default()
+    ///         },
+    ///     );
+    ///     let dynamics_info = physics_client.get_dynamics_info(cube_id, None)?;
+    ///     println!("{:?}", dynamics_info);
+    ///     assert!((dynamics_info.mass - 38.).abs() < 1e-7);
+    ///     assert!((dynamics_info.lateral_friction - 0.1).abs() < 1e-7);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn change_dynamics<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        options: ChangeDynamicsOptions,
+    ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
             let command = ffi::b3InitChangeDynamicsInfo(self.handle);
-            assert!(linear_damping >= 0.);
-            ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
+            if let Some(joint_limit_force) = options.joint_limit_force {
+                assert!(joint_limit_force >= 0.);
+                ffi::b3ChangeDynamicsInfoSetJointLimitForce(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_limit_force,
+                );
+            }
+            if let Some(joint_limits) = options.joint_limits {
+                assert!(joint_limits.0 <= joint_limits.1);
+                ffi::b3ChangeDynamicsInfoSetJointLimit(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_limits.0,
+                    joint_limits.1,
+                );
+            }
+            if let Some(mass) = options.mass {
+                assert!(mass >= 0.);
+                ffi::b3ChangeDynamicsInfoSetMass(command, body.0, link_index, mass);
+            }
+            if let Some(anisotropic_friction) = options.anisotropic_friction {
+                let friction = [anisotropic_friction; 3];
+                ffi::b3ChangeDynamicsInfoSetAnisotropicFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    friction.as_ptr(),
+                );
+            }
+            if let Some(lateral_friction) = options.lateral_friction {
+                assert!(lateral_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetLateralFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    lateral_friction,
+                );
+            }
+            if let Some(spinning_friction) = options.spinning_friction {
+                assert!(spinning_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetSpinningFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    spinning_friction,
+                );
+            }
+            if let Some(rolling_friction) = options.rolling_friction {
+                assert!(rolling_friction >= 0.);
+                ffi::b3ChangeDynamicsInfoSetRollingFriction(
+                    command,
+                    body.0,
+                    link_index,
+                    rolling_friction,
+                );
+            }
+            if let Some(linear_damping) = options.linear_damping {
+                assert!(linear_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetLinearDamping(command, body.0, linear_damping);
+            }
+            if let Some(angular_damping) = options.angular_damping {
+                assert!(angular_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
+            }
+            if let Some(joint_damping) = options.joint_damping {
+                assert!(joint_damping >= 0.);
+                ffi::b3ChangeDynamicsInfoSetJointDamping(
+                    command,
+                    body.0,
+                    link_index,
+                    joint_damping,
+                );
+            }
+            if let Some(restitution) = options.restitution {
+                assert!(restitution >= 0.);
+                ffi::b3ChangeDynamicsInfoSetRestitution(command, body.0, link_index, restitution);
+            }
+            if let Some(contact_stiffness_and_damping) = options.contact_stiffness_and_damping {
+                assert!(contact_stiffness_and_damping.0 >= 0.);
+                assert!(contact_stiffness_and_damping.1 >= 0.);
+                ffi::b3ChangeDynamicsInfoSetContactStiffnessAndDamping(
+                    command,
+                    body.0,
+                    link_index,
+                    contact_stiffness_and_damping.0,
+                    contact_stiffness_and_damping.1,
+                );
+            }
+            if let Some(friction_anchor) = options.friction_anchor {
+                match friction_anchor {
+                    true => {
+                        ffi::b3ChangeDynamicsInfoSetFrictionAnchor(command, body.0, link_index, 1);
+                    }
+                    false => {
+                        ffi::b3ChangeDynamicsInfoSetFrictionAnchor(command, body.0, link_index, 0);
+                    }
+                }
+            }
+            if let Some(ccd_swept_sphere_radius) = options.ccd_swept_sphere_radius {
+                assert!(ccd_swept_sphere_radius >= 0.);
+                ffi::b3ChangeDynamicsInfoSetCcdSweptSphereRadius(
+                    command,
+                    body.0,
+                    link_index,
+                    ccd_swept_sphere_radius,
+                );
+            }
+            if let Some(activation_state) = options.activation_state {
+                ffi::b3ChangeDynamicsInfoSetActivationState(
+                    command,
+                    body.0,
+                    activation_state.bits(),
+                );
+            }
+            if let Some(contact_processing_threshold) = options.contact_processing_threshold {
+                assert!(contact_processing_threshold >= 0.);
+                ffi::b3ChangeDynamicsInfoSetContactProcessingThreshold(
+                    command,
+                    body.0,
+                    link_index,
+                    contact_processing_threshold,
+                );
+            }
+            if let Some(max_joint_velocity) = options.max_joint_velocity {
+                assert!(max_joint_velocity >= 0.);
+                ffi::b3ChangeDynamicsInfoSetMaxJointVelocity(command, body.0, max_joint_velocity);
+            }
+            if let Some(collision_margin) = options.collision_margin {
+                assert!(collision_margin >= 0.);
+                ffi::b3ChangeDynamicsInfoSetCollisionMargin(command, body.0, collision_margin);
+            }
             ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
         }
     }
-
-    pub fn change_dynamics_angular_damping(&mut self, body: BodyId, angular_damping: f64) {
+    /// With this method you can get information about the mass, center of mass,
+    /// friction and other properties of the base and links.
+    ///
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base.
+    ///
+    /// See [`change_dynamics`](`Self::change_dynamics`) for an example
+    pub fn get_dynamics_info<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+    ) -> Result<DynamicsInfo, Error> {
+        assert!(body.0 >= 0);
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
         unsafe {
-            let command = ffi::b3InitChangeDynamicsInfo(self.handle);
-            assert!(angular_damping >= 0.);
-            ffi::b3ChangeDynamicsInfoSetAngularDamping(command, body.0, angular_damping);
-            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let cmd_handle = ffi::b3GetDynamicsInfoCommandInit(self.handle, body.0, link_index);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_GET_DYNAMICS_INFO_COMPLETED as i32 {
+                return Err(Error::new(
+                    "get_dynamics_info failed; invalid return status",
+                ));
+            }
+            let mut dynamics_info = b3DynamicsInfo {
+                m_mass: 0.0,
+                m_localInertialDiagonal: [0.; 3],
+                m_localInertialFrame: [0.; 7],
+                m_lateralFrictionCoeff: 0.0,
+                m_rollingFrictionCoeff: 0.0,
+                m_spinningFrictionCoeff: 0.0,
+                m_restitution: 0.0,
+                m_contactStiffness: 0.0,
+                m_contactDamping: 0.0,
+                m_activationState: 0,
+                m_bodyType: 0,
+                m_angularDamping: 0.0,
+                m_linearDamping: 0.0,
+                m_ccdSweptSphereRadius: 0.0,
+                m_contactProcessingThreshold: 0.0,
+                m_frictionAnchor: 0,
+                m_collisionMargin: 0.0,
+                m_dynamicType: 0,
+            };
+            if ffi::b3GetDynamicsInfo(status_handle, &mut dynamics_info) != 0 {
+                Ok(dynamics_info.into())
+            } else {
+                Err(Error::new("Couldn't get dynamics info"))
+            }
         }
     }
     /// returns the number of joints of a body
@@ -833,27 +1173,7 @@ impl PhysicsClient {
 
     fn get_joint_info_intern(&mut self, body: BodyId, joint_index: usize) -> b3JointInfo {
         unsafe {
-            let mut joint_info = b3JointInfo {
-                m_link_name: [2; 1024],
-                m_joint_name: [2; 1024],
-                m_joint_type: 0,
-                m_q_index: 0,
-                m_u_index: 0,
-                m_joint_index: 0,
-                m_flags: 0,
-                m_joint_damping: 0.0,
-                m_joint_friction: 0.0,
-                m_joint_lower_limit: 0.0,
-                m_joint_upper_limit: 0.0,
-                m_joint_max_force: 0.0,
-                m_joint_max_velocity: 0.0,
-                m_parent_frame: [0.; 7],
-                m_child_frame: [0.; 7],
-                m_joint_axis: [0.; 3],
-                m_parent_index: 0,
-                m_q_size: 0,
-                m_u_size: 0,
-            };
+            let mut joint_info = b3JointInfo::default();
             ffi::b3GetJointInfo(self.handle, body.0, joint_index as i32, &mut joint_info);
             joint_info
         }
@@ -1099,10 +1419,10 @@ impl PhysicsClient {
         }
         if let Some(damping) = joint_damping {
             assert_eq!(damping.len(),
-                dof_count,
-                "calculateInverseKinematics: the size of input joint damping values ({}) should be equal to the number of degrees of freedom ({})",
-                damping.len(),
-                dof_count,
+                       dof_count,
+                       "calculateInverseKinematics: the size of input joint damping values ({}) should be equal to the number of degrees of freedom ({})",
+                       damping.len(),
+                       dof_count,
             );
 
             has_joint_damping = true;
@@ -1138,7 +1458,7 @@ impl PhysicsClient {
                         command,
                         dof_count as i32,
                         end_effector_link_index as i32,
-                        pos.coords.as_ptr(),
+                        pos.as_ptr(),
                         orientation.coords.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
@@ -1150,7 +1470,7 @@ impl PhysicsClient {
                         command,
                         dof_count as i32,
                         end_effector_link_index as i32,
-                        pos.coords.as_ptr(),
+                        pos.as_ptr(),
                         lower_limits.as_ptr(),
                         upper_limits.as_ptr(),
                         joint_ranges.as_ptr(),
@@ -1161,14 +1481,14 @@ impl PhysicsClient {
                 ffi::b3CalculateInverseKinematicsAddTargetPositionWithOrientation(
                     command,
                     end_effector_link_index as i32,
-                    pos.coords.as_ptr(),
+                    pos.as_ptr(),
                     orientation.coords.as_ptr(),
                 );
             } else {
                 ffi::b3CalculateInverseKinematicsAddTargetPurePosition(
                     command,
                     end_effector_link_index as i32,
-                    pos.coords.as_ptr(),
+                    pos.as_ptr(),
                 );
             }
 
@@ -1217,8 +1537,18 @@ impl PhysicsClient {
     /// the joint/link damping, while forward dynamics (in stepSimulation) includes those damping
     /// terms. So if you want to compare the inverse dynamics and forward dynamics,
     /// make sure to set those damping terms to zero using
-    /// [change_dynamics_linear_damping](`Self::change_dynamics_linear_damping`) and
-    /// [change_dynamics_angular_damping](`Self::change_dynamics_angular_damping`).
+    /// [change_dynamics](`Self::change_dynamics`) with
+    /// ```rust
+    /// use rubullet::ChangeDynamicsOptions;
+    /// ChangeDynamicsOptions {
+    ///     joint_damping: Some(0.),
+    ///     linear_damping: Some(0.),
+    ///     angular_damping: Some(0.),
+    ///     ..Default::default()
+    /// };
+    /// ```
+    ///
+    /// See also the `inverse_dynamics` example in the example folder.
     pub fn calculate_inverse_dynamics(
         &mut self,
         body: BodyId,
@@ -1228,10 +1558,10 @@ impl PhysicsClient {
     ) -> Result<Vec<f64>, Error> {
         let flags = 0; // TODO find out what those flags are and let the user set them
         assert_eq!(object_velocities.len(),
-            object_accelerations.len(),
-            "number of object velocities ({}) should be equal to the number of object accelerations ({})",
-            object_velocities.len(),
-            object_accelerations.len(),
+                   object_accelerations.len(),
+                   "number of object velocities ({}) should be equal to the number of object accelerations ({})",
+                   object_velocities.len(),
+                   object_accelerations.len(),
         );
         unsafe {
             let command_handle = ffi::b3CalculateInverseDynamicsCommandInit2(
@@ -1535,10 +1865,10 @@ impl PhysicsClient {
             }
         }
         assert_eq!(forces.len(),
-            joint_indices.len(),
-            "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
-            forces.len(),
-            joint_indices.len(),
+                   joint_indices.len(),
+                   "number of maximum forces (size: {}) should match the number of joint indices (size: {})",
+                   forces.len(),
+                   joint_indices.len(),
         );
         let kp = 0.1;
         let kd = 1.0;
@@ -1558,10 +1888,10 @@ impl PhysicsClient {
             match control_mode {
                 ControlModeArray::Positions(target_positions) => {
                     assert_eq!(target_positions.len(),
-                        joint_indices.len(),
-                        "number of target positions ({}) should match the number of joint indices ({})",
-                        target_positions.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target positions ({}) should match the number of joint indices ({})",
+                               target_positions.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..target_positions.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -1594,28 +1924,28 @@ impl PhysicsClient {
                     velocity_gains: vg,
                 } => {
                     assert_eq!(pos.len(),
-                        joint_indices.len(),
-                        "number of target positions ({}) should match the number of joint indices ({})",
-                        pos.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target positions ({}) should match the number of joint indices ({})",
+                               pos.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(vel.len(),
-                        joint_indices.len(),
-                        "number of target velocities ({}) should match the number of joint indices ({})",
-                        vel.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target velocities ({}) should match the number of joint indices ({})",
+                               vel.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(pg.len(),
-                        joint_indices.len(),
-                        "number of position gains ({}) should match the number of joint indices ({})",
-                        pg.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of position gains ({}) should match the number of joint indices ({})",
+                               pg.len(),
+                               joint_indices.len(),
                     );
                     assert_eq!(vg.len(),
-                        joint_indices.len(),
-                        "number of velocity gains ({}) should match the number of joint indices ({})",
-                        vg.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of velocity gains ({}) should match the number of joint indices ({})",
+                               vg.len(),
+                               joint_indices.len(),
                     );
 
                     for i in 0..pos.len() {
@@ -1643,10 +1973,10 @@ impl PhysicsClient {
                 }
                 ControlModeArray::Velocities(vel) => {
                     assert_eq!(vel.len(),
-                        joint_indices.len(),
-                        "number of target velocities ({}) should match the number of joint indices ({})",
-                        vel.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target velocities ({}) should match the number of joint indices ({})",
+                               vel.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..vel.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -1665,10 +1995,10 @@ impl PhysicsClient {
                 }
                 ControlModeArray::Torques(f) => {
                     assert_eq!(f.len(),
-                        joint_indices.len(),
-                        "number of target torques ({}) should match the number of joint indices ({})",
-                        f.len(),
-                        joint_indices.len(),
+                               joint_indices.len(),
+                               "number of target torques ({}) should match the number of joint indices ({})",
+                               f.len(),
+                               joint_indices.len(),
                     );
                     for i in 0..f.len() {
                         let info = self.get_joint_info_intern(body, joint_indices[i]);
@@ -1696,7 +2026,7 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::PhysicsClient;
-    /// use nalgebra::{Point3, Vector3};
+    /// use nalgebra::Vector3;
     ///
     /// // variant 1: using arrays
     /// let eye_position = [1.; 3];
@@ -1704,9 +2034,9 @@ impl PhysicsClient {
     /// let up_vector = [0., 1., 0.];
     /// let view_matrix_from_arrays = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
     ///
-    /// // variant 2: using vectors and points
-    /// let eye_position = Point3::new(1.,1.,1.);
-    /// let target_position = Point3::new(1., 0., 0.);
+    /// // variant 2: using vectors
+    /// let eye_position = Vector3::new(1.,1.,1.);
+    /// let target_position = Vector3::new(1., 0., 0.);
     /// let up_vector = Vector3::new(0., 1., 0.);
     /// let view_matrix_from_points = PhysicsClient::compute_view_matrix(eye_position, target_position, up_vector);
     /// assert_eq!(view_matrix_from_arrays.as_slice(),view_matrix_from_points.as_slice());
@@ -1716,16 +2046,16 @@ impl PhysicsClient {
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix<Point: Into<Point3<f32>>, Vector: Into<Vector3<f32>>>(
-        camera_eye_position: Point,
-        camera_target_position: Point,
+    pub fn compute_view_matrix<Vector: Into<Vector3<f32>>>(
+        camera_eye_position: Vector,
+        camera_target_position: Vector,
         camera_up_vector: Vector,
     ) -> Matrix4<f32> {
         let mut view_matrix: Matrix4<f32> = Matrix4::zeros();
         unsafe {
             ffi::b3ComputeViewMatrixFromPositions(
-                camera_eye_position.into().coords.as_ptr(),
-                camera_target_position.into().coords.as_ptr(),
+                camera_eye_position.into().as_ptr(),
+                camera_target_position.into().as_ptr(),
                 camera_up_vector.into().as_slice().as_ptr(),
                 view_matrix.as_mut_ptr(),
             );
@@ -1746,7 +2076,7 @@ impl PhysicsClient {
     /// # Example
     /// ```rust
     /// use rubullet::PhysicsClient;
-    /// use nalgebra::Point3;
+    /// use nalgebra::Vector3;
     /// // variant 1: using array
     /// let target_position = [1., 0., 0.];
     /// let view_matrix_from_array = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
@@ -1757,8 +2087,8 @@ impl PhysicsClient {
     ///     0.5,
     ///     false,
     /// );
-    /// // variant 1: using Point3
-    /// let target_position = Point3::new(1., 0., 0.);
+    /// // variant 1: using Vector3
+    /// let target_position = Vector3::new(1., 0., 0.);
     /// let view_matrix_from_point = PhysicsClient::compute_view_matrix_from_yaw_pitch_roll(
     ///     target_position,
     ///     0.6,
@@ -1774,8 +2104,8 @@ impl PhysicsClient {
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * [get_camera_image](`Self::get_camera_image`)
-    pub fn compute_view_matrix_from_yaw_pitch_roll<Point: Into<Point3<f32>>>(
-        camera_target_position: Point,
+    pub fn compute_view_matrix_from_yaw_pitch_roll<Vector: Into<Vector3<f32>>>(
+        camera_target_position: Vector,
         distance: f32,
         yaw: f32,
         pitch: f32,
@@ -1789,7 +2119,7 @@ impl PhysicsClient {
         };
         unsafe {
             ffi::b3ComputeViewMatrixFromYawPitchRoll(
-                camera_target_position.into().coords.as_ptr(),
+                camera_target_position.into().as_ptr(),
                 distance,
                 yaw,
                 pitch,
@@ -1879,46 +2209,83 @@ impl PhysicsClient {
     /// # Arguments
     /// * `width` - eye position in Cartesian world coordinates
     /// * `height` - position of the target (focus) point, in Cartesian world coordinates
-    /// * `view_matrix` -  view matrix, see [compute_view_matrix](`Self::compute_view_matrix`)
-    /// * `projection_matrix` - projection matrix, see [compute_projection_matrix](`Self::compute_projection_matrix`)
+    /// * `options` - additional options to set view and projection matrix etc.
     /// # See also
     /// * [compute_view_matrix](`Self::compute_view_matrix`)
     /// * [compute_view_matrix_from_yaw_pitch_roll](`Self::compute_view_matrix_from_yaw_pitch_roll`)
     /// * [compute_projection_matrix](`Self::compute_projection_matrix`)
     /// * [compute_projection_matrix_fov](`Self::compute_projection_matrix_fov`)
     /// * panda_camera_demo.rs for an example
-    pub fn get_camera_image(
+    pub fn get_camera_image<Options: Into<Option<CameraImageOptions>>>(
         &mut self,
-        width: i32,
-        height: i32,
-        view_matrix: Matrix4<f32>,
-        projection_matrix: Matrix4<f32>,
+        width: usize,
+        height: usize,
+        options: Options,
     ) -> Result<Images, Error> {
         unsafe {
+            let options = options.into().unwrap_or_default();
             let command = ffi::b3InitRequestCameraImage(self.handle);
-            ffi::b3RequestCameraImageSetPixelResolution(command, width, height);
-            ffi::b3RequestCameraImageSetCameraMatrices(
-                command,
-                view_matrix.as_ptr(),
-                projection_matrix.as_ptr(),
-            );
+            ffi::b3RequestCameraImageSetPixelResolution(command, width as i32, height as i32);
+            if let (Some(mut view_matrix), Some(mut projection_matrix)) =
+                (options.view_matrix, options.projection_matrix)
+            {
+                ffi::b3RequestCameraImageSetCameraMatrices(
+                    command,
+                    view_matrix.as_mut_ptr(),
+                    projection_matrix.as_mut_ptr(),
+                );
+            }
+            if let Some(light_dir) = options.light_direction {
+                ffi::b3RequestCameraImageSetLightDirection(command, light_dir.as_ptr());
+            }
+            if let Some(light_color) = options.light_color {
+                ffi::b3RequestCameraImageSetLightColor(command, light_color.as_ptr());
+            }
+            if let Some(light_distance) = options.light_distance {
+                ffi::b3RequestCameraImageSetLightDistance(command, light_distance);
+            }
+            if let Some(shadow) = options.shadow {
+                ffi::b3RequestCameraImageSetShadow(command, shadow as i32);
+            }
+            if let Some(light_ambient_coeff) = options.light_ambient_coeff {
+                ffi::b3RequestCameraImageSetLightAmbientCoeff(command, light_ambient_coeff);
+            }
+            if let Some(light_diffuse_coeff) = options.light_diffuse_coeff {
+                ffi::b3RequestCameraImageSetLightDiffuseCoeff(command, light_diffuse_coeff);
+            }
+            if let Some(light_specular_coeff) = options.light_specular_coeff {
+                ffi::b3RequestCameraImageSetLightSpecularCoeff(command, light_specular_coeff);
+            }
+            if let Some(flags) = options.flags {
+                ffi::b3RequestCameraImageSetFlags(command, flags.bits());
+            }
+            if let Some(renderer) = options.renderer {
+                ffi::b3RequestCameraImageSelectRenderer(command, renderer as i32);
+            }
+            if let (Some(mut projective_texture_view), Some(mut projective_texture_proj)) = (
+                options.projective_texture_view,
+                options.projective_texture_proj,
+            ) {
+                ffi::b3RequestCameraImageSetProjectiveTextureMatrices(
+                    command,
+                    projective_texture_view.as_mut_ptr(),
+                    projective_texture_proj.as_mut_ptr(),
+                );
+            }
+
             if self.can_submit_command() {
                 let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
                 let status_type = ffi::b3GetStatusType(status_handle);
                 if status_type == CMD_CAMERA_IMAGE_COMPLETED as i32 {
                     let mut image_data = b3CameraImageData::default();
                     ffi::b3GetCameraImageData(self.handle, &mut image_data);
-                    let buffer = std::slice::from_raw_parts(
-                        image_data.m_rgb_color_data,
-                        (width * height * 4) as usize,
-                    );
-                    let depth_buffer = std::slice::from_raw_parts(
-                        image_data.m_depth_values,
-                        (width * height) as usize,
-                    );
+                    let buffer =
+                        std::slice::from_raw_parts(image_data.m_rgb_color_data, width * height * 4);
+                    let depth_buffer =
+                        std::slice::from_raw_parts(image_data.m_depth_values, width * height);
                     let segmentation_buffer = std::slice::from_raw_parts(
                         image_data.m_segmentation_mask_values,
-                        (width * height) as usize,
+                        width * height,
                     );
                     let rgba: RgbaImage =
                         ImageBuffer::from_vec(width as u32, height as u32, buffer.into()).unwrap();
@@ -1936,13 +2303,15 @@ impl PhysicsClient {
                     )
                     .unwrap();
                     return Ok(Images {
+                        width: image_data.m_pixel_width as usize,
+                        height: image_data.m_pixel_height as usize,
                         rgba,
                         depth,
                         segmentation,
                     });
                 }
             }
-            Err(Error::new("getCameraImage failed"))
+            Err(Error::new("get_camera_image failed"))
         }
     }
     /// This method can configure some settings of the built-in OpenGL visualizer,
@@ -1970,9 +2339,9 @@ impl PhysicsClient {
     ///
     /// # Arguments
     /// * `line_from_xyz` - starting point of the line in Cartesian world coordinates. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `line_to_xyz` - end point of the line in Cartesian world coordinates. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `options` - advanced options for the line. Use None for default settings.
     ///
     /// # Return
@@ -1988,11 +2357,11 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///#     use nalgebra::Point3;
+    ///#     use nalgebra::Vector3;
     /// let mut client = PhysicsClient::connect(Gui)?;
     ///     let red_line = client.add_user_debug_line(
     ///         [0.; 3],
-    ///         Point3::new(1.,1.,1.),
+    ///         Vector3::new(1.,1.,1.),
     ///         AddDebugLineOptions {
     ///             line_color_rgb: [1., 0., 0.],
     ///             ..Default::default()
@@ -2004,8 +2373,8 @@ impl PhysicsClient {
     /// ```
     pub fn add_user_debug_line<
         Options: Into<Option<AddDebugLineOptions>>,
-        Start: Into<Point3<f64>>,
-        End: Into<Point3<f64>>,
+        Start: Into<Vector3<f64>>,
+        End: Into<Vector3<f64>>,
     >(
         &mut self,
         line_from_xyz: Start,
@@ -2016,8 +2385,8 @@ impl PhysicsClient {
             let options = options.into().unwrap_or_default();
             let command_handle = ffi::b3InitUserDebugDrawAddLine3D(
                 self.handle,
-                line_from_xyz.into().coords.as_ptr(),
-                line_to_xyz.into().coords.as_ptr(),
+                line_from_xyz.into().as_ptr(),
+                line_to_xyz.into().as_ptr(),
                 options.line_color_rgb.as_ptr(),
                 options.line_width,
                 options.life_time,
@@ -2119,7 +2488,7 @@ impl PhysicsClient {
     /// # Arguments
     /// * `text` - text represented  by something which can be converted to a &str
     /// * `text_position` - 3d position of the text in Cartesian world coordinates \[x,y,z\]. Can be
-    /// a Point3, a Vector3, an array or anything else than can be converted into a Point3.
+    /// a Point3, a Vector3, an array or anything else than can be converted into a Vector3.
     /// * `options` - advanced options for the text. Use None for default settings.
     ///
     /// # Return
@@ -2133,12 +2502,12 @@ impl PhysicsClient {
     ///# use rubullet::AddDebugTextOptions;
     ///# use rubullet::PhysicsClient;
     ///# use std::time::Duration;
-    ///# use nalgebra::Point3;
+    ///# use nalgebra::Vector3;
     ///# pub fn main() -> Result<()> {
     ///#     use nalgebra::UnitQuaternion;
     ///# use std::f64::consts::PI;
     /// let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text = client.add_user_debug_text("My text", Vector3::new(0., 0., 1.), None)?;
     ///     let text_red_on_floor = client.add_user_debug_text(
     ///         "My red text on the floor",
     ///         [0.;3],
@@ -2155,7 +2524,7 @@ impl PhysicsClient {
     pub fn add_user_debug_text<
         'a,
         Text: Into<&'a str>,
-        Position: Into<Point3<f64>>,
+        Position: Into<Vector3<f64>>,
         Options: Into<Option<AddDebugTextOptions>>,
     >(
         &mut self,
@@ -2169,7 +2538,7 @@ impl PhysicsClient {
             let command_handle = ffi::b3InitUserDebugDrawAddText3D(
                 self.handle,
                 text.as_ptr(),
-                text_position.into().coords.as_ptr(),
+                text_position.into().as_ptr(),
                 options.text_color_rgb.as_ptr(),
                 options.text_size,
                 options.life_time,
@@ -2242,9 +2611,9 @@ impl PhysicsClient {
     ///# use std::time::Duration;
     ///#
     ///# pub fn main() -> Result<()> {
-    ///#     use nalgebra::Point3;
+    ///#     use nalgebra::Vector3;
     /// let mut client = PhysicsClient::connect(Gui)?;
-    ///     let text = client.add_user_debug_text("My text", Point3::new(0., 0., 1.), None)?;
+    ///     let text = client.add_user_debug_text("My text", Vector3::new(0., 0., 1.), None)?;
     ///     let text_2 = client.add_user_debug_text("My text2", [0., 0., 2.], None)?;
     ///     client.remove_all_user_debug_items();
     ///#     std::thread::sleep(Duration::from_secs(10));
@@ -2431,7 +2800,7 @@ impl PhysicsClient {
     /// either WORLD_FRAME for Cartesian world coordinates or LINK_FRAME for local link coordinates.
     pub fn apply_external_force<
         Force: Into<Vector3<f64>>,
-        Position: Into<Point3<f64>>,
+        Position: Into<Vector3<f64>>,
         Link: Into<Option<usize>>,
     >(
         &mut self,
@@ -2452,7 +2821,7 @@ impl PhysicsClient {
                 body.0,
                 link_index,
                 force_object.into().as_ptr(),
-                position_object.into().coords.as_ptr(),
+                position_object.into().as_ptr(),
                 flags as i32,
             );
             let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
@@ -2591,11 +2960,11 @@ impl PhysicsClient {
                 } => {
                     if num_heightfield_columns > 0 && num_heightfield_rows > 0 {
                         let num_height_field_points = heightfield_data.len();
-                        assert_eq!( num_heightfield_rows * num_heightfield_columns,
-                            num_height_field_points,
-                            "Size of heightfield_data ({}) doesn't match num_heightfield_columns * num_heightfield_rows = {}",
-                            num_height_field_points,
-                            num_heightfield_rows * num_heightfield_columns,
+                        assert_eq!(num_heightfield_rows * num_heightfield_columns,
+                                   num_height_field_points,
+                                   "Size of heightfield_data ({}) doesn't match num_heightfield_columns * num_heightfield_rows = {}",
+                                   num_height_field_points,
+                                   num_heightfield_rows * num_heightfield_columns,
                         );
                         shape_index = ffi::b3CreateCollisionShapeAddHeightfield2(
                             self.handle,
@@ -2826,7 +3195,7 @@ impl PhysicsClient {
 
             if shape_index >= 0 {
                 if let Some(flags) = options.flags {
-                    ffi::b3CreateVisualSetFlag(command_handle, shape_index, flags);
+                    ffi::b3CreateVisualSetFlag(command_handle, shape_index, flags.bits());
                 }
                 ffi::b3CreateVisualShapeSetRGBAColor(
                     command_handle,
@@ -2909,13 +3278,85 @@ impl PhysicsClient {
     ///#    Ok(())
     ///# }
     /// ```
-    // TODO: think about splitting this function in two function. A normal one. And one for batches which returns a list instead
     pub fn create_multi_body(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
         options: MultiBodyOptions,
     ) -> Result<BodyId, Error> {
+        unsafe {
+            let command_handle =
+                self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
+            let status_handle = self.submit_multi_body_command(&options, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                return Ok(BodyId(uid));
+            }
+        }
+        Err(Error::new("create_multi_body failed."))
+    }
+
+    /// like [`create_multi_body`](`Self::create_multi_body`) but creates multiple instances of this
+    /// object.
+    /// # Arguments
+    /// * `base_collision_shape` - unique id from [create_collision_shape](`Self::create_collision_shape`)
+    /// or use [`CollisionId::NONE`](`crate::types::CollisionId::NONE`) if you do not want to have a collision shape.
+    /// You can re-use the collision shape for multiple multibodies (instancing)
+    /// * `base_visual_shape` - unique id from [create_visual_shape](`Self::create_visual_shape`)
+    /// or use [`VisualId::NONE`](`crate::types::VisualId::NONE`) if you do not want to set a visual shape.
+    /// You can re-use the visual shape (instancing)
+    /// * `batch_positions` - list of base positions for the new multibodies.
+    /// * `options` - additional options for creating a multi_body. See [MultiBodyOptions](`crate::MultiBodyOptions`)
+    /// for details
+    ///
+    /// # Return
+    /// returns a list of [BodyId's](`crate::BodyId`) of the newly created bodies.
+    ///
+    /// See `create_multi_body_batch.rs` for an example.
+    pub fn create_multi_body_batch(
+        &mut self,
+        base_collision_shape: CollisionId,
+        base_visual_shape: VisualId,
+        batch_positions: &[Vector3<f64>],
+        options: MultiBodyOptions,
+    ) -> Result<Vec<BodyId>, Error> {
+        unsafe {
+            let command_handle =
+                self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
+
+            let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
+            for pos in batch_positions.iter() {
+                new_batch_positions.extend_from_slice(pos.as_slice());
+            }
+            ffi::b3CreateMultiBodySetBatchPositions(
+                self.handle,
+                command_handle,
+                new_batch_positions.as_mut_slice().as_mut_ptr(),
+                batch_positions.len() as i32,
+            );
+
+            let status_handle = self.submit_multi_body_command(&options, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
+                let uid = ffi::b3GetStatusBodyIndex(status_handle);
+                let num_batch_positions = batch_positions.len() as i32;
+                let out = (0..num_batch_positions)
+                    .into_iter()
+                    .map(|x| BodyId(uid - num_batch_positions + x + 1))
+                    .collect();
+                return Ok(out);
+            }
+        }
+        Err(Error::new("create_multi_body_batch failed."))
+    }
+    // internal method to split create_multi_body and create_multi_body_batch
+    fn create_multi_body_base(
+        &mut self,
+        base_collision_shape: CollisionId,
+        base_visual_shape: VisualId,
+        options: &MultiBodyOptions,
+    ) -> b3SharedMemoryCommandHandle {
         unsafe {
             assert!(
                 options.link_masses.len() == options.link_collision_shapes.len()
@@ -2949,18 +3390,16 @@ impl PhysicsClient {
                 base_inertial_position_array.as_ptr(),
                 base_inertial_rotation_array.as_ptr(),
             );
-            if let Some(batch_positions) = options.batch_positions {
-                let mut new_batch_positions = Vec::<f64>::with_capacity(batch_positions.len() * 3);
-                for pos in batch_positions.iter() {
-                    new_batch_positions.extend_from_slice(pos.coords.as_slice());
-                }
-                ffi::b3CreateMultiBodySetBatchPositions(
-                    self.handle,
-                    command_handle,
-                    new_batch_positions.as_mut_slice().as_mut_ptr(),
-                    batch_positions.len() as i32,
-                );
-            }
+            command_handle
+        }
+    }
+    // internal method to split create_multi_body and create_multi_body_batch
+    fn submit_multi_body_command(
+        &mut self,
+        options: &MultiBodyOptions,
+        command_handle: b3SharedMemoryCommandHandle,
+    ) -> b3SharedMemoryStatusHandle {
+        unsafe {
             for i in 0..options.link_masses.len() {
                 let link_mass = options.link_masses[i];
                 let link_collision_shape_index = options.link_collision_shapes[i].0;
@@ -3002,14 +3441,8 @@ impl PhysicsClient {
             if let Some(flags) = options.flags {
                 ffi::b3CreateMultiBodySetFlags(command_handle, flags.bits());
             }
-            let status_handle = b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
-            let status_type = ffi::b3GetStatusType(status_handle);
-            if status_type == CMD_CREATE_MULTI_BODY_COMPLETED as i32 {
-                let uid = ffi::b3GetStatusBodyIndex(status_handle);
-                return Ok(BodyId(uid));
-            }
+            b3SubmitClientCommandAndWaitStatus(self.handle, command_handle)
         }
-        Err(Error::new("create_multi_body failed."))
     }
     /// Use this function to change the texture of a shape,
     /// the RGBA color and other properties.
@@ -3085,7 +3518,7 @@ impl PhysicsClient {
                 ffi::b3UpdateVisualShapeRGBAColor(command_handle, rgba.as_ptr());
             }
             if let Some(flags) = options.flags {
-                ffi::b3UpdateVisualShapeFlags(command_handle, flags);
+                ffi::b3UpdateVisualShapeFlags(command_handle, flags.bits());
             }
             let status_handle =
                 ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
@@ -3181,6 +3614,1821 @@ impl PhysicsClient {
     pub fn get_num_bodies(&mut self) -> usize {
         unsafe { ffi::b3GetNumBodies(self.handle) as usize }
     }
+    /// URDF, SDF and MJCF specify articulated bodies as a tree-structures without loops.
+    /// Thhis method allows you to connect specific links of bodies to close those loops.
+    /// In addition, you can create arbitrary constraints between objects, and between an
+    /// object and a specific world frame.
+    ///
+    /// It can also be used to control the motion of physics objects, driven by animated frames,
+    /// such as a VR controller. It is better to use constraints, instead of setting the position
+    /// or velocity directly for such purpose, since those constraints are solved together with
+    /// other dynamics constraints.
+    ///
+    /// # Arguments
+    /// * `parent_body` - parent body unique id
+    /// * `parent_link_index` - parent link index (or `None` for the base)
+    /// * `child_body` - child body unique id, or `None` for no body
+    /// (specify a non-dynamic child frame in world coordinates)
+    /// * `child_link_index` - child link index (or `None` for the base)
+    /// * `joint_type` - a [`JointType`](`crate::types::JointType`) for the constraint
+    /// * `joint_axis` - joint axis in child link frame. Must be something that can be converted
+    /// into a Vector3
+    /// * `parent_frame_pose` - pose of the joint frame relative to parent center of mass frame.
+    /// * `child_frame_pose` - pose of the joint frame relative to a given child center of mass
+    /// frame (or world origin if no child specified)
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::ControlModeArray::Torques;
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     assert_eq!(0, physics_client.get_num_constraints());
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.set_gravity([0., 0., -10.]);
+    ///     physics_client.set_real_time_simulation(true);
+    ///     let cid = physics_client.create_constraint(
+    ///         cube_id,
+    ///         None,
+    ///         None,
+    ///         None,
+    ///         JointType::Fixed,
+    ///         [0.; 3],
+    ///         Isometry3::identity(),
+    ///         Isometry3::translation(0., 0., 1.),
+    ///     )?;
+    ///     println!("{:?}", cid);
+    ///     println!("{:?}", physics_client.get_constraint(0)?);
+    ///     assert_eq!(1, physics_client.get_num_constraints());
+    ///     let constraint_info = physics_client.get_constraint_info(cid)?;
+    ///     println!("{:?}", constraint_info);
+    ///     let mut a = -PI;
+    ///     loop {
+    ///         a += 0.05;
+    ///         if a > PI {
+    ///             break;
+    ///         }
+    ///         std::thread::sleep(Duration::from_secs_f64(0.01));
+    ///         let change_constraint_options = ChangeConstraintOptions {
+    ///             joint_child_pivot: Some(Vector3::new(a, 0., 1.)),
+    ///             joint_child_frame_orientation: Some(UnitQuaternion::from_euler_angles(a, 0., 0.)),
+    ///             max_force: Some(50.),
+    ///             ..Default::default()
+    ///         };
+    ///         physics_client.change_constraint(cid, change_constraint_options);
+    ///         let constraint_info = physics_client.get_constraint_info(cid)?;
+    ///         assert!((constraint_info.joint_child_frame_pose.translation.x - a).abs() < 1e-7);
+    ///         assert!(
+    ///             (constraint_info
+    ///                 .joint_child_frame_pose
+    ///                 .rotation
+    ///                 .euler_angles()
+    ///                 .0
+    ///                 - a)
+    ///                 .abs()
+    ///                 < 1e-7
+    ///         );
+    ///     }
+    ///     let constraint_state = physics_client.get_constraint_state(cid)?;
+    ///     println!("{}", constraint_state);
+    ///     physics_client.remove_constraint(cid);
+    ///     assert_eq!(0, physics_client.get_num_constraints());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_constraint<
+        ChildBody: Into<Option<BodyId>>,
+        ParentLink: Into<Option<usize>>,
+        ChildLink: Into<Option<usize>>,
+        JointAxisVector: Into<Vector3<f64>>,
+    >(
+        &mut self,
+        parent_body: BodyId,
+        parent_link_index: ParentLink,
+        child_body: ChildBody,
+        child_link_index: ChildLink,
+        joint_type: JointType,
+        joint_axis: JointAxisVector,
+        parent_frame_pose: Isometry3<f64>,
+        child_frame_pose: Isometry3<f64>,
+    ) -> Result<ConstraintId, Error> {
+        let child_body = match child_body.into() {
+            None => -1,
+            Some(body) => body.0,
+        };
+        let parent_link_index: i32 = match parent_link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+
+        let child_link_index: i32 = match child_link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let mut joint_info = b3JointInfo::default();
+        let joint_axis = joint_axis.into();
+        joint_info.m_joint_type = joint_type as i32;
+        joint_info.m_parent_frame[0] = parent_frame_pose.translation.x;
+        joint_info.m_parent_frame[1] = parent_frame_pose.translation.y;
+        joint_info.m_parent_frame[2] = parent_frame_pose.translation.z;
+        joint_info.m_parent_frame[3] = parent_frame_pose.rotation.i;
+        joint_info.m_parent_frame[4] = parent_frame_pose.rotation.j;
+        joint_info.m_parent_frame[5] = parent_frame_pose.rotation.k;
+        joint_info.m_parent_frame[6] = parent_frame_pose.rotation.w;
+
+        joint_info.m_child_frame[0] = child_frame_pose.translation.x;
+        joint_info.m_child_frame[1] = child_frame_pose.translation.y;
+        joint_info.m_child_frame[2] = child_frame_pose.translation.z;
+        joint_info.m_child_frame[3] = child_frame_pose.rotation.i;
+        joint_info.m_child_frame[4] = child_frame_pose.rotation.j;
+        joint_info.m_child_frame[5] = child_frame_pose.rotation.k;
+        joint_info.m_child_frame[6] = child_frame_pose.rotation.w;
+
+        joint_info.m_joint_axis[0] = joint_axis[0];
+        joint_info.m_joint_axis[1] = joint_axis[1];
+        joint_info.m_joint_axis[2] = joint_axis[2];
+        unsafe {
+            let command_handle = ffi::b3InitCreateUserConstraintCommand(
+                self.handle,
+                parent_body.0,
+                parent_link_index,
+                child_body,
+                child_link_index,
+                &mut joint_info,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_CONSTRAINT_COMPLETED as i32 {
+                return Ok(ConstraintId(ffi::b3GetStatusUserConstraintUniqueId(
+                    status_handle,
+                )));
+            }
+        }
+        Err(Error::new("create_constraint failed"))
+    }
+    /// Allows you to change parameters of an existing constraint.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn change_constraint(
+        &mut self,
+        constraint: ConstraintId,
+        options: ChangeConstraintOptions,
+    ) {
+        unsafe {
+            let command_handle = ffi::b3InitChangeUserConstraintCommand(self.handle, constraint.0);
+            if let Some(pivot) = options.joint_child_pivot {
+                ffi::b3InitChangeUserConstraintSetPivotInB(command_handle, pivot.as_ptr());
+            }
+            if let Some(frame_orn) = options.joint_child_frame_orientation {
+                ffi::b3InitChangeUserConstraintSetFrameInB(
+                    command_handle,
+                    frame_orn.coords.as_ptr(),
+                );
+            }
+            if let Some(relative_position_target) = options.relative_position_target {
+                assert!(
+                    relative_position_target < 1e10,
+                    "relative position target must not exceed 1e10"
+                );
+                ffi::b3InitChangeUserConstraintSetRelativePositionTarget(
+                    command_handle,
+                    relative_position_target,
+                );
+            }
+            if let Some(erp) = options.erp {
+                assert!(erp.is_sign_positive(), "erp must be positive");
+                ffi::b3InitChangeUserConstraintSetERP(command_handle, erp);
+            }
+            if let Some(max_force) = options.max_force {
+                assert!(max_force.is_sign_positive(), "max_force must be positive");
+                ffi::b3InitChangeUserConstraintSetMaxForce(command_handle, max_force);
+            }
+            if let Some(gear_ratio) = options.gear_ratio {
+                ffi::b3InitChangeUserConstraintSetGearRatio(command_handle, gear_ratio);
+            }
+            if let Some(aux_link) = options.gear_aux_link {
+                ffi::b3InitChangeUserConstraintSetGearAuxLink(command_handle, aux_link as i32);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// removes a constraint
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn remove_constraint(&mut self, constraint: ConstraintId) {
+        unsafe {
+            let command_handle = ffi::b3InitRemoveUserConstraintCommand(self.handle, constraint.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// You can query for the total number of constraints, created using
+    /// [`create_constraint`](`Self::create_constraint`)
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_num_constraints(&mut self) -> usize {
+        unsafe { ffi::b3GetNumUserConstraints(self.handle) as usize }
+    }
+    /// will take a serial index in range 0..[`get_num_constraints`](`Self::get_num_constraints`),
+    /// and reports the constraint unique id.
+    /// Note that the constraint unique ids may not be contiguous, since you may remove constraints.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_constraint(&mut self, serial_index: usize) -> Result<ConstraintId, Error> {
+        unsafe {
+            let constraint_id = ffi::b3GetUserConstraintId(self.handle, serial_index as i32);
+            if constraint_id >= 0 {
+                return Ok(ConstraintId(constraint_id));
+            }
+        }
+        Err(Error::new("no constraint with this serial index"))
+    }
+    /// Get the user-created constraint info, given a ConstraintId.
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    pub fn get_constraint_info(
+        &mut self,
+        constraint: ConstraintId,
+    ) -> Result<ConstraintInfo, Error> {
+        let mut b3_constraint_info = ffi::b3UserConstraint::default();
+        unsafe {
+            if ffi::b3GetUserConstraintInfo(self.handle, constraint.0, &mut b3_constraint_info) != 0
+            {
+                return Ok(b3_constraint_info.into());
+            }
+        }
+        Err(Error::new("Couldn't get user constraint info"))
+    }
+    /// Give a constraint unique id, you can query for the applied constraint forces in the most
+    /// recent simulation step. The input is a constraint unique id and the output is a vector of
+    /// constraint forces, its dimension is the degrees of freedom that are affected by the
+    /// constraint (a fixed constraint affects 6 DoF for example).
+    /// See [`create_constraint`](`Self::create_constraint`) for an example.
+    #[allow(clippy::collapsible_if)]
+    pub fn get_constraint_state(
+        &mut self,
+        constraint: ConstraintId,
+    ) -> Result<DVector<f64>, Error> {
+        let mut constraint_state = ffi::b3UserConstraintState::default();
+        unsafe {
+            if self.can_submit_command() {
+                let cmd_handle =
+                    ffi::b3InitGetUserConstraintStateCommand(self.handle, constraint.0);
+                let status_handle =
+                    ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+                let _status_type = ffi::b3GetStatusType(status_handle);
+                if ffi::b3GetStatusUserConstraintState(status_handle, &mut constraint_state) != 0 {
+                    if constraint_state.m_numDofs != 0 {
+                        return Ok(DVector::from_column_slice(
+                            &constraint_state.m_appliedConstraintForces
+                                [0..constraint_state.m_numDofs as usize],
+                        ));
+                    }
+                }
+            }
+            Err(Error::new("Could not get constraint state"))
+        }
+    }
+    /// queriers the axis aligned bounding box (in world space) given an object unique id,
+    /// and optionally a link index. (when you pass `None`, you get the AABB of the base).
+    /// # Arguments
+    /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
+    /// * `link_index` - link index or `None` for the base.
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let r2d2 = physics_client.load_urdf("r2d2.urdf", None)?;
+    ///     let aabb = physics_client.get_aabb(r2d2, None)?;
+    ///     println!("{:?}", aabb);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also the get_aabb.rs example in the example folder
+    pub fn get_aabb<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+    ) -> Result<Aabb, Error> {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        assert!(body.0 >= 0);
+        unsafe {
+            let cmd_handle = ffi::b3RequestCollisionInfoCommandInit(self.handle, body.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, cmd_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_REQUEST_COLLISION_INFO_COMPLETED as i32 {
+                return Err(Error::new("get_aabb failed"));
+            }
+            let mut aabb_min = [0.; 3];
+            let mut aabb_max = [0.; 3];
+            if ffi::b3GetStatusAABB(
+                status_handle,
+                link_index,
+                aabb_min.as_mut_ptr(),
+                aabb_max.as_mut_ptr(),
+            ) != 0
+            {
+                return Ok(Aabb {
+                    min: aabb_min.into(),
+                    max: aabb_max.into(),
+                });
+            }
+            Err(Error::new("get_aabb failed"))
+        }
+    }
+    /// This query will return all the unique ids of objects that have axis aligned bounding
+    /// box overlap with a given axis aligned bounding box. Note that the query is conservative
+    /// and may return additional objects that don't have actual AABB overlap. This happens because
+    /// the acceleration structures have some heuristic that enlarges the AABBs a bit
+    /// (extra margin and extruded along the velocity vector).
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_id = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let overlapping_object = physics_client.get_overlapping_objects(Aabb{
+    ///         min: [-1.;3].into(),
+    ///         max:[1.;3].into(),
+    ///     });
+    ///     assert_eq!(2,overlapping_object.len());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn get_overlapping_objects(&mut self, aabb: Aabb) -> Vec<OverlappingObject> {
+        unsafe {
+            let Aabb { min, max } = aabb;
+            let command_handle =
+                ffi::b3InitAABBOverlapQuery(self.handle, min.as_ptr(), max.as_ptr());
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let mut overlap_data = b3AABBOverlapData {
+                m_numOverlappingObjects: 0,
+                m_overlappingObjects: [].as_mut_ptr(),
+            };
+            ffi::b3GetAABBOverlapResults(self.handle, &mut overlap_data);
+            let mut objects = Vec::with_capacity(overlap_data.m_numOverlappingObjects as usize);
+            let data = std::slice::from_raw_parts_mut(
+                overlap_data.m_overlappingObjects,
+                overlap_data.m_numOverlappingObjects as usize,
+            );
+            for object in data.iter() {
+                let link_index = {
+                    assert!(object.m_linkIndex >= -1);
+                    if object.m_linkIndex == -1 {
+                        None
+                    } else {
+                        Some(object.m_linkIndex as usize)
+                    }
+                };
+                let object = OverlappingObject {
+                    body: BodyId(object.m_objectUniqueId),
+                    link_index,
+                };
+                objects.push(object);
+            }
+            objects
+        }
+    }
+    /// The getContactPoints API returns the contact points computed during the most recent call to
+    /// [`step_simulation`](`Self::step_simulation`). Note that if you change the state of the
+    /// simulation after [`step_simulation`](`Self::step_simulation`),
+    /// the 'get_contact_points()' is not updated and potentially invalid
+    ///
+    /// # Arguments
+    /// * `body_a` - only report contact points that involve body A
+    /// * `body_b` - only report contact points that involve body B. Important: you need to have a
+    ///  body A if you provide body B.
+    /// * `link_a` - Only report contact points that involve link_index_a of body_a. See note on usage of this option.
+    /// * `link_b` - Only report contact points that involve link_index_b of body_b. See note on usage of this option.
+    ///
+    /// # Note on usage of the link_indices:
+    /// You can either provide:
+    /// * `None` - if you want to have all the links.
+    /// * `Some(None)` - if you want to specify the Base link
+    /// * `Some(Some(2))` - if you want to specify link `2`.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let _cube_a = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 1.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let _cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.step_simulation()?;
+    ///     let points = physics_client.get_contact_points(None, None, None, None)?;
+    ///     assert_eq!(4, points.len());
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also the `contact_friction.rs` example in the example folder.
+    pub fn get_contact_points<BodyA: Into<Option<BodyId>>, BodyB: Into<Option<BodyId>>>(
+        &mut self,
+        body_a: BodyA,
+        body_b: BodyB,
+        link_a: Option<Option<usize>>,
+        link_b: Option<Option<usize>>,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let body_a = body_a.into();
+        let body_b = body_b.into();
+        unsafe {
+            let command_handle = ffi::b3InitRequestContactPointInformation(self.handle);
+            if let Some(body_1) = body_a {
+                ffi::b3SetContactFilterBodyA(command_handle, body_1.0);
+                match link_a {
+                    None => {}
+                    Some(link) => {
+                        let link_index_a = match link {
+                            None => -1,
+                            Some(index) => index as i32,
+                        };
+                        ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index_a);
+                    }
+                }
+
+                if let Some(body_2) = body_b {
+                    ffi::b3SetContactFilterBodyB(command_handle, body_2.0);
+                    match link_b {
+                        None => {}
+                        Some(link) => {
+                            let link_index_b = match link {
+                                None => -1,
+                                Some(index) => index as i32,
+                            };
+                            ffi::b3SetClosestDistanceFilterLinkB(command_handle, link_index_b);
+                        }
+                    }
+                }
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_CONTACT_POINT_INFORMATION_COMPLETED as i32 {
+                let mut contact_information = b3ContactInformation {
+                    m_numContactPoints: 0,
+                    m_contactPointData: [].as_mut_ptr(),
+                };
+                ffi::b3GetContactPointInformation(self.handle, &mut contact_information);
+                let mut objects =
+                    Vec::with_capacity(contact_information.m_numContactPoints as usize);
+                let data = std::slice::from_raw_parts_mut(
+                    contact_information.m_contactPointData,
+                    contact_information.m_numContactPoints as usize,
+                );
+                for &object in data.iter() {
+                    objects.push(object.into());
+                }
+                return Ok(objects);
+            }
+        }
+        Err(Error::new("could not get contact points"))
+    }
+
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * `get_closest_points_body_body` - calculates the closest points between two bodies.
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`) - calculates the closest points between a body and a collision shape
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`) - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `body_a` - BodyId for the first object
+    /// * `link_index_a` - link index for object A or `None` for the base.
+    /// * `body_b` - BodyId for the second object
+    /// * `link_index_b` - link index for object B or `None` for the base.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///#     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let points = physics_client.get_closest_points_body_body(cube_a, None, cube_b, None, 1.)?;
+    ///     assert!((points[0].contact_distance - 0.45).abs() < 1e-5);
+    ///     assert_eq!(points[0].body_a, Some(cube_a));
+    ///     assert_eq!(points[0].body_b, Some(cube_b));
+    ///     assert_eq!(points[0].link_index_a, None);
+    ///     assert_eq!(points[0].link_index_b, None);
+    ///     assert!((points[0].position_on_a.z - 0.025).abs() < 1e-5);
+    ///     assert!((points[0].position_on_b.z - 0.475).abs() < 1e-5);
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an other example
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`)
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`)
+    pub fn get_closest_points_body_body<LinkA: Into<Option<usize>>, LinkB: Into<Option<usize>>>(
+        &mut self,
+        body_a: BodyId,
+        link_index_a: LinkA,
+        body_b: BodyId,
+        link_index_b: LinkB,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let link_index_a = match link_index_a.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let link_index_b = match link_index_b.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(body_a.0 >= 0);
+            assert!(body_b.0 >= 0);
+            ffi::b3SetClosestDistanceFilterBodyA(command_handle, body_a.0);
+            ffi::b3SetClosestDistanceFilterBodyB(command_handle, body_b.0);
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index_a);
+            ffi::b3SetClosestDistanceFilterLinkB(command_handle, link_index_b);
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`) - calculates the closest points between two bodies.
+    /// * `get_closest_points_body_shape` - calculates the closest points between a body and a collision shape
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`) - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `body` - BodyId for the body object
+    /// * `link_index` - link index for object A or `None` for the base.
+    /// * `collision_shape` - Collision shape of the other object
+    /// * `shape_pose` - pose of the collision shape in world coordinates.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an example
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`)
+    /// * [`get_closest_points_shape_shape`](`Self::get_closest_points_shape_shape`)
+    pub fn get_closest_points_body_shape<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        collision_shape: CollisionId,
+        shape_pose: Isometry3<f64>,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(body.0 >= 0);
+            assert!(collision_shape.0 >= 0);
+            ffi::b3SetClosestDistanceFilterBodyA(command_handle, body.0);
+            ffi::b3SetClosestDistanceFilterLinkA(command_handle, link_index);
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterCollisionShapeB(command_handle, collision_shape.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionB(
+                command_handle,
+                shape_pose.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationB(
+                command_handle,
+                shape_pose.rotation.coords.as_ptr(),
+            );
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+    /// Computes contact points independent from [`step_simulation`](`Self::step_simulation`).
+    /// It also lets you compute closest points of objects with an arbitrary separating distance.
+    /// In this query there will be no normal forces reported.
+    ///
+    /// There are 3 variants of this method:
+    ///
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`) - calculates the closest points between two bodies.
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`) - calculates the closest points between a body and a collision shape
+    /// * `get_closest_points_shape_shape` - calculates the closest points between two collision shapes
+    ///
+    /// # Arguments
+    /// * `collision_shape_a` - CollisionId of the first shape
+    /// * `shape_pose_a` - pose of the first collision shape in world coordinates.
+    /// * `collision_shape_b` - CollisionId of the second shape
+    /// * `shape_pose_b` - pose of the second collision shape in world coordinates.
+    /// * `distance` - If the distance between objects exceeds this maximum distance, no points may be returned.
+    ///
+    /// # See also
+    /// * `get_closest_points.rs` in the example for folder for an example
+    /// * [`get_closest_points_body_shape`](`Self::get_closest_points_body_shape`)
+    /// * [`get_closest_points_body_body`](`Self::get_closest_points_body_body`)
+    pub fn get_closest_points_shape_shape(
+        &mut self,
+        collision_shape_a: CollisionId,
+        shape_pose_a: Isometry3<f64>,
+        collision_shape_b: CollisionId,
+        shape_pose_b: Isometry3<f64>,
+        distance: f64,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        unsafe {
+            let command_handle = ffi::b3InitClosestDistanceQuery(self.handle);
+            assert!(collision_shape_a.0 >= 0);
+            assert!(collision_shape_b.0 >= 0);
+
+            ffi::b3SetClosestDistanceThreshold(command_handle, distance);
+            ffi::b3SetClosestDistanceFilterCollisionShapeA(command_handle, collision_shape_a.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapeB(command_handle, collision_shape_b.0);
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionA(
+                command_handle,
+                shape_pose_a.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapePositionB(
+                command_handle,
+                shape_pose_b.translation.vector.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationA(
+                command_handle,
+                shape_pose_a.rotation.coords.as_ptr(),
+            );
+            ffi::b3SetClosestDistanceFilterCollisionShapeOrientationB(
+                command_handle,
+                shape_pose_b.rotation.coords.as_ptr(),
+            );
+            self.intern_get_closest_points(command_handle)
+        }
+    }
+
+    unsafe fn intern_get_closest_points(
+        &mut self,
+        command_handle: b3SharedMemoryCommandHandle,
+    ) -> Result<Vec<ContactPoint>, Error> {
+        let mut contact_information = b3ContactInformation {
+            m_numContactPoints: 0,
+            m_contactPointData: [].as_mut_ptr(),
+        };
+        let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+        let status_type = ffi::b3GetStatusType(status_handle);
+        if status_type == CMD_CONTACT_POINT_INFORMATION_COMPLETED as i32 {
+            ffi::b3GetContactPointInformation(self.handle, &mut contact_information);
+            let mut objects = Vec::with_capacity(contact_information.m_numContactPoints as usize);
+            let data = std::slice::from_raw_parts_mut(
+                contact_information.m_contactPointData,
+                contact_information.m_numContactPoints as usize,
+            );
+            for &object in data.iter() {
+                let mut contact_point: ContactPoint = object.into();
+                contact_point.normal_force = None;
+                objects.push(contact_point);
+            }
+            return Ok(objects);
+        }
+        Err(Error::new("get_closes_points failed"))
+    }
+    /// State logging lets you log the state of the simulation, such as the state of one or more
+    /// objects after each simulation step (after each call to stepSimulation or automatically after
+    /// each simulation step when [`set_real_time_simulation`](`Self::set_real_time_simulation`) is enabled).
+    /// This allows you to record
+    /// trajectories of objects. There is also the option to log the common state of bodies such as
+    /// base position and orientation, joint positions (angles) and joint motor forces.
+    ///
+    /// All log files generated using this method can be read using Rust, C++ or Python scripts.
+    ///
+    /// # Arguments
+    /// * `logging_type` - select one of different modes for logging
+    /// * `file` - a file in which the logging data will be saved.
+    /// * `options` - define various logging options.
+    ///
+    /// # Examples
+    /// * `dump_log.rs` - a tool which prints the content of a log file.
+    /// * `kuka_with_cube.rs` - records the state of a generic robot.
+    /// * `kuka_with_cube_playback.rs` - reads the log file generated by `kuka_with_cube.rs` and replays
+    /// the joint states.
+    /// * `log_minitaur.rs` - logs the state of a minatur robot.
+    /// * `profile_timing.rs` - an example which shows how to profile your function with the
+    /// [`submit_profile_timing`](`Self::submit_profile_timing`) method.
+    ///
+    /// ```no_run
+    ///# use anyhow::Result;
+    ///# use rubullet::{LoggingType, StateLoggingOptions, PhysicsClient, Mode};
+    ///# fn main() -> Result<()> {
+    ///#     let mut  physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///     let log_id = physics_client.start_state_logging(
+    ///             LoggingType::GenericRobot,
+    ///             "LOG0001.txt",
+    ///             None,
+    ///         )?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn start_state_logging<P: AsRef<Path>, Options: Into<Option<StateLoggingOptions>>>(
+        &mut self,
+        logging_type: LoggingType,
+        file: P,
+        options: Options,
+    ) -> Result<LogId, Error> {
+        let options = options.into().unwrap_or_default();
+        unsafe {
+            let command_handle = ffi::b3StateLoggingCommandInit(self.handle);
+            let file = CString::new(file.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            ffi::b3StateLoggingStart(command_handle, logging_type as i32, file.as_ptr());
+            for body in options.object_ids.iter() {
+                ffi::b3StateLoggingAddLoggingObjectUniqueId(command_handle, body.0);
+            }
+            if let Some(max_log_dof) = options.max_log_dof {
+                ffi::b3StateLoggingSetMaxLogDof(command_handle, max_log_dof as i32);
+            }
+            if let Some(body) = options.body_a {
+                ffi::b3StateLoggingSetBodyAUniqueId(command_handle, body.0);
+                if let Some(link_index) = options.link_index_a {
+                    let link_index = match link_index {
+                        None => -1,
+                        Some(index) => index as i32,
+                    };
+                    ffi::b3StateLoggingSetLinkIndexA(command_handle, link_index);
+                }
+                if let Some(body) = options.body_b {
+                    ffi::b3StateLoggingSetBodyBUniqueId(command_handle, body.0);
+                    if let Some(link_index) = options.link_index_b {
+                        let link_index = match link_index {
+                            None => -1,
+                            Some(index) => index as i32,
+                        };
+                        ffi::b3StateLoggingSetLinkIndexB(command_handle, link_index);
+                    }
+                }
+            }
+            if let Some(device_type_filter) = options.device_type_filter {
+                ffi::b3StateLoggingSetDeviceTypeFilter(command_handle, device_type_filter);
+            }
+            if let Some(flags) = options.log_flags {
+                ffi::b3StateLoggingSetLogFlags(command_handle, flags.bits());
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_STATE_LOGGING_START_COMPLETED as i32 {
+                return Ok(LogId(ffi::b3GetStatusLoggingUniqueId(status_handle)));
+            }
+            Err(Error::new("could not start logging"))
+        }
+    }
+    /// Stops a logger. If you use a  [`ProfileTimings`](`crate::types::LoggingType::ProfileTimings`)
+    /// logger, you need to call this method at the end. Otherwise, your data will not be saved to the
+    /// file.
+    /// # Arguments
+    /// * `log` - [`LogId`](`crate::types::LogId`) as returned by [`start_state_logging`](`Self::start_state_logging`)
+    pub fn stop_state_logging(&mut self, log: LogId) {
+        assert!(log.0 >= 0);
+        unsafe {
+            let command_handle = ffi::b3StateLoggingCommandInit(self.handle);
+            ffi::b3StateLoggingStop(command_handle, log.0);
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// submit_profile_timing allows to insert start and stop timings to profile Rust code.
+    /// RuBullet and Bullet have instrumented many functions so you can see where the time is spend.
+    /// You can dump those profile timings in a file, that can be viewed with Google Chrome
+    /// in the `about://tracing` window using the LOAD feature. In the GUI,
+    /// you can press 'p' to start/stop the profile dump. In some cases you may want to
+    /// instrument the timings of your client code.
+    /// # Arguments
+    /// * `event_name` - Give the timing a name or use `None` to specify the end of the timing.
+    ///
+    /// # Usage
+    /// To use this function you need to create a logger with [`start_state_logging`](`Self::start_state_logging`)
+    /// with [`ProfileTimings`](`crate::types::LoggingType::ProfileTimings`) as [`LoggingType`](`crate::types::LoggingType`)
+    ///
+    /// You can start a timing by calling
+    /// `client.submit_profile_timing("my_timing");`
+    /// This will start a timing called `my_timing0`. The "0" is a running index which get s increased for every new timing.
+    /// calling `client.submit_profile_timing("my_timing");` again will start a timing called `my_timing1`.
+    /// The timing are put onto stacked and are being stopped by calling `client.submit_profile_timing(None);`.
+    /// Calling it the first time will stop `my_timing1`. And the second calling it a second time will
+    /// stop `my_timing0`.
+    ///
+    /// At the end call the [`stop_state_logging`](`Self::stop_state_logging`) method to write
+    /// the profiling data into the log file. Open `about://tracing` or `chrome://tracing` in Chrome or
+    /// Chromium to view your data.
+    ///
+    /// # Example
+    /// from the `profile_timing.rs` example:
+    /// ```no_run
+    ///
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    /// use std::time::{Duration, Instant};
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///     let t = Instant::now() + Duration::from_secs_f64(3.1);
+    ///     let log_id = physics_client.start_state_logging(
+    ///         LoggingType::ProfileTimings,
+    ///         "chrome_about_tracing.json",
+    ///         None,
+    ///     )?;
+    ///     while Instant::now() < t {
+    ///         physics_client.step_simulation()?;
+    ///
+    ///         physics_client.submit_profile_timing("rusttest");
+    ///         std::thread::sleep(Duration::from_secs_f64(1. / 240.));
+    ///
+    ///         physics_client.submit_profile_timing("nested");
+    ///         for _ in 0..100 {
+    ///             physics_client.submit_profile_timing("deep_nested");
+    ///             physics_client.submit_profile_timing(None);
+    ///         }
+    ///         std::thread::sleep(Duration::from_millis(1));
+    ///         physics_client.submit_profile_timing(None);
+    ///         physics_client.submit_profile_timing(None);
+    ///     }
+    ///     physics_client.stop_state_logging(log_id);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn submit_profile_timing<'a, EventName: Into<Option<&'a str>>>(
+        &mut self,
+        event_name: EventName,
+    ) {
+        unsafe {
+            match event_name.into() {
+                None => {
+                    let command_handle = ffi::b3ProfileTimingCommandInit(self.handle, [0].as_ptr());
+                    ffi::b3SetProfileTimingType(command_handle, 1);
+                    let _status_handle =
+                        ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+                }
+                Some(event_name) => {
+                    let event_name = CString::new(event_name.as_bytes()).expect("Invalid name");
+                    let command_handle =
+                        ffi::b3ProfileTimingCommandInit(self.handle, event_name.as_ptr());
+                    ffi::b3SetProfileTimingType(command_handle, 0);
+                    let _status_handle =
+                        ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+                }
+            };
+        }
+    }
+    /// You can create an approximate snapshot of the current world as a PyBullet Python file
+    /// (Yes, a Python file and not a Rust file),
+    /// stored on the server. save_world can be useful as a basic editing feature, setting
+    /// up the robot, joint angles, object positions and environment for example in VR.
+    /// Later you can just load the PyBullet Python file to re-create the world. You could also
+    /// use it to create a Python version of your awesome world to
+    /// show it to your friends who are not using RuBullet yet!
+    /// The python snapshot contains loadURDF commands together with initialization of joint angles
+    /// and object transforms. Note that not all settings are stored in the world file.
+    ///
+    /// # Arguments
+    /// * `filename` - location where to save the python file.
+    ///
+    /// # Example
+    /// ```no_run
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     let points = physics_client.save_world("my_world.py")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    pub fn save_world<P: AsRef<Path>>(&mut self, filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command_handle = ffi::b3SaveWorldCommandInit(self.handle, file.as_ptr());
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SAVE_WORLD_COMPLETED as i32 {
+                return Err(Error::new("save_world command execution failed"));
+            }
+            Ok(())
+        }
+    }
+    /// Loads Bodies from a `.bullet` file. These can be created with [`save_bullet`](`Self::save_bullet`).
+    ///
+    /// Returns a list of BodyId's.
+    /// # Arguments
+    /// * `bullet_filename` - location of the `.bullet`
+    /// # Example
+    /// ```rust
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let points = physics_client.load_bullet("spider.bullet")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also `save_and_restore.rs` example.
+    pub fn load_bullet<P: AsRef<Path>>(
+        &mut self,
+        bullet_filename: P,
+    ) -> Result<Vec<BodyId>, Error> {
+        unsafe {
+            let file = CString::new(bullet_filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadBulletCommandInit(self.handle, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_BULLET_LOADING_COMPLETED as i32 {
+                return Err(Error::new("Couldn't load .bullet file."));
+            }
+            let mut body_indices_out = [0; MAX_SDF_BODIES as usize];
+            let num_bodies = ffi::b3GetStatusBodyIndices(
+                status_handle,
+                body_indices_out.as_mut_ptr(),
+                MAX_SDF_BODIES as i32,
+            );
+            if num_bodies > MAX_SDF_BODIES as i32 {
+                return Err(Error::new("load_bullet exceeds body capacity"));
+            }
+            assert!(num_bodies >= 0);
+            let mut bodies = Vec::with_capacity(num_bodies as usize);
+            for &body in body_indices_out.iter().take(num_bodies as usize) {
+                assert!(body >= 0);
+                bodies.push(BodyId(body));
+            }
+            Ok(bodies)
+        }
+    }
+    /// Saves all bodies and the current state into a `.bullet` file which can then be read by
+    /// [`load_bullet`](`Self::load_bullet`) or [`restore_state_from_file`](`Self::restore_state_from_file`).
+    /// # Example
+    /// ```no_run
+    ///# use anyhow::Result;
+    ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
+    ///# use rubullet::*;
+    ///# use std::f64::consts::PI;
+    ///# use std::time::Duration;
+    ///#
+    ///# fn main() -> Result<()> {
+    ///#     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
+    ///#     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     physics_client.load_urdf("plane.urdf", None)?;
+    ///     let cube_a = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let cube_b = physics_client.load_urdf(
+    ///         "cube_small.urdf",
+    ///         UrdfOptions {
+    ///             base_transform: Isometry3::translation(0., 0., 0.5),
+    ///             ..Default::default()
+    ///         },
+    ///     )?;
+    ///     physics_client.step_simulation()?;
+    ///     physics_client.save_bullet("cubes.bullet")?;
+    ///#     Ok(())
+    ///# }
+    /// ```
+    /// See also `save_and_restore.rs` example.
+    pub fn save_bullet<P: AsRef<Path>>(&mut self, bullet_filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(bullet_filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3SaveBulletCommandInit(self.handle, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_BULLET_SAVING_COMPLETED as i32 {
+                return Err(Error::new("Couldn't save .bullet file."));
+            }
+            Ok(())
+        }
+    }
+    /// restores a state from memory using a state id which was created with [`save_state`](`Self::save_state`).
+    /// See `save_and_restore.rs` example.
+    pub fn restore_state(&mut self, state: StateId) -> Result<(), Error> {
+        unsafe {
+            let command = ffi::b3LoadStateCommandInit(self.handle);
+            assert!(state.0 >= 0);
+            ffi::b3LoadStateSetStateId(command, state.0);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_RESTORE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't restore state."));
+            }
+            Ok(())
+        }
+    }
+    /// restores a state from a `.bullet` file. It is necessary that the correct bodies are already
+    /// loaded. If this is not the case use [`load_bullet`](`Self::load_bullet`) instead.
+    /// See `save_and_restore.rs` example.
+    pub fn restore_state_from_file<P: AsRef<Path>>(&mut self, filename: P) -> Result<(), Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadStateCommandInit(self.handle);
+            ffi::b3LoadStateSetFileName(command, file.as_ptr());
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_RESTORE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't restore state."));
+            }
+            Ok(())
+        }
+    }
+    /// Saves the current state in memory and returns a StateId which can be used by [`restore_state`](`Self::restore_state`)
+    /// to restore this state.  Use [`save_bullet`](`Self::save_bullet`) if you want to save a state
+    /// to a file.
+    /// See `save_and_restore.rs` example.
+    pub fn save_state(&mut self) -> Result<StateId, Error> {
+        unsafe {
+            let command = ffi::b3SaveStateCommandInit(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SAVE_STATE_COMPLETED as i32 {
+                return Err(Error::new("Couldn't save state."));
+            }
+            let state_id = ffi::b3GetStatusGetStateId(status_handle);
+            assert!(state_id >= 0);
+            Ok(StateId(state_id))
+        }
+    }
+    /// Removes a state from memory.
+    pub fn remove_state(&mut self, state: StateId) {
+        unsafe {
+            assert!(state.0 >= 0);
+            if self.can_submit_command() {
+                let command = ffi::b3InitRemoveStateCommand(self.handle, state.0);
+                let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+                let _status_type = ffi::b3GetStatusType(status_handle);
+            }
+        }
+    }
+    /// Set some internal physics engine parameter, such as cfm or erp etc.
+    pub fn set_physics_engine_parameter(&mut self, options: SetPhysicsEngineParameterOptions) {
+        unsafe {
+            let command = ffi::b3InitPhysicsParamCommand(self.handle);
+            if let Some(num_solver_iterations) = options.num_solver_iterations {
+                ffi::b3PhysicsParamSetNumSolverIterations(command, num_solver_iterations as i32);
+            }
+            if let Some(minimum_solver_island_size) = options.minimum_solver_island_size {
+                ffi::b3PhysicsParameterSetMinimumSolverIslandSize(
+                    command,
+                    minimum_solver_island_size as i32,
+                );
+            }
+            if let Some(solver_residual_threshold) = options.solver_residual_threshold {
+                assert!(solver_residual_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetSolverResidualThreshold(command, solver_residual_threshold);
+            }
+            if let Some(collision_filter_mode) = options.collision_filter_mode {
+                ffi::b3PhysicsParamSetCollisionFilterMode(command, collision_filter_mode as i32);
+            }
+            if let Some(num_sub_steps) = options.num_sub_steps {
+                ffi::b3PhysicsParamSetNumSubSteps(command, num_sub_steps as i32);
+            }
+            if let Some(fixed_time_step) = options.fixed_time_step {
+                ffi::b3PhysicsParamSetTimeStep(command, fixed_time_step.as_secs_f64());
+            }
+            if let Some(use_split_impulse) = options.use_split_impulse {
+                match use_split_impulse {
+                    true => {
+                        ffi::b3PhysicsParamSetUseSplitImpulse(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetUseSplitImpulse(command, 0);
+                    }
+                }
+            }
+            if let Some(split_impulse_penetration_threshold) =
+                options.split_impulse_penetration_threshold
+            {
+                assert!(split_impulse_penetration_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetSplitImpulsePenetrationThreshold(
+                    command,
+                    split_impulse_penetration_threshold,
+                );
+            }
+            if let Some(contact_breaking_threshold) = options.contact_breaking_threshold {
+                assert!(contact_breaking_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetContactBreakingThreshold(command, contact_breaking_threshold);
+            }
+            if let Some(contact_slop) = options.contact_slop {
+                assert!(contact_slop.is_sign_positive());
+                ffi::b3PhysicsParamSetContactSlop(command, contact_slop);
+            }
+            if let Some(max_num_cmd_per_1_ms) = options.max_num_cmd_per_1_ms {
+                assert!(max_num_cmd_per_1_ms >= -1);
+                ffi::b3PhysicsParamSetMaxNumCommandsPer1ms(command, max_num_cmd_per_1_ms);
+            }
+            if let Some(restitution_velocity_threshold) = options.restitution_velocity_threshold {
+                assert!(restitution_velocity_threshold.is_sign_positive());
+                ffi::b3PhysicsParamSetRestitutionVelocityThreshold(
+                    command,
+                    restitution_velocity_threshold,
+                );
+            }
+            if let Some(enable_file_caching) = options.enable_file_caching {
+                match enable_file_caching {
+                    true => {
+                        ffi::b3PhysicsParamSetEnableFileCaching(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetEnableFileCaching(command, 0);
+                    }
+                }
+            }
+            if let Some(erp) = options.erp {
+                assert!(erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultNonContactERP(command, erp);
+            }
+            if let Some(contact_erp) = options.contact_erp {
+                assert!(contact_erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultContactERP(command, contact_erp);
+            }
+            if let Some(friction_erp) = options.friction_erp {
+                assert!(friction_erp.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultFrictionERP(command, friction_erp);
+            }
+            if let Some(enable_cone_friction) = options.enable_cone_friction {
+                match enable_cone_friction {
+                    true => {
+                        ffi::b3PhysicsParamSetEnableConeFriction(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetEnableConeFriction(command, 0);
+                    }
+                }
+            }
+            if let Some(deterministic_overlapping_pairs) = options.deterministic_overlapping_pairs {
+                match deterministic_overlapping_pairs {
+                    true => {
+                        ffi::b3PhysicsParameterSetDeterministicOverlappingPairs(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParameterSetDeterministicOverlappingPairs(command, 0);
+                    }
+                }
+            }
+            if let Some(allowed_ccd_penetration) = options.allowed_ccd_penetration {
+                assert!(allowed_ccd_penetration.is_sign_positive());
+                ffi::b3PhysicsParameterSetAllowedCcdPenetration(command, allowed_ccd_penetration);
+            }
+            if let Some(joint_feedback_mode) = options.joint_feedback_mode {
+                ffi::b3PhysicsParameterSetJointFeedbackMode(command, joint_feedback_mode as i32);
+            }
+            if let Some(enable_sat) = options.enable_sat {
+                match enable_sat {
+                    true => {
+                        ffi::b3PhysicsParameterSetEnableSAT(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParameterSetEnableSAT(command, 0);
+                    }
+                }
+            }
+            if let Some(constraint_solver_type) = options.constraint_solver_type {
+                let val = constraint_solver_type as i32;
+                println!("{:?}", val);
+                ffi::b3PhysicsParameterSetConstraintSolverType(command, val);
+            }
+            if let Some(global_cfm) = options.global_cfm {
+                assert!(global_cfm.is_sign_positive());
+                ffi::b3PhysicsParamSetDefaultGlobalCFM(command, global_cfm);
+            }
+            if let Some(report_solver_analytics) = options.report_solver_analytics {
+                match report_solver_analytics {
+                    true => {
+                        ffi::b3PhysicsParamSetSolverAnalytics(command, 1);
+                    }
+                    false => {
+                        ffi::b3PhysicsParamSetSolverAnalytics(command, 0);
+                    }
+                }
+            }
+            if let Some(warm_starting_factor) = options.warm_starting_factor {
+                assert!(warm_starting_factor.is_sign_positive());
+                ffi::b3PhysicsParamSetWarmStartingFactor(command, warm_starting_factor);
+            }
+            if let Some(sparse_sdf_voxel_size) = options.sparse_sdf_voxel_size {
+                assert!(sparse_sdf_voxel_size.is_sign_positive());
+                ffi::b3PhysicsParameterSetSparseSdfVoxelSize(command, sparse_sdf_voxel_size);
+            }
+            if let Some(num_non_contact_inner_iterations) = options.num_non_contact_inner_iterations
+            {
+                assert!(num_non_contact_inner_iterations >= 1);
+                ffi::b3PhysicsParamSetNumNonContactInnerIterations(
+                    command,
+                    num_non_contact_inner_iterations as i32,
+                );
+            }
+            let _status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+        }
+    }
+    /// Get the current values of internal physics engine parameter.
+    /// # Warning
+    /// Some of the parameters are always returning the same value even when you change them using
+    /// [`set_physics_engine_parameter`](`Self::set_physics_engine_parameter`)
+    /// . These parameters are:
+    /// * constraint_solver_type
+    /// * minimum_solver_island_size
+    /// * report_solver_analytics
+    /// * warm_starting_factor
+    /// * sparse_sdf_voxel_size
+    pub fn get_physics_engine_parameters(&mut self) -> Result<PhysicsEngineParameters, Error> {
+        unsafe {
+            let command = ffi::b3InitRequestPhysicsParamCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_REQUEST_PHYSICS_SIMULATION_PARAMETERS_COMPLETED as i32 {
+                return Err(Error::new("Couldn't get physics simulation parameters."));
+            }
+            let mut params = b3PhysicsSimulationParameters::default();
+            ffi::b3GetStatusPhysicsSimulationParameters(status_handle, &mut params);
+            Ok(params.into())
+        }
+    }
+    /// You can get the width and height (in pixels) of the camera, its view and projection matrix
+    /// and more information using this command.
+    /// Can be useful to calculate rays. See `add_planar_reflection.rs` example.
+    pub fn get_debug_visualizer_camera(&mut self) -> DebugVisualizerCameraInfo {
+        unsafe {
+            let mut camera = b3OpenGLVisualizerCameraInfo::default();
+            let command = ffi::b3InitRequestOpenGLVisualizerCameraCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let _has_cam_info = ffi::b3GetStatusOpenGLVisualizerCamera(status_handle, &mut camera);
+            camera.into()
+        }
+    }
+    /// You can reset the 3D OpenGL debug visualizer camera distance
+    /// (between eye and camera target position), camera yaw and pitch and camera target position
+    /// # Arguments
+    /// * `camera_distance` - distance from eye to camera target position
+    /// * `camera_yaw` - camera yaw angle (in degrees) left/right
+    /// * `camera_pitch` - camera pitch angle (in degrees) up/down
+    /// * `camera_target_position` - this is the camera focus point
+    pub fn reset_debug_visualizer_camera<Vector: Into<Vector3<f32>>>(
+        &mut self,
+        camera_distance: f32,
+        camera_yaw: f32,
+        camera_pitch: f32,
+        camera_target_position: Vector,
+    ) {
+        let camera_target_position = camera_target_position.into();
+        unsafe {
+            let command_handle = ffi::b3InitConfigureOpenGLVisualizer(self.handle);
+            assert!(
+                camera_distance.is_sign_positive(),
+                "camera_distance cannot be negative!"
+            );
+            ffi::b3ConfigureOpenGLVisualizerSetViewMatrix(
+                command_handle,
+                camera_distance,
+                camera_pitch,
+                camera_yaw,
+                camera_target_position.as_ptr(),
+            );
+            ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+        }
+    }
+    /// You can perform a single raycast to find the intersection information of the first object hit.
+    /// # Arguments
+    /// * `ray_from_position` - start of the ray in world coordinates
+    /// * `ray_to_position` - end of the ray in world coordinates
+    /// * `options` - additional options. See [`RayTestOptions`](`crate::types::RayTestOptions`)
+    ///
+    /// # Return
+    /// Either `None`, which means that there was no object hit or a [`RayHitInfo`](`crate::types::RayHitInfo`)
+    /// which contains all necessary information about the hit target.
+    ///
+    /// # Example
+    /// ```
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let cube = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///     let hit_info = physics_client.ray_test([-1.; 3], [1.; 3], None)?.unwrap();
+    ///     assert_eq!(hit_info.body_id, cube);
+    ///     assert!(physics_client.ray_test([2.; 3], [1.; 3], None)?.is_none());
+    ///     Ok(())
+    /// }
+    ///```
+    /// See `add_planar_reflection.rs` for a more complex example.
+    pub fn ray_test<
+        RayFrom: Into<Vector3<f64>>,
+        RayTo: Into<Vector3<f64>>,
+        Options: Into<Option<RayTestOptions>>,
+    >(
+        &mut self,
+        ray_from_position: RayFrom,
+        ray_to_position: RayTo,
+        options: Options,
+    ) -> Result<Option<RayHitInfo>, Error> {
+        let options = options.into().unwrap_or_default();
+        let from = ray_from_position.into();
+        let to = ray_to_position.into();
+        unsafe {
+            let command_handle = ffi::b3CreateRaycastCommandInit(
+                self.handle,
+                from.x,
+                from.y,
+                from.z,
+                to.x,
+                to.y,
+                to.z,
+            );
+            let collision_mask = options.collision_filter_mask.unwrap_or(-1);
+            ffi::b3RaycastBatchSetCollisionFilterMask(command_handle, collision_mask);
+            if let Some(report_hit_number) = options.report_hit_number {
+                ffi::b3RaycastBatchSetReportHitNumber(command_handle, report_hit_number as i32);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED as i32 {
+                let mut raycast_info = b3RaycastInformation::default();
+                ffi::b3GetRaycastInformation(self.handle, &mut raycast_info);
+                #[allow(non_snake_case)]
+                let b3RaycastInformation {
+                    m_numRayHits,
+                    m_rayHits,
+                } = raycast_info;
+                assert_eq!(m_numRayHits, 1);
+                let array = std::slice::from_raw_parts(m_rayHits, m_numRayHits as usize);
+                return Ok(RayHitInfo::new(array[0]));
+            }
+            Err(Error::new("could not get ray info"))
+        }
+    }
+    /// This is similar to the [`ray_test`](`Self::ray_test`), but allows you to provide an array
+    /// of rays, for faster execution. The size of 'ray_from_positions'
+    /// needs to be equal to the size of 'ray_to_positions'.
+    /// # Arguments
+    /// * `ray_from_positions` - list of start points for each ray, in world coordinates
+    /// * `ray_to_positions` - list of end points for each ray in world coordinates
+    /// + `options` - additional options to set the number of threads etc.
+    ///
+    /// # Return
+    /// A list of Option<RayHitInfo>. The Option is `None` when nothing was hit. Otherwise the
+    /// you get the [`RayHitInfo`](`crate::types::RayHitInfo`)
+    ///
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use nalgebra::Vector3;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let cube = physics_client.load_urdf("cube_small.urdf", None)?;
+    ///
+    ///     let from = vec![Vector3::from_element(-1.), Vector3::from_element(2.)];
+    ///     let to = vec![Vector3::from_element(1.), Vector3::from_element(1.)];
+    ///
+    ///     let hit_list = physics_client.ray_test_batch(&from, &to, None)?;
+    ///     assert_eq!(hit_list[0].unwrap().body_id, cube);
+    ///     assert!(hit_list[1].is_none());
+    ///     Ok(())
+    /// }
+    /// ```
+    /// See `batch_ray_cast.rs` for a more complex example.
+    pub fn ray_test_batch<Options: Into<Option<RayTestBatchOptions>>>(
+        &mut self,
+        ray_from_positions: &[Vector3<f64>],
+        ray_to_positions: &[Vector3<f64>],
+        options: Options,
+    ) -> Result<Vec<Option<RayHitInfo>>, Error> {
+        assert_eq!(
+            ray_from_positions.len(),
+            ray_to_positions.len(),
+            "ray_from_positions and ray_to_positions must have the same length!"
+        );
+        assert!(
+            !ray_to_positions.is_empty(),
+            "ray_positions cannot be empty!"
+        );
+        assert!(
+            ray_to_positions.len() <= MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING,
+            "Number of rays exceed the maximum batch size of {}.",
+            MAX_RAY_INTERSECTION_BATCH_SIZE_STREAMING
+        );
+
+        let options = options.into().unwrap_or_default();
+        unsafe {
+            let command_handle = ffi::b3CreateRaycastBatchCommandInit(self.handle);
+            let num_threads = match options.report_hit_number {
+                None => -1,
+                Some(threads) => threads as i32,
+            };
+            ffi::b3RaycastBatchSetNumThreads(command_handle, num_threads);
+            ffi::b3RaycastBatchAddRays(
+                self.handle,
+                command_handle,
+                ray_from_positions[0].as_ptr(),
+                ray_to_positions[0].as_ptr(),
+                ray_to_positions.len() as i32,
+            );
+
+            if let Some(body) = options.parent_object_id {
+                let link_index = match options.parent_link_index {
+                    None => -1,
+                    Some(index) => index as i32,
+                };
+                ffi::b3RaycastBatchSetParentObject(command_handle, body.0, link_index);
+            }
+            if let Some(report_hit_number) = options.report_hit_number {
+                ffi::b3RaycastBatchSetReportHitNumber(command_handle, report_hit_number as i32);
+            }
+            let collision_mask = options.collision_filter_mask.unwrap_or(-1);
+            ffi::b3RaycastBatchSetCollisionFilterMask(command_handle, collision_mask);
+            if let Some(fraction_epsilon) = options.fraction_epsilon {
+                assert!(fraction_epsilon >= 0., "fraction epsilon must be positive");
+                ffi::b3RaycastBatchSetFractionEpsilon(command_handle, fraction_epsilon);
+            }
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_REQUEST_RAY_CAST_INTERSECTIONS_COMPLETED as i32 {
+                let mut ray_cast_info = b3RaycastInformation::default();
+                ffi::b3GetRaycastInformation(self.handle, &mut ray_cast_info);
+                #[allow(non_snake_case)]
+                let b3RaycastInformation {
+                    m_numRayHits,
+                    m_rayHits,
+                } = ray_cast_info;
+                let mut vec = Vec::<Option<RayHitInfo>>::with_capacity(m_numRayHits as usize);
+
+                let array = std::slice::from_raw_parts(m_rayHits, m_numRayHits as usize);
+                for &ray in array.iter() {
+                    vec.push(RayHitInfo::new(ray));
+                }
+
+                return Ok(vec);
+            }
+            Err(Error::new("could not get ray info"))
+        }
+    }
+    /// Each body is part of a group. It collides with other bodies if their group matches the mask, and vise versa.
+    /// The following check is performed using the group and mask of the two bodies involved.
+    /// It depends on the collision filter mode.
+    /// # Arguments
+    /// * `body` - Id of the body to be configured
+    /// * `link_index` - link index of the body to be configured
+    /// * `collision_filter_group` - bitwise group of the filter
+    /// * `collision_filter_mask` - bitwise mask of the filter
+    ///
+    /// See `collision_filter.rs` for an example.
+    pub fn set_collision_filter_group_mask<Link: Into<Option<usize>>>(
+        &mut self,
+        body: BodyId,
+        link_index: Link,
+        collision_filter_group: i32,
+        collision_filter_mask: i32,
+    ) {
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3CollisionFilterCommandInit(self.handle);
+            ffi::b3SetCollisionFilterGroupMask(
+                command_handle,
+                body.0,
+                link_index,
+                collision_filter_group,
+                collision_filter_mask,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// You can have more fine-grain control over collision detection between specific pairs of links.
+    /// With this method you can enable or disable collision detection.
+    /// This method will override the filter group/mask and other logic.
+    ///
+    /// # Arguments
+    /// * `body_a` - Id of body B
+    /// * `body_b` -  Id of body B
+    /// * `link_index_a` - link index of body A
+    /// * `link_index_b` - link index of body B
+    /// * `enable_collision` - enables and disables collision
+    ///
+    /// See `collision_filter.rs` for an example.
+    pub fn set_collision_filter_pair<LinkA: Into<Option<usize>>, LinkB: Into<Option<usize>>>(
+        &mut self,
+        body_a: BodyId,
+        body_b: BodyId,
+        link_index_a: LinkA,
+        link_index_b: LinkB,
+        enable_collision: bool,
+    ) {
+        let link_index_a = match link_index_a.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        let link_index_b = match link_index_b.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3CollisionFilterCommandInit(self.handle);
+            ffi::b3SetCollisionFilterPair(
+                command_handle,
+                body_a.0,
+                body_b.0,
+                link_index_a,
+                link_index_b,
+                enable_collision as i32,
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let _status_type = ffi::b3GetStatusType(status_handle);
+        }
+    }
+    /// lets you load a deformable object from a VTK or OBJ file.
+    /// # Arguments
+    /// * `filename` - a relative or absolute path on the file system of the physics server
+    /// * `options` - use additional options. See [`SoftBodyOptions`](`crate::types::SoftBodyOptions`).
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let _bunny = physics_client.load_soft_body("bunny.obj", None)?;
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn load_soft_body<P: AsRef<Path>, Options: Into<Option<SoftBodyOptions>>>(
+        &mut self,
+        filename: P,
+        options: Options,
+    ) -> Result<BodyId, Error> {
+        unsafe {
+            let file = CString::new(filename.as_ref().as_os_str().as_bytes())
+                .map_err(|_| Error::new("Invalid path"))?;
+            let command = ffi::b3LoadSoftBodyCommandInit(self.handle, file.as_ptr());
+            let options = options.into().unwrap_or_default();
+            let pose = options.base_pose;
+            ffi::b3LoadSoftBodySetStartPosition(
+                command,
+                pose.translation.x,
+                pose.translation.y,
+                pose.translation.z,
+            );
+            ffi::b3LoadSoftBodySetStartOrientation(
+                command,
+                pose.rotation.i,
+                pose.rotation.j,
+                pose.rotation.k,
+                pose.rotation.w,
+            );
+            if let Some(sim_filename) = options.sim_filename {
+                let sim_file = CString::new(sim_filename.as_os_str().as_bytes())
+                    .map_err(|_| Error::new("Invalid path"))?;
+                ffi::b3LoadSoftBodyUpdateSimMesh(command, sim_file.as_ptr());
+            }
+            if let Some(scale) = options.scale {
+                assert!(scale > 0.);
+                ffi::b3LoadSoftBodySetScale(command, scale);
+            }
+            if let Some(mass) = options.mass {
+                assert!(mass > 0.);
+                ffi::b3LoadSoftBodySetMass(command, mass);
+            }
+            if let Some(collision_margin) = options.collision_margin {
+                assert!(collision_margin > 0.);
+                ffi::b3LoadSoftBodySetCollisionMargin(command, collision_margin);
+            }
+            if options.use_mass_spring {
+                ffi::b3LoadSoftBodyAddMassSpringForce(
+                    command,
+                    options.spring_elastic_stiffness,
+                    options.spring_damping_stiffness,
+                );
+                ffi::b3LoadSoftBodyUseBendingSprings(
+                    command,
+                    options.use_bending_springs as i32,
+                    options.spring_bending_stiffness,
+                );
+                ffi::b3LoadSoftBodyUseAllDirectionDampingSprings(
+                    command,
+                    options.spring_damping_all_directions as i32,
+                );
+            }
+            if options.use_neo_hookean {
+                ffi::b3LoadSoftBodyAddNeoHookeanForce(
+                    command,
+                    options.neo_hookean_mu,
+                    options.neo_hookean_lambda,
+                    options.neo_hookean_damping,
+                );
+            }
+            if options.use_self_collision {
+                ffi::b3LoadSoftBodySetSelfCollision(command, 1);
+            }
+            if let Some(repulsion_stiffness) = options.repulsion_stiffness {
+                assert!(repulsion_stiffness > 0.);
+                ffi::b3LoadSoftBodySetRepulsionStiffness(command, repulsion_stiffness);
+            }
+            ffi::b3LoadSoftBodySetFrictionCoefficient(command, options.friction_coeff);
+
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_LOAD_SOFT_BODY_COMPLETED as i32 {
+                Err(Error::new("Cannot load soft body."))
+            } else {
+                let id = ffi::b3GetStatusBodyIndex(status_handle);
+                assert!(id >= 0);
+                Ok(BodyId(id))
+            }
+        }
+    }
+    /// You can pin vertices of a deformable object to the world, or attach a vertex of a deformable
+    /// to a multi body using this method.
+    /// It will return a ConstraintId.
+    /// You can remove this constraint using the [`remove_constraint`](`Self::remove_constraint`) method.
+    ///
+    /// See `deformable_anchor.rs` for an example.
+    pub fn create_soft_body_anchor<
+        Body: Into<Option<BodyId>>,
+        Link: Into<Option<usize>>,
+        Vector: Into<Option<Vector3<f64>>>,
+    >(
+        &mut self,
+        soft_body_id: BodyId,
+        node_index: usize,
+        body: Body,
+        link_index: Link,
+        body_frame_position: Vector,
+    ) -> Result<ConstraintId, Error> {
+        let body_frame_position = body_frame_position.into().unwrap_or_else(Vector3::zeros);
+        let body_id = body.into().unwrap_or(BodyId(-1));
+        let link_index = match link_index.into() {
+            None => -1,
+            Some(index) => index as i32,
+        };
+        unsafe {
+            let command_handle = ffi::b3InitCreateSoftBodyAnchorConstraintCommand(
+                self.handle,
+                soft_body_id.0,
+                node_index as i32,
+                body_id.0,
+                link_index,
+                body_frame_position.as_ptr(),
+            );
+            let status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type == CMD_USER_CONSTRAINT_COMPLETED as i32 {
+                return Ok(ConstraintId(ffi::b3GetStatusUserConstraintUniqueId(
+                    status_handle,
+                )));
+            }
+            Err(Error::new("Cannot load soft body."))
+        }
+    }
+    /// reset_simulation_with_flags does the same as [`reset_simulation`](`Self::reset_simulation`),
+    /// but also lets you add some experimental flags. It can be useful if you want to create a world
+    /// with soft body objects.
+    pub fn reset_simulation_with_flags(&mut self, flags: ResetFlags) {
+        unsafe {
+            let command_handle = ffi::b3InitResetSimulationCommand(self.handle);
+            ffi::b3InitResetSimulationSetFlags(command_handle, flags.bits());
+            let _status_handle =
+                ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command_handle);
+        }
+    }
+    /// check whether the client is still connected. Most of the time the call blocks instead of returning false, though
+    pub fn is_connected(&mut self) -> bool {
+        self.can_submit_command()
+    }
+    /// sync_body_info will synchronize the body information (get_body_info) in case of multiple
+    /// clients connected to one physics server changing the world
+    /// ( [`load_urdf`](`Self::load_urdf()`), [remove_body](`Self::remove_body`) etc).
+    pub fn sync_body_info(&mut self) -> Result<(), Error> {
+        unsafe {
+            let command = ffi::b3InitSyncBodyInfoCommand(self.handle);
+            let status_handle = ffi::b3SubmitClientCommandAndWaitStatus(self.handle, command);
+            let status_type = ffi::b3GetStatusType(status_handle);
+            if status_type != CMD_SYNC_BODY_INFO_COMPLETED as i32 {
+                return Err(Error::new("Error in sync_body_info command"));
+            }
+        }
+        Ok(())
+    }
+    /// closes the PhysicsClient.
+    pub fn disconnect(self) {}
+
+    /// get a specific body id. The index must be in range \[0,get_num_bodies()\].
+    /// # Example
+    /// ```rust
+    /// use anyhow::Result;
+    /// use rubullet::*;
+    ///
+    /// fn main() -> Result<()> {
+    ///     let mut physics_client = PhysicsClient::connect(Mode::Direct)?;
+    ///     physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
+    ///     let plane_id = physics_client.load_urdf("plane.urdf", None)?;
+    ///     assert_eq!(physics_client.get_body_id(0)?, plane_id);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn get_body_id(&mut self, index: usize) -> Result<BodyId, Error> {
+        unsafe {
+            let id = ffi::b3GetBodyUniqueId(self.handle, index as i32);
+            if id >= 0 {
+                Ok(BodyId(id))
+            } else {
+                Err(Error::new("could not get body id"))
+            }
+        }
+    }
 }
 
 impl Drop for PhysicsClient {
@@ -3189,8 +5437,8 @@ impl Drop for PhysicsClient {
     }
 }
 
-/// Module used to enforce the existence of only a single GUI
-mod gui_marker {
+/// Module used to enforce the existence of only a single GUI and a single SharedMemory instance per process.
+pub(crate) mod marker {
     use std::sync::atomic::{AtomicBool, Ordering};
 
     /// A marker for whether or not a GUI has been started.
@@ -3222,6 +5470,39 @@ mod gui_marker {
         fn drop(&mut self) {
             // We are the only marker so no need to CAS
             GUI_EXISTS.store(false, Ordering::SeqCst)
+        }
+    }
+
+    static SHARED_MEMORY_EXISTS: AtomicBool = AtomicBool::new(false);
+
+    /// A marker type for keeping track of the existence of a SharedMemory instance.
+    pub struct SharedMemoryMarker {
+        _unused: (),
+    }
+
+    impl SharedMemoryMarker {
+        /// Attempts to acquire the GUI marker.
+        pub fn acquire() -> Result<SharedMemoryMarker, crate::Error> {
+            // We can probably use a weaker ordering but this will be called so little that we
+            // may as well be sure about it.
+            match SHARED_MEMORY_EXISTS.compare_exchange(
+                false,
+                true,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(false) => Ok(SharedMemoryMarker { _unused: () }),
+                _ => Err(crate::Error::new(
+                    "Only one in-process SharedMemory connection allowed",
+                )),
+            }
+        }
+    }
+
+    impl Drop for SharedMemoryMarker {
+        fn drop(&mut self) {
+            // We are the only marker so no need to CAS
+            SHARED_MEMORY_EXISTS.store(false, Ordering::SeqCst)
         }
     }
 }

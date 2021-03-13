@@ -12,7 +12,7 @@ fn main() -> Result<()> {
         "../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data",
     )?;
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
-    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
+    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.));
 
     let time_step = Duration::from_secs_f64(1. / 60.);
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;
@@ -20,8 +20,11 @@ fn main() -> Result<()> {
         let _images = physics_client.get_camera_image(
             128,
             128,
-            panda.view_matrix,
-            panda.projection_matrix,
+            CameraImageOptions {
+                view_matrix: Some(panda.view_matrix),
+                projection_matrix: Some(panda.projection_matrix),
+                ..Default::default()
+            },
         )?;
         _images.rgba.save("/tmp/test.png")?;
         panda.step(&mut physics_client);
@@ -128,8 +131,15 @@ impl PandaSim {
             ..Default::default()
         };
         let panda_id = client.load_urdf("franka_panda/panda.urdf", urdf_options)?;
-        client.change_dynamics_linear_damping(panda_id, 0.);
-        client.change_dynamics_angular_damping(panda_id, 0.);
+        client.change_dynamics(
+            panda_id,
+            None,
+            ChangeDynamicsOptions {
+                linear_damping: Some(0.),
+                angular_damping: Some(0.),
+                ..Default::default()
+            },
+        );
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);

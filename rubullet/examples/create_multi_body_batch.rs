@@ -2,7 +2,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use nalgebra::{Isometry3, Point3, Vector3};
+use nalgebra::{Isometry3, Vector3};
 use rubullet::DebugVisualizerFlag::{CovEnableGui, CovEnableRendering, CovEnableTinyRenderer};
 use rubullet::*;
 
@@ -132,7 +132,7 @@ fn main() -> Result<()> {
     for x in 0..32 {
         for y in 0..32 {
             for z in 0..10 {
-                batch_positions.push(Point3::new(
+                batch_positions.push(Vector3::new(
                     x as f64 * mesh_scaling[0] * 5.5,
                     y as f64 * mesh_scaling[1] * 5.5,
                     (0.5 + z as f64) * mesh_scaling[2] * 2.5,
@@ -141,20 +141,19 @@ fn main() -> Result<()> {
         }
     }
 
-    let body_id = physics_client.create_multi_body(
+    let body_id = physics_client.create_multi_body_batch(
         collision_shape_id,
         visual_shape_id,
+        &batch_positions,
         MultiBodyOptions {
             base_pose: Isometry3::translation(0., 0., 2.),
             use_maximal_coordinates: true,
-
-            batch_positions: Some(batch_positions),
             ..Default::default()
         },
     )?;
 
     physics_client.change_visual_shape(
-        body_id,
+        body_id[0],
         None,
         ChangeVisualShapeOptions {
             texture_id: Some(tex_uid),
@@ -162,7 +161,7 @@ fn main() -> Result<()> {
         },
     )?;
     physics_client.configure_debug_visualizer(CovEnableRendering, true);
-    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0))?;
+    physics_client.set_gravity(Vector3::new(0.0, 0.0, -10.0));
 
     loop {
         physics_client.step_simulation()?;

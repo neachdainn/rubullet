@@ -13,7 +13,7 @@ fn main() -> Result<()> {
     )?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::CovEnableYAxisUp, true);
     physics_client.set_time_step(Duration::from_secs_f64(1. / 60.));
-    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.))?;
+    physics_client.set_gravity(Vector3::new(0.0, -9.8, 0.));
 
     let time_step = Duration::from_secs_f64(1. / 60.);
     let mut panda = PandaSim::new(&mut physics_client, Vector3::zeros())?;
@@ -118,8 +118,15 @@ impl PandaSim {
             ..Default::default()
         };
         let panda_id = client.load_urdf("franka_panda/panda.urdf", urdf_options)?;
-        client.change_dynamics_linear_damping(panda_id, 0.);
-        client.change_dynamics_angular_damping(panda_id, 0.);
+        client.change_dynamics(
+            panda_id,
+            None,
+            ChangeDynamicsOptions {
+                linear_damping: Some(0.),
+                angular_damping: Some(0.),
+                ..Default::default()
+            },
+        );
         let mut index = 0;
         for i in 0..client.get_num_joints(panda_id) {
             let info = client.get_joint_info(panda_id, i);
