@@ -9,7 +9,7 @@ RuBullet is a Rust implementation of [PyBullet](https://pybullet.org/).
 In other words, it uses the [Bullet3](https://github.com/bulletphysics/bullet3) 
 C API in order to expose a functionality that is similar to PyBullet.
 Development is ongoing and functionality is currently limited.
-
+![](https://i.imgur.com/UonCX5F.png)
 ## Status
 Right now RuBullet should cover most of the basic use cases. It can:
 * Create a PhysicsClient in Direct, Gui or other modes
