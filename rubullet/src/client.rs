@@ -2899,18 +2899,19 @@ impl PhysicsClient {
     /// both you can use them to create objects in RuBullet.
     /// # Arguments
     /// * `shape` - A geometric body from which to create the shape
-    /// * `frame_offset` - offset of the shape with respect to the link frame.
+    /// * `frame_offset` - offset of the shape with respect to the link frame. Default is no offset.
     ///
     /// # Return
     /// Returns a unique [CollisionId](crate::CollisionId) which can then be used to create a body.
     /// # See also
     /// * [create_visual_shape](`Self::create_visual_shape`)
     /// * [create_multi_body](`Self::create_multi_body`)
-    pub fn create_collision_shape(
+    pub fn create_collision_shape<FrameOffset: Into<Option<Isometry3<f64>>>>(
         &mut self,
         shape: GeometricCollisionShape,
-        frame_offset: Isometry3<f64>,
+        frame_offset: FrameOffset,
     ) -> Result<CollisionId, Error> {
+        let frame_offset = frame_offset.into().unwrap_or_else(Isometry3::identity);
         unsafe {
             let mut shape_index = -1;
             let command_handle = ffi::b3CreateCollisionShapeCommandInit(self.handle);
@@ -3081,19 +3082,20 @@ impl PhysicsClient {
     ///
     /// # Arguments
     /// * `shape` - A geometric body from which to create the shape
-    /// * `options` - additional option to specify, like colors.
-    ///
+    /// * `options` - additional options to specify, like colors. See [VisualShapeOptions](crate::VisualShapeOptions)
+    /// for details.
     /// # Return
     /// Returns a unique [VisualId](crate::VisualId) which can then be used to create a body.
     /// # See also
     /// * [create_collision_shape](`Self::create_collision_shape`)
     /// * [create_multi_body](`Self::create_multi_body`)
-    pub fn create_visual_shape(
+    pub fn create_visual_shape<Options: Into<Option<VisualShapeOptions>>>(
         &mut self,
         shape: GeometricVisualShape,
-        options: VisualShapeOptions,
+        options: Options,
     ) -> Result<VisualId, Error> {
         unsafe {
+            let options = options.into().unwrap_or_default();
             let mut shape_index = -1;
             let command_handle = ffi::b3CreateVisualShapeCommandInit(self.handle);
 
@@ -3247,9 +3249,6 @@ impl PhysicsClient {
     /// # Return
     /// returns the [BodyId](`crate::BodyId`) of the newly created body.
     ///
-    /// Note: Currently, if you use `batch_positions` you will not get back a list of Id's, like in PyBullet.
-    /// Instead you will get the Id of the last body in the batch.
-    ///
     /// # Example
     /// ```rust
     ///# use anyhow::Result;
@@ -3262,7 +3261,7 @@ impl PhysicsClient {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
-    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, None)?;
     ///    let box_shape = GeometricVisualShape::Box {
     ///        half_extents: Vector3::from_element(0.5),
     ///    };
@@ -3274,16 +3273,17 @@ impl PhysicsClient {
     ///        },
     ///    )?;
     ///    let box_id =
-    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///        physics_client.create_multi_body(box_collision, box_visual, None)?;
     ///#    Ok(())
     ///# }
     /// ```
-    pub fn create_multi_body(
+    pub fn create_multi_body<Options: Into<Option<MultiBodyOptions>>>(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
-        options: MultiBodyOptions,
+        options: Options,
     ) -> Result<BodyId, Error> {
+        let options = options.into().unwrap_or_default();
         unsafe {
             let command_handle =
                 self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
@@ -3314,13 +3314,14 @@ impl PhysicsClient {
     /// returns a list of [BodyId's](`crate::BodyId`) of the newly created bodies.
     ///
     /// See `create_multi_body_batch.rs` for an example.
-    pub fn create_multi_body_batch(
+    pub fn create_multi_body_batch<Options: Into<Option<MultiBodyOptions>>>(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
         batch_positions: &[Vector3<f64>],
-        options: MultiBodyOptions,
+        options: Options,
     ) -> Result<Vec<BodyId>, Error> {
+        let options = options.into().unwrap_or_default();
         unsafe {
             let command_handle =
                 self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
@@ -3464,7 +3465,7 @@ impl PhysicsClient {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
-    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, None)?;
     ///    let box_shape = GeometricVisualShape::Box {
     ///        half_extents: Vector3::from_element(0.5),
     ///    };
@@ -3476,7 +3477,7 @@ impl PhysicsClient {
     ///        },
     ///    )?;
     ///    let box_id =
-    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///        physics_client.create_multi_body(box_collision, box_visual, None)?;
     ///
     ///    let color = physics_client.get_visual_shape_data(box_id,false)?[0].rgba_color;
     ///    assert_eq!(color, [0.,1.,0.,1.]);

@@ -124,7 +124,7 @@ fn main() -> Result<()> {
         GeometricCollisionShape::Box {
             half_extents: mesh_scaling,
         },
-        Isometry3::identity(),
+        None,
     )?;
 
     let tex_uid = physics_client.load_texture("tex256.png")?;
