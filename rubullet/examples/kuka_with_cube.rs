@@ -64,7 +64,7 @@ fn main() -> Result<()> {
     )?;
     let _log_id_2 = physics_client.start_state_logging(
         LoggingType::ContactPoints,
-        "LOG0002.mp3",
+        "LOG0002.txt",
         StateLoggingOptions {
             body_a: Some(cube_id),
             ..Default::default()
