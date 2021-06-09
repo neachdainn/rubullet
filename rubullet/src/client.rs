@@ -15,7 +15,7 @@ use self::marker::GuiMarker;
 use crate::client::marker::SharedMemoryMarker;
 use crate::types::{
     Aabb, AddDebugLineOptions, AddDebugTextOptions, BodyId, ChangeVisualShapeOptions, CollisionId,
-    ConstraintInfo, ControlModeArray, ExternalForceFrame, GeometricCollisionShape,
+    ConstraintInfo, ControlCommandArray, ExternalForceFrame, GeometricCollisionShape,
     GeometricVisualShape, Images, InverseKinematicsParameters, ItemId, Jacobian, JointInfo,
     JointState, JointType, KeyboardEvent, LinkState, LoadModelFlags, MouseButtonState, MouseEvent,
     MultiBodyOptions, OverlappingObject, SdfOptions, TextureId, Velocity, VisualId,
@@ -23,8 +23,8 @@ use crate::types::{
 };
 use crate::{
     BodyInfo, CameraImageOptions, ChangeConstraintOptions, ChangeDynamicsOptions, ConstraintId,
-    ContactPoint, ControlMode, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo, Error,
-    LogId, LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions,
+    ContactPoint, ControlCommand, DebugVisualizerCameraInfo, DebugVisualizerFlag, DynamicsInfo,
+    Error, LogId, LoggingType, Mode, PhysicsEngineParameters, RayHitInfo, RayTestBatchOptions,
     RayTestOptions, ResetFlags, SetPhysicsEngineParameterOptions, SoftBodyOptions, StateId,
     StateLoggingOptions, UrdfOptions, VisualShapeData,
 };
@@ -1718,10 +1718,10 @@ impl PhysicsClient {
     /// sets joint motor commands. This function is the rust version of `setJointMotorControl2` from PyBullet.
     /// This function differs a bit from the corresponding PyBullet function.
     /// Instead of providing optional arguments that depend on the Control Mode, the necessary parameters
-    /// are directly encoded in the ControlMode Enum.
+    /// are directly encoded in the ControlCommand Enum.
     ///
-    /// We can control a robot by setting a desired control mode for one or more joint motors.
-    /// During the stepSimulation the physics engine will simulate the motors to reach the given
+    /// We can control a robot by setting a desired control command for one or more joint motors.
+    /// During the step_simulation the physics engine will simulate the motors to reach the given
     /// target value that can be reached within the maximum motor forces and other constraints.
     ///
     /// # Important Note:
@@ -1730,33 +1730,33 @@ impl PhysicsClient {
     /// This will let you perform torque control.
     /// For Example:
     /// ```rust
-    ///# use rubullet::{ControlMode, PhysicsClient, Mode};
+    ///# use rubullet::{ControlCommand, PhysicsClient, Mode};
     ///# use anyhow::Result;
     ///# pub fn main() -> Result<()> {
     ///#     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///#     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///#     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///#     let joint_index = 1;
-    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Velocity(0.), Some(0.));
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlCommand::Velocity(0.), Some(0.));
     ///# Ok(())
     ///# }
     /// ```
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `joint_index` - link index in range [0..get_num_joints(bodyUniqueId)] (note that link index == joint index)
-    /// * `control_mode` - Specifies how to control the robot (Position, Torque, etc.)
+    /// * `control_command` - Specifies how to control the robot (Position, Torque, etc.) inlcuding the respective values.
     /// * `maximum_force` - this is the maximum motor force used to reach the target value. It has no effect in Torque mode.
     /// # Example
     /// ```rust
-    /// use rubullet::{ControlMode, PhysicsClient, Mode};
+    /// use rubullet::{ControlCommand, PhysicsClient, Mode};
     /// use anyhow::Result;
     /// pub fn main() -> Result<()> {
     ///     let mut client = PhysicsClient::connect(Mode::Direct)?;
     ///     client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/examples/pybullet/gym/pybullet_data")?;
     ///     let panda_id = client.load_urdf("franka_panda/panda.urdf", None)?;
     ///     let joint_index = 1;
-    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Torque(100.), None);
-    ///     client.set_joint_motor_control(panda_id, joint_index, ControlMode::Position(0.4), Some(1000.));
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlCommand::Torque(100.), None);
+    ///     client.set_joint_motor_control(panda_id, joint_index, ControlCommand::Position(0.4), Some(1000.));
     /// Ok(())
     /// }
     /// ```
@@ -1766,7 +1766,7 @@ impl PhysicsClient {
         &mut self,
         body: BodyId,
         joint_index: usize,
-        control_mode: ControlMode,
+        control_command: ControlCommand,
         maximum_force: Option<f64>,
     ) {
         let force = maximum_force.unwrap_or(100000.);
@@ -1775,11 +1775,11 @@ impl PhysicsClient {
         let target_velocity = 0.;
         unsafe {
             let command_handle =
-                ffi::b3JointControlCommandInit2(self.handle, body.0, control_mode.get_int());
+                ffi::b3JointControlCommandInit2(self.handle, body.0, control_command.get_int());
             let info = self.get_joint_info_intern(body, joint_index);
 
-            match control_mode {
-                ControlMode::Position(target_position) => {
+            match control_command {
+                ControlCommand::Position(target_position) => {
                     ffi::b3JointControlSetDesiredPosition(
                         command_handle,
                         info.m_q_index,
@@ -1796,14 +1796,14 @@ impl PhysicsClient {
                     ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                     ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
                 }
-                ControlMode::Pd {
+                ControlCommand::Pd {
                     target_position: pos,
                     target_velocity: vel,
                     position_gain: kp,
                     velocity_gain: kd,
                     maximum_velocity: max_vel,
                 }
-                | ControlMode::PositionWithPd {
+                | ControlCommand::PositionWithPd {
                     target_position: pos,
                     target_velocity: vel,
                     position_gain: kp,
@@ -1825,12 +1825,12 @@ impl PhysicsClient {
                     ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                     ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
                 }
-                ControlMode::Velocity(vel) => {
+                ControlCommand::Velocity(vel) => {
                     ffi::b3JointControlSetDesiredVelocity(command_handle, info.m_u_index, vel);
                     ffi::b3JointControlSetKd(command_handle, info.m_u_index, kd);
                     ffi::b3JointControlSetMaximumForce(command_handle, info.m_u_index, force);
                 }
-                ControlMode::Torque(f) => {
+                ControlCommand::Torque(f) => {
                     ffi::b3JointControlSetDesiredForceTorque(command_handle, info.m_u_index, f);
                 }
             }
@@ -1844,13 +1844,13 @@ impl PhysicsClient {
     /// # Arguments
     /// * `body` - the [`BodyId`](`crate::types::BodyId`), as returned by [`load_urdf`](`Self::load_urdf()`) etc.
     /// * `joint_indices` - list of link indices in range [0..get_num_joints(bodyUniqueId)] (note that link index == joint index)
-    /// * `control_mode` - Specifies how to control the robot (Position, Torque, etc.)
+    /// * `control_command` - Specifies how to control the robot (Position, Torque, etc.)
     /// * `maximum_force` - this is the maximum motor force used to reach the target value for each joint. It has no effect in Torque mode.
     pub fn set_joint_motor_control_array(
         &mut self,
         body: BodyId,
         joint_indices: &[usize],
-        control_mode: ControlModeArray,
+        control_command: ControlCommandArray,
         maximum_force: Option<&[f64]>,
     ) -> Result<(), Error> {
         let alloc_vec;
@@ -1875,7 +1875,7 @@ impl PhysicsClient {
         let num_joints = self.get_num_joints(body);
         unsafe {
             let command_handle =
-                ffi::b3JointControlCommandInit2(self.handle, body.0, control_mode.get_int());
+                ffi::b3JointControlCommandInit2(self.handle, body.0, control_command.get_int());
 
             for &joint_index in joint_indices.iter() {
                 assert!(
@@ -1885,8 +1885,8 @@ impl PhysicsClient {
                     num_joints,
                 );
             }
-            match control_mode {
-                ControlModeArray::Positions(target_positions) => {
+            match control_command {
+                ControlCommandArray::Positions(target_positions) => {
                     assert_eq!(target_positions.len(),
                                joint_indices.len(),
                                "number of target positions ({}) should match the number of joint indices ({})",
@@ -1911,13 +1911,13 @@ impl PhysicsClient {
                         );
                     }
                 }
-                ControlModeArray::Pd {
+                ControlCommandArray::Pd {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,
                     velocity_gains: vg,
                 }
-                | ControlModeArray::PositionsWithPd {
+                | ControlCommandArray::PositionsWithPd {
                     target_positions: pos,
                     target_velocities: vel,
                     position_gains: pg,
@@ -1971,7 +1971,7 @@ impl PhysicsClient {
                         );
                     }
                 }
-                ControlModeArray::Velocities(vel) => {
+                ControlCommandArray::Velocities(vel) => {
                     assert_eq!(vel.len(),
                                joint_indices.len(),
                                "number of target velocities ({}) should match the number of joint indices ({})",
@@ -1993,7 +1993,7 @@ impl PhysicsClient {
                         );
                     }
                 }
-                ControlModeArray::Torques(f) => {
+                ControlCommandArray::Torques(f) => {
                     assert_eq!(f.len(),
                                joint_indices.len(),
                                "number of target torques ({}) should match the number of joint indices ({})",
@@ -2899,18 +2899,19 @@ impl PhysicsClient {
     /// both you can use them to create objects in RuBullet.
     /// # Arguments
     /// * `shape` - A geometric body from which to create the shape
-    /// * `frame_offset` - offset of the shape with respect to the link frame.
+    /// * `frame_offset` - offset of the shape with respect to the link frame. Default is no offset.
     ///
     /// # Return
     /// Returns a unique [CollisionId](crate::CollisionId) which can then be used to create a body.
     /// # See also
     /// * [create_visual_shape](`Self::create_visual_shape`)
     /// * [create_multi_body](`Self::create_multi_body`)
-    pub fn create_collision_shape(
+    pub fn create_collision_shape<FrameOffset: Into<Option<Isometry3<f64>>>>(
         &mut self,
         shape: GeometricCollisionShape,
-        frame_offset: Isometry3<f64>,
+        frame_offset: FrameOffset,
     ) -> Result<CollisionId, Error> {
+        let frame_offset = frame_offset.into().unwrap_or_else(Isometry3::identity);
         unsafe {
             let mut shape_index = -1;
             let command_handle = ffi::b3CreateCollisionShapeCommandInit(self.handle);
@@ -3081,19 +3082,20 @@ impl PhysicsClient {
     ///
     /// # Arguments
     /// * `shape` - A geometric body from which to create the shape
-    /// * `options` - additional option to specify, like colors.
-    ///
+    /// * `options` - additional options to specify, like colors. See [VisualShapeOptions](crate::VisualShapeOptions)
+    /// for details.
     /// # Return
     /// Returns a unique [VisualId](crate::VisualId) which can then be used to create a body.
     /// # See also
     /// * [create_collision_shape](`Self::create_collision_shape`)
     /// * [create_multi_body](`Self::create_multi_body`)
-    pub fn create_visual_shape(
+    pub fn create_visual_shape<Options: Into<Option<VisualShapeOptions>>>(
         &mut self,
         shape: GeometricVisualShape,
-        options: VisualShapeOptions,
+        options: Options,
     ) -> Result<VisualId, Error> {
         unsafe {
+            let options = options.into().unwrap_or_default();
             let mut shape_index = -1;
             let command_handle = ffi::b3CreateVisualShapeCommandInit(self.handle);
 
@@ -3247,9 +3249,6 @@ impl PhysicsClient {
     /// # Return
     /// returns the [BodyId](`crate::BodyId`) of the newly created body.
     ///
-    /// Note: Currently, if you use `batch_positions` you will not get back a list of Id's, like in PyBullet.
-    /// Instead you will get the Id of the last body in the batch.
-    ///
     /// # Example
     /// ```rust
     ///# use anyhow::Result;
@@ -3262,7 +3261,7 @@ impl PhysicsClient {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
-    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, None)?;
     ///    let box_shape = GeometricVisualShape::Box {
     ///        half_extents: Vector3::from_element(0.5),
     ///    };
@@ -3274,16 +3273,17 @@ impl PhysicsClient {
     ///        },
     ///    )?;
     ///    let box_id =
-    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///        physics_client.create_multi_body(box_collision, box_visual, None)?;
     ///#    Ok(())
     ///# }
     /// ```
-    pub fn create_multi_body(
+    pub fn create_multi_body<Options: Into<Option<MultiBodyOptions>>>(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
-        options: MultiBodyOptions,
+        options: Options,
     ) -> Result<BodyId, Error> {
+        let options = options.into().unwrap_or_default();
         unsafe {
             let command_handle =
                 self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
@@ -3314,13 +3314,14 @@ impl PhysicsClient {
     /// returns a list of [BodyId's](`crate::BodyId`) of the newly created bodies.
     ///
     /// See `create_multi_body_batch.rs` for an example.
-    pub fn create_multi_body_batch(
+    pub fn create_multi_body_batch<Options: Into<Option<MultiBodyOptions>>>(
         &mut self,
         base_collision_shape: CollisionId,
         base_visual_shape: VisualId,
         batch_positions: &[Vector3<f64>],
-        options: MultiBodyOptions,
+        options: Options,
     ) -> Result<Vec<BodyId>, Error> {
+        let options = options.into().unwrap_or_default();
         unsafe {
             let command_handle =
                 self.create_multi_body_base(base_collision_shape, base_visual_shape, &options);
@@ -3464,7 +3465,7 @@ impl PhysicsClient {
     ///#
     ///# let mut physics_client = PhysicsClient::connect(Direct)?;
     ///    let sphere_shape = GeometricCollisionShape::Sphere { radius: 0.4 };
-    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, Isometry3::identity())?;
+    ///    let box_collision = physics_client.create_collision_shape(sphere_shape, None)?;
     ///    let box_shape = GeometricVisualShape::Box {
     ///        half_extents: Vector3::from_element(0.5),
     ///    };
@@ -3476,7 +3477,7 @@ impl PhysicsClient {
     ///        },
     ///    )?;
     ///    let box_id =
-    ///        physics_client.create_multi_body(box_collision, box_visual, MultiBodyOptions::default())?;
+    ///        physics_client.create_multi_body(box_collision, box_visual, None)?;
     ///
     ///    let color = physics_client.get_visual_shape_data(box_id,false)?[0].rgba_color;
     ///    assert_eq!(color, [0.,1.,0.,1.]);
@@ -3641,7 +3642,7 @@ impl PhysicsClient {
     /// ```rust
     ///# use anyhow::Result;
     ///# use nalgebra::{Isometry3, UnitQuaternion, Vector3};
-    ///# use rubullet::ControlModeArray::Torques;
+    ///# use rubullet::ControlCommandArray::Torques;
     ///# use rubullet::*;
     ///# use std::f64::consts::PI;
     ///# use std::time::Duration;

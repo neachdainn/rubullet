@@ -45,7 +45,7 @@ pub use crate::{
         Aabb, ActivationState, AddDebugLineOptions, AddDebugTextOptions, BodyId, BodyInfo,
         BodyType, CameraImageOptions, ChangeConstraintOptions, ChangeDynamicsOptions,
         ChangeVisualShapeOptions, CollisionId, ConstraintId, ConstraintInfo, ConstraintSolverType,
-        ContactPoint, ControlMode, ControlModeArray, DebugVisualizerCameraInfo,
+        ContactPoint, ControlCommand, ControlCommandArray, DebugVisualizerCameraInfo,
         DebugVisualizerFlag, DynamicsInfo, ExternalForceFrame, GeometricCollisionShape,
         GeometricVisualShape, IkSolver, Images, InverseKinematicsNullSpaceParameters,
         InverseKinematicsParameters, InverseKinematicsParametersBuilder, ItemId, Jacobian,

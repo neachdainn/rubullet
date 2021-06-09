@@ -11,17 +11,14 @@ pub enum ClosestPointsMethod {
 const METHOD: ClosestPointsMethod = ClosestPointsMethod::Shape;
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
-    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.configure_debug_visualizer(DebugVisualizerFlag::CovEnableGui, false);
-    let geom = physics_client.create_collision_shape(
-        GeometricCollisionShape::Sphere { radius: 0.1 },
-        Isometry3::identity(),
-    )?;
+    let geom = physics_client
+        .create_collision_shape(GeometricCollisionShape::Sphere { radius: 0.1 }, None)?;
     let geom_box = physics_client.create_collision_shape(
         GeometricCollisionShape::Box {
             half_extents: [0.2; 3].into(),
         },
-        Isometry3::identity(),
+        None,
     )?;
     let mut base_pose_b = Isometry3::from_parts(
         Translation3::new(1.5, 0., 1.),

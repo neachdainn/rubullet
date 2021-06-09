@@ -1,16 +1,13 @@
 //! An introduction to the usage of RuBullet.
-use std::time::Duration;
-
 use anyhow::Result;
-use nalgebra::{Isometry3, Translation3, UnitQuaternion, Vector3};
+use nalgebra::{Isometry3, Vector3};
 use rand::prelude::*;
 use rubullet::DebugVisualizerFlag::CovEnableRendering;
 use rubullet::*;
+use std::time::Duration;
 
 fn main() -> Result<()> {
     let mut physics_client = PhysicsClient::connect(Mode::Gui)?;
-
-    physics_client.set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")?;
     physics_client.configure_debug_visualizer(CovEnableRendering, false);
     let height_pertubation_range = 0.05;
     let mut rng = thread_rng();
@@ -35,14 +32,10 @@ fn main() -> Result<()> {
             num_columns: num_heightfield_columns,
             replace_heightfield: None,
         },
-        Isometry3::identity(),
+        None,
     )?;
 
-    let terrain = physics_client.create_multi_body(
-        terrain_shape,
-        VisualId::NONE,
-        MultiBodyOptions::default(),
-    )?;
+    let terrain = physics_client.create_multi_body(terrain_shape, VisualId::NONE, None)?;
 
     physics_client.change_visual_shape(
         terrain,
@@ -59,13 +52,13 @@ fn main() -> Result<()> {
         GeometricCollisionShape::Sphere {
             radius: sphere_radius,
         },
-        Isometry3::identity(),
+        None,
     )?;
     let col_box_id = physics_client.create_collision_shape(
         GeometricCollisionShape::Box {
             half_extents: Vector3::from_element(sphere_radius),
         },
-        Isometry3::identity(),
+        None,
     )?;
     let mass = 1.;
     let visual_shape_id = VisualId::NONE;
@@ -73,13 +66,10 @@ fn main() -> Result<()> {
     for i in 0..3 {
         for j in 0..3 {
             for k in 0..3 {
-                let base_pose = Isometry3::from_parts(
-                    Translation3::new(
-                        i as f64 * 5. * sphere_radius,
-                        j as f64 * 5. * sphere_radius,
-                        1. + k as f64 * 5. * sphere_radius + 1.,
-                    ),
-                    UnitQuaternion::identity(),
+                let base_pose = Isometry3::translation(
+                    i as f64 * 5. * sphere_radius,
+                    j as f64 * 5. * sphere_radius,
+                    1. + k as f64 * 5. * sphere_radius + 1.,
                 );
                 let sphere_uid = {
                     if k & 2 != 0 {
@@ -126,7 +116,7 @@ fn main() -> Result<()> {
                     physics_client.set_joint_motor_control(
                         sphere_uid,
                         joint,
-                        ControlMode::Velocity(1.),
+                        ControlCommand::Velocity(1.),
                         Some(10.),
                     );
                 }

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use rubullet::ControlModeArray::Torques;
+use rubullet::ControlCommandArray::Torques;
 use rubullet::*;
 
 fn main() -> Result<()> {
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
     physics_client.set_joint_motor_control_array(
         id_robot,
         &id_revolute_joints,
-        ControlModeArray::Velocities(&[0., 0.]),
+        ControlCommandArray::Velocities(&[0., 0.]),
         Some(&[0., 0.]),
     )?;
     // Target Positions:
