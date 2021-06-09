@@ -1,10 +1,10 @@
 use nalgebra::{DVector, Isometry3, Matrix3xX, Translation3, UnitQuaternion, Vector3};
 
 use anyhow::Result;
-use rubullet::ControlModeArray::Torques;
+use rubullet::ControlCommandArray::Torques;
 use rubullet::Mode::Direct;
 use rubullet::{
-    BodyId, ChangeDynamicsOptions, ConstraintSolverType, ControlMode, ControlModeArray,
+    BodyId, ChangeDynamicsOptions, ConstraintSolverType, ControlCommand, ControlCommandArray,
     DebugVisualizerFlag, Error, InverseKinematicsParametersBuilder, JointFeedbackMode,
     JointInfoFlags, JointType, LoadModelFlags, PhysicsClient, SetPhysicsEngineParameterOptions,
     UrdfOptions,
@@ -194,7 +194,7 @@ pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: 
         .set_joint_motor_control_array(
             robot,
             indices.as_slice(),
-            ControlModeArray::PositionsWithPd {
+            ControlCommandArray::PositionsWithPd {
                 target_positions: position,
                 target_velocities: zero_vec.as_slice(),
                 position_gains: position_gains.as_slice(),
@@ -518,7 +518,7 @@ pub fn inverse_dynamics_test() {
         .set_joint_motor_control_array(
             id_robot,
             &id_revolute_joints,
-            ControlModeArray::Velocities(&[0., 0.]),
+            ControlCommandArray::Velocities(&[0., 0.]),
             Some(&[0., 0.]),
         )
         .unwrap();
@@ -670,7 +670,7 @@ impl PandaSim {
             client.set_joint_motor_control(
                 self.id,
                 i,
-                ControlMode::Position(joint_poses[i]),
+                ControlCommand::Position(joint_poses[i]),
                 Some(240. * 5.),
             );
         }

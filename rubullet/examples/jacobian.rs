@@ -1,6 +1,6 @@
 use nalgebra::{Isometry3, Matrix3xX, Vector3};
 use rubullet::Mode::Direct;
-use rubullet::{BodyId, ControlModeArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
+use rubullet::{BodyId, ControlCommandArray, JointInfo, JointState, PhysicsClient, UrdfOptions};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -16,7 +16,7 @@ pub fn set_joint_positions(client: &mut PhysicsClient, robot: BodyId, position: 
         .set_joint_motor_control_array(
             robot,
             indices.as_slice(),
-            ControlModeArray::PositionsWithPd {
+            ControlCommandArray::PositionsWithPd {
                 target_positions: position,
                 target_velocities: zero_vec.as_slice(),
                 position_gains: position_gains.as_slice(),

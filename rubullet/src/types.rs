@@ -628,8 +628,8 @@ impl Default for SdfOptions {
         }
     }
 }
-/// The Control Mode specifies how the robot should move (Position Control, Velocity Control, Torque Control)
-/// Each Control Mode has its own set of Parameters. The Position mode for example takes a desired joint
+/// The ControlCommand specifies how the robot should move (Position Control, Velocity Control, Torque Control)
+/// Each type of ControlCommand has its own set of Parameters. The Position mode for example takes a desired joint
 /// position as input. It can be used in [`set_joint_motor_control()`](`crate::client::PhysicsClient::set_joint_motor_control()`)
 ///
 /// | Mode                    | Implementation | Component                        | Constraint error to be minimized                                                                          |
@@ -638,7 +638,7 @@ impl Default for SdfOptions {
 /// | Velocity                | constraint     | pure velocity constraint         | error = desired_velocity - actual_velocity                                                                |
 /// | Torque                  | External Force |                                  |                                                                                                           |
 /// | Pd                      | ???            | ???                              | ???                                                                                                       |
-pub enum ControlMode {
+pub enum ControlCommand {
     /// Position Control with the desired joint position.
     Position(f64),
     /// Same as Position, but you can set your own gains
@@ -673,20 +673,20 @@ pub enum ControlMode {
     },
 }
 
-impl ControlMode {
+impl ControlCommand {
     pub(crate) fn get_int(&self) -> i32 {
         match self {
-            ControlMode::Position(_) => 2,
-            ControlMode::Velocity(_) => 0,
-            ControlMode::Torque(_) => 1,
-            ControlMode::Pd { .. } => 3,
-            ControlMode::PositionWithPd { .. } => 2,
+            ControlCommand::Position(_) => 2,
+            ControlCommand::Velocity(_) => 0,
+            ControlCommand::Torque(_) => 1,
+            ControlCommand::Pd { .. } => 3,
+            ControlCommand::PositionWithPd { .. } => 2,
         }
     }
 }
 /// Can be used in [`set_joint_motor_control_array()`](`crate::client::PhysicsClient::set_joint_motor_control_array()`).
-/// It is basically the same as [`ControlMode`](`ControlMode`) but with arrays. See [`ControlMode`](`ControlMode`) for details.
-pub enum ControlModeArray<'a> {
+/// It is basically the same as [`ControlCommand`](`ControlCommand`) but with arrays. See [`ControlCommand`](`ControlCommand`) for details.
+pub enum ControlCommandArray<'a> {
     /// Position Control with the desired joint positions.
     Positions(&'a [f64]),
     /// Same as Positions, but you can set your own gains
@@ -717,14 +717,14 @@ pub enum ControlModeArray<'a> {
     },
 }
 
-impl ControlModeArray<'_> {
+impl ControlCommandArray<'_> {
     pub(crate) fn get_int(&self) -> i32 {
         match self {
-            ControlModeArray::Positions(_) => 2,
-            ControlModeArray::Velocities(_) => 0,
-            ControlModeArray::Torques(_) => 1,
-            ControlModeArray::Pd { .. } => 3,
-            ControlModeArray::PositionsWithPd { .. } => 2,
+            ControlCommandArray::Positions(_) => 2,
+            ControlCommandArray::Velocities(_) => 0,
+            ControlCommandArray::Torques(_) => 1,
+            ControlCommandArray::Pd { .. } => 3,
+            ControlCommandArray::PositionsWithPd { .. } => 2,
         }
     }
 }

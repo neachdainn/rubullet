@@ -116,7 +116,7 @@ fn main() -> Result<()> {
                     physics_client.set_joint_motor_control(
                         sphere_uid,
                         joint,
-                        ControlMode::Velocity(1.),
+                        ControlCommand::Velocity(1.),
                         Some(10.),
                     );
                 }

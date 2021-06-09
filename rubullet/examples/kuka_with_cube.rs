@@ -91,7 +91,7 @@ fn main() -> Result<()> {
         physics_client.set_joint_motor_control_array(
             kuka_id,
             &[0, 1, 2, 3, 4, 5, 6],
-            ControlModeArray::PositionsWithPd {
+            ControlCommandArray::PositionsWithPd {
                 target_positions: &joint_poses,
                 target_velocities: &[0.; 7],
                 position_gains: &[0.03; 7],
