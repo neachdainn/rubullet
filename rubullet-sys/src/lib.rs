@@ -387,7 +387,7 @@ extern "C" {
         bodyUniqueId: c_int,
         jointIndex: c_int,
         jointInfo: *mut b3JointInfo,
-    );
+    ) -> c_int;
     pub fn b3CreatePoseCommandInit(
         physClient: b3PhysicsClientHandle,
         bodyUniqueId: c_int,

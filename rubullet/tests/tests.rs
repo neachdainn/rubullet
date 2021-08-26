@@ -118,6 +118,19 @@ fn test_get_body_info() {
     assert_eq!(body_info.body_name.as_str(), "physics");
 }
 #[test]
+#[should_panic]
+fn test_get_joint_info_index_out_of_range() {
+    let mut physics_client = PhysicsClient::connect(Direct).unwrap();
+    physics_client
+        .set_additional_search_path("../rubullet-sys/bullet3/libbullet3/data")
+        .unwrap();
+    let r2d2 = physics_client.load_urdf("r2d2.urdf", None).unwrap();
+    let num_joints = physics_client.get_num_joints(r2d2);
+    let joint_info = physics_client.get_joint_info(r2d2, num_joints);
+    println!("{:?}", joint_info);
+}
+
+#[test]
 // tests a fixed joint and a revolute joint
 fn test_get_joint_info() {
     let mut physics_client = PhysicsClient::connect(Direct).unwrap();

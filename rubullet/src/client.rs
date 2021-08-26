@@ -1174,7 +1174,15 @@ impl PhysicsClient {
     fn get_joint_info_intern(&mut self, body: BodyId, joint_index: usize) -> b3JointInfo {
         unsafe {
             let mut joint_info = b3JointInfo::default();
-            ffi::b3GetJointInfo(self.handle, body.0, joint_index as i32, &mut joint_info);
+            if ffi::b3GetJointInfo(self.handle, body.0, joint_index as i32, &mut joint_info) == 0 {
+                assert!(
+                    joint_index < self.get_num_joints(body),
+                    "Joint index out-of-range."
+                );
+                // This should never happen as 'b3GetJointInfo' can only fail if the joint index
+                // is out of range.
+                panic!("internal error: get_joint_info_intern failed")
+            }
             joint_info
         }
     }
