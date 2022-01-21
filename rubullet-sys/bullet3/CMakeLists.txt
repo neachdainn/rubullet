@@ -5,7 +5,12 @@ SET(USE_DOUBLE_PRECISION ON CACHE BOOL "Use double precision" FORCE)
 SET(BULLET_DOUBLE_DEF "-DBT_USE_DOUBLE_PRECISION")
 # Add the Bullet libraries.
 add_subdirectory(libbullet3)
-add_definitions(-DBT_ENABLE_CLSOCKET -DBT_USE_DOUBLE_PRECISION -DBT_USE_EGL -DGLEW_DYNAMIC_LOAD_ALL_GLX_FUNCTIONS=1 -DGLEW_INIT_OPENGL11_FUNCTIONS=1 -DGLEW_STATIC -DUSE_GRAPHICAL_BENCHMARK -D_LINUX)
+add_definitions(-DBT_ENABLE_CLSOCKET -DBT_USE_DOUBLE_PRECISION -DBT_USE_EGL -DGLEW_DYNAMIC_LOAD_ALL_GLX_FUNCTIONS=1 -DGLEW_INIT_OPENGL11_FUNCTIONS=1 -DGLEW_STATIC -DUSE_GRAPHICAL_BENCHMARK)
+if(APPLE)
+    add_definitions(-D_DARWIN)
+elseif(UNIX AND NOT APPLE)
+    add_definitions(-D_LINUX)
+endif()
 # Create the library for the Bullet C API
 add_library(cbullet
         libbullet3/examples/SharedMemory/plugins/stablePDPlugin/SpAlg.cpp
