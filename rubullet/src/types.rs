@@ -3,7 +3,7 @@ use crate::Error;
 use image::{ImageBuffer, Luma, RgbaImage};
 use nalgebra::{
     DVector, Isometry3, Matrix3xX, Matrix4, Matrix6xX, Quaternion, Translation3, UnitQuaternion,
-    Vector3, Vector6, U3,
+    Vector3, Vector6,
 };
 use rubullet_sys::{
     b3BodyInfo, b3ContactPointData, b3DynamicsInfo, b3JointInfo, b3JointSensorState, b3LinkState,
@@ -458,11 +458,11 @@ impl<T: Into<DVector<f64>>> std::ops::Mul<T> for Jacobian {
 impl Jacobian {
     /// Linear part of the the jacobian (first 3 rows)
     pub fn get_linear_jacobian(&self) -> Matrix3xX<f64> {
-        Matrix3xX::from(self.jacobian.fixed_rows::<U3>(0))
+        Matrix3xX::from(self.jacobian.fixed_rows::<3>(0))
     }
     /// Angular part of the the jacobian (last 3 rows)
     pub fn get_angular_jacobian(&self) -> Matrix3xX<f64> {
-        Matrix3xX::from(self.jacobian.fixed_rows::<U3>(3))
+        Matrix3xX::from(self.jacobian.fixed_rows::<3>(3))
     }
 }
 /// Frame for [`apply_external_torque()`](`crate::PhysicsClient::apply_external_torque()`) and
@@ -1243,11 +1243,11 @@ pub struct Velocity(Vector6<f64>);
 impl Velocity {
     /// returns the linear velocity (x,y,z)
     pub fn get_linear_velocity(&self) -> Vector3<f64> {
-        self.0.fixed_rows::<U3>(0).into()
+        self.0.fixed_rows::<3>(0).into()
     }
     /// returns the angular velocity (wx,wy,wz)
     pub fn get_angular_velocity(&self) -> Vector3<f64> {
-        self.0.fixed_rows::<U3>(3).into()
+        self.0.fixed_rows::<3>(3).into()
     }
     /// converts the velocity to a Vector6 (x,y,z,wx,wy,wz)
     pub fn to_vector(&self) -> Vector6<f64> {

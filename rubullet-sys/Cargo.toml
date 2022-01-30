@@ -16,13 +16,6 @@ exclude = [
     "bullet3/libbullet3/docs",
     "bullet3/libbullet3/test"
 ]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "rubullet_sys"
-src = "src/lib.rs"
-
 
 [build-dependencies]
 cmake = "0.1.42"
-

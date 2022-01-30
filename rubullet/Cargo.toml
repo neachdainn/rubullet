@@ -10,11 +10,6 @@ categories = ["science::robotics", "simulation"]
 keywords = ["pybullet", "bullet", "bullet3", "physics", "robotics"]
 readme = "../README.md"
 documentation = "https://docs.rs/rubullet/"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "rubullet"
-path = "src/lib.rs"
 
 [[example]]
 name = "contact_friction"
@@ -89,8 +84,8 @@ name = "inverse_dynamics"
 path = "examples/inverse_dynamics.rs"
 
 [dependencies]
-nalgebra = "0.23"
-image = "0.23.12"
+nalgebra = "0.30"
+image = { version = "0.23.14", default-features = false }
 rubullet-sys = { version = "0.1.0-alpha-2", path = "../rubullet-sys" }
 bitflags = "1.2.1"
 
