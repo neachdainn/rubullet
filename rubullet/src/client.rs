@@ -1417,7 +1417,7 @@ impl PhysicsClient {
             );
         }
         if let Some(positions) = current_positions {
-            assert_ne!(
+            assert_eq!(
                 positions.len(),
                 dof_count,
                 "number of current_positions ({}) is not equal to the number of DoF's ({})",
