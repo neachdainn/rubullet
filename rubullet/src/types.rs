@@ -1272,6 +1272,7 @@ bitflags::bitflags! {
     /// let flags = LoadModelFlags::URDF_ENABLE_CACHED_GRAPHICS_SHAPES | LoadModelFlags::URDF_PRINT_URDF_INFO;
     /// assert!(flags.contains(LoadModelFlags::URDF_PRINT_URDF_INFO));
     /// ```
+	#[derive(Clone, Copy, Debug)]
     pub struct LoadModelFlags : i32 {
         /// use no flags (Default)
          const NONE = 0;
@@ -1332,6 +1333,7 @@ impl Default for LoadModelFlags {
 }
 bitflags::bitflags! {
     #[doc(hidden)]
+	#[derive(Debug)]
     pub struct JointInfoFlags : i32 {
         const NONE = 0;
         const JOINT_CHANGE_MAX_FORCE = 1;
@@ -1463,6 +1465,7 @@ impl From<b3UserConstraint> for ConstraintInfo {
     }
 }
 bitflags::bitflags! {
+	#[derive(Clone, Copy, Debug)]
     pub struct ActivationState : i32 {
         const ENABLE_SLEEPING = 1;
         const DISABLE_SLEEPING = 2;
@@ -1791,6 +1794,7 @@ pub struct StateLoggingOptions {
     pub log_flags: Option<LogFlags>,
 }
 bitflags::bitflags! {
+	#[derive(Debug)]
     pub struct LogFlags : i32 {
         const JOINT_MOTOR_TORQUES = 1;
         const JOINT_USER_TORQUES = 2;
@@ -2268,6 +2272,7 @@ bitflags::bitflags! {
 }
 bitflags::bitflags! {
     /// flags for camera rendering
+	#[derive(Debug)]
     pub struct RendererAuxFlags : i32 {
         /// if used the pixels of the segmentation mask are calculated with this formula:
         /// bodyId + (linkIndex+1)<<24
