@@ -64,6 +64,7 @@ type Handle = ffi::b3PhysicsClientHandle;
 /// Connection to a physics server.
 ///
 /// This serves as an abstraction over the possible physics servers, providing a unified interface.
+#[derive(Debug)]
 pub struct PhysicsClient {
     /// The underlying `b3PhysicsClientHandle` that is guaranteed to not be null.
     pub(crate) handle: Handle,
@@ -1416,7 +1417,7 @@ impl PhysicsClient {
             );
         }
         if let Some(positions) = current_positions {
-            assert_ne!(
+            assert_eq!(
                 positions.len(),
                 dof_count,
                 "number of current_positions ({}) is not equal to the number of DoF's ({})",
@@ -5457,6 +5458,7 @@ pub(crate) mod marker {
     static GUI_EXISTS: AtomicBool = AtomicBool::new(false);
 
     /// A marker type for keeping track of the existence of a GUI.
+    #[derive(Debug)]
     pub struct GuiMarker {
         _unused: (),
     }
@@ -5485,6 +5487,7 @@ pub(crate) mod marker {
     static SHARED_MEMORY_EXISTS: AtomicBool = AtomicBool::new(false);
 
     /// A marker type for keeping track of the existence of a SharedMemory instance.
+    #[derive(Debug)]
     pub struct SharedMemoryMarker {
         _unused: (),
     }

@@ -26,11 +26,11 @@ fn main() {
     println!("cargo:rustc-link-lib=static=Bullet3Common");
     println!("cargo:rustc-link-lib=static=cbullet");
 
-    println!("cargo:rustc-link-lib=stdc++");
-
     if cfg!(target_os = "macos") {
         println!("cargo:rustc-link-lib=c++");
         println!("cargo:rustc-link-lib=framework=Cocoa");
         println!("cargo:rustc-link-lib=framework=OpenGL");
+    } else {
+        println!("cargo:rustc-link-lib=stdc++");
     }
 }
